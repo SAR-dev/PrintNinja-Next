@@ -13,3 +13,9 @@ app/ui/dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# graphify knowledge graph: graph.json is committed (rewritten whole on every
+# build, per CLAUDE.md); everything else is local or regenerable (report,
+# HTML viz, caches, sidecars, per-machine paths).
+graphify-out/*
+!graphify-out/graph.json
