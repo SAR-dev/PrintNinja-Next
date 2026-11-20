@@ -1,0 +1,31 @@
+# Full Rust test suite in a capped container (mirrors CI's rust-test-linux).
+#
+# The cap is the point: CARGO_BUILD_JOBS=2 + 6 GB memory means an
+# over-sized compile fails fast inside the box instead of wedging the
+# host. `target/` lives in a named volume, so only the first run
+# compiles everything.
+#
+#   pnpm test:rust            # cargo test
+#   pnpm test:rust:report     # cargo junit -> /workspace/test-report
+#
+# The app crate embeds app/ui/dist, so build the frontend first:
+#   pnpm -C app/ui install && pnpm -C app/ui build
+name: printninja-next-rust-test
+
+services:
+  rust-test:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile.test
+    image: printninja-next/rust-test
+    working_dir: /workspace
+    volumes:
+      - ..:/workspace
+      - rust-test-target:/workspace/target
+    environment:
+      CARGO_BUILD_JOBS: "2"
+    mem_limit: 6g
+    command: cargo test
+
+volumes:
+  rust-test-target:

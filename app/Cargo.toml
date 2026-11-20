@@ -1,0 +1,15 @@
+[package]
+name = "printninja"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "printninja_lib"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[build-dependencies]
+tauri-build = "2"
+
+[dependencies]
+tauri = "2"

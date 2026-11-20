@@ -1,0 +1,23 @@
+# Test container image: Rust toolchain + Linux system build dependencies
+# only. The workspace is mounted at /workspace, so rustup reads
+# rust-toolchain.toml from the repo.
+#
+# Deliberately slim: cargo-junit is the only installed tool, used by the
+# `pnpm test:rust:report` script.
+FROM rust:1.90.0-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        file \
+        pkg-config \
+        libssl-dev \
+        libwebkit2gtk-4.1-dev \
+        libgtk-3-dev \
+        libayatana-appindicator3-dev \
+        librsvg2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN cargo install --locked cargo-junit
+
+WORKDIR /workspace

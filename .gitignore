@@ -1,0 +1,15 @@
+# Rust
+target/
+test-report/
+
+# Frontend
+node_modules/
+app/ui/dist/
+
+# Env and local state
+.env
+*.local
+
+# OS
+.DS_Store
+Thumbs.db

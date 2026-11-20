@@ -1,0 +1,7 @@
+[package]
+name = "pn-profiles"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]

@@ -1,0 +1,34 @@
+# PrintNinja (next) — Rust workspace.
+#
+# Layout per docs/planned/REFACTORING-PLAN.md §5.11:
+#   core/{scene,render,planner,profiles,encoders,transport,job}
+#   app/                Tauri shell (Windows, Linux; Android in phase 11)
+#   tests/golden        golden-file harness + committed golden byte files
+#
+# `tests/e2e/support/virtual-printer` is deliberately EXCLUDED: it is a
+# standalone std-only crate with its own Cargo.lock, compiled on demand
+# and spawned as a subprocess by the e2e tests.
+[workspace]
+resolver = "2"
+members = [
+    "app",
+    "core/scene",
+    "core/render",
+    "core/planner",
+    "core/profiles",
+    "core/encoders",
+    "core/transport",
+    "core/job",
+    "tests/golden",
+]
+exclude = ["tests/e2e/support/virtual-printer"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.90.0"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
