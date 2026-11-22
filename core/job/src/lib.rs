@@ -12,5 +12,7 @@ mod run;
 mod status;
 
 pub use queue::JobQueue;
+#[cfg(windows)]
+pub use run::SpoolerFactory;
 pub use run::{run, send_plan_from, JobResult, JobSpec, TcpFactory, TransportFactory};
 pub use status::{decode, reply_complete, StatusReading};

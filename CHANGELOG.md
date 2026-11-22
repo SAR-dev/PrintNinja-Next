@@ -34,3 +34,10 @@ Unreleased.
   the send deadline mid-unit, a paper-out mid-batch reports "1 of 2
   printed" with a paper reason, and back-to-back jobs on one printer are
   serialized
+- Phase 3 delivery (Windows spooler increment): a spooler transport for
+  page printers and every queue installed in Windows (OpenPrinter →
+  StartDoc/Write/EndDoc per unit, full-write verification, retryable
+  connect), plus the pure datatype-choice and queue-status helpers
+  (PDF-vs-RAW, the 1804 "invalid data type" refusal read as plain words,
+  and the PRINTER_INFO_2 fault bits with their priority order) — unit
+  tested on every platform

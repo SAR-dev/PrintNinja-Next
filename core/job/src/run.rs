@@ -281,6 +281,26 @@ impl TransportFactory for TcpFactory {
     }
 }
 
+/// A factory over one Windows spooler queue. `datatype` is the spooler
+/// datatype declared for each unit — `"RAW"` for command languages,
+/// `"PDF"` for PDF jobs (see `pn_transport::spooler::spool_datatype`);
+/// the caller picks it from the render result.
+#[cfg(windows)]
+pub struct SpoolerFactory {
+    pub printer_name: String,
+    pub datatype: &'static str,
+}
+
+#[cfg(windows)]
+impl TransportFactory for SpoolerFactory {
+    fn connect(&self) -> Result<Box<dyn Transport>, SendError> {
+        Ok(Box::new(pn_transport::WindowsSpoolerTransport::connect(
+            &self.printer_name,
+            self.datatype,
+        )?))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -598,6 +618,27 @@ media = ["label"]
             other => panic!("expected Failed(wrong mode preflight), got {other:?}"),
         }
         assert_eq!(*factory.connects.lock().unwrap(), 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_missing_spooler_queue_fails_honestly() {
+        // The factory cannot open a queue that does not exist: the job
+        // is retried once (nothing was flushed) and ends Failed with the
+        // spooler's refusal.
+        let factory = SpoolerFactory {
+            printer_name: "PrintNinja No Such Queue 9876".to_string(),
+            datatype: "RAW",
+        };
+        let result = run(
+            &JobSpec::new("job", units(1)),
+            &no_status_profile(),
+            &factory,
+        );
+        match result {
+            JobResult::Failed { reason } => assert!(reason.contains("OpenPrinter"), "{reason}"),
+            other => panic!("expected Failed, got {other:?}"),
+        }
     }
 
     #[test]
