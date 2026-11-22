@@ -1,7 +1,16 @@
-//! Job model: states, verification, retry, partial counts
-//! (plan §5.7, built in phase 3).
+//! Jobs: the crate that owns the job result states (plan §5.7).
 //!
-//! Result states are honest about what was actually confirmed:
-//! `Printed (confirmed)` only when the printer acknowledged;
-//! `Sent (unconfirmed)` for spooler-accepted jobs; `Failed (with reason)`
-//! for anything else, with the spooler's cause attached.
+//! The job orchestrator is the only crate that knows what a successful
+//! print *means*: it asks the printer before and after, reads the reply in
+//! the profile's dialect, paces the bytes per the profile, and reports an
+//! honest state — confirmed, unconfirmed, "N of M printed" with the
+//! reason, failed, or wrong mode suspected. Transports stay byte-level;
+//! profiles stay declarative.
+
+mod queue;
+mod run;
+mod status;
+
+pub use queue::JobQueue;
+pub use run::{run, send_plan_from, JobResult, JobSpec, TcpFactory, TransportFactory};
+pub use status::{decode, reply_complete, StatusReading};

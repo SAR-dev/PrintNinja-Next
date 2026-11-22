@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 description = "Virtual network printer: Raw/JetDirect, LPD and IPP (Rust port of virtualprinter.py, no dashboard)"
 
+# Standalone crate: this empty table keeps `cargo` from walking up into the
+# repo's workspace when the e2e harness builds us on demand (in-container,
+# where no prebuilt binary exists).
+[workspace]
+
 [dependencies]
 # Small receive buffer so fault states are deterministic: without it a
 # fast loopback can swallow the whole test payload before a hang blocks

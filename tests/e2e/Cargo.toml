@@ -1,0 +1,14 @@
+[package]
+name = "pn-e2e"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+# Delivery e2e: the real pn-transport + pn-job driving the virtual printer
+# fixture (see support/virtual-printer) as a subprocess. std-only on purpose —
+# the HTTP state control is a hand-rolled GET over a TcpStream.
+[dependencies]
+pn-transport = { path = "../../core/transport" }
+pn-job = { path = "../../core/job" }
+pn-profiles = { path = "../../core/profiles" }

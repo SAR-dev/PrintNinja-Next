@@ -2436,12 +2436,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pn-e2e"
+version = "0.0.0"
+dependencies = [
+ "pn-job",
+ "pn-profiles",
+ "pn-transport",
+]
+
+[[package]]
 name = "pn-encoders"
 version = "0.0.0"
 
 [[package]]
 name = "pn-job"
 version = "0.0.0"
+dependencies = [
+ "pn-profiles",
+ "pn-transport",
+]
 
 [[package]]
 name = "pn-planner"

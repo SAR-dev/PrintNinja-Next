@@ -20,6 +20,7 @@ members = [
     "core/transport",
     "core/job",
     "tests/golden",
+    "tests/e2e",
 ]
 exclude = ["tests/e2e/support/virtual-printer"]
 
