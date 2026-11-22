@@ -23,6 +23,7 @@ use std::ffi::CString;
 #[cfg(windows)]
 use std::ptr::null_mut;
 
+#[cfg(windows)]
 use crate::{SendError, SendPlan, Transport, UnitReport};
 
 /// Which spooler datatype to declare for a job.

@@ -12,6 +12,8 @@ mod run;
 mod status;
 
 pub use queue::JobQueue;
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub use run::BtFactory;
 #[cfg(windows)]
 pub use run::SpoolerFactory;
 pub use run::{run, send_plan_from, IppFactory, JobResult, JobSpec, TcpFactory, TransportFactory};

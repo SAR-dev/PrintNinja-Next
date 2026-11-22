@@ -324,6 +324,26 @@ impl TransportFactory for IppFactory {
     }
 }
 
+/// A factory over a paired Bluetooth device. `address` is what the row
+/// stores: a MAC (Linux dials its RFCOMM channel; Windows looks up the
+/// port the paired device owns) or, on Windows, the port itself
+/// (`COM7`).
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub struct BtFactory {
+    pub address: String,
+    pub connect_deadline: Duration,
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+impl TransportFactory for BtFactory {
+    fn connect(&self) -> Result<Box<dyn Transport>, SendError> {
+        Ok(Box::new(pn_transport::BluetoothTransport::connect(
+            &self.address,
+            self.connect_deadline,
+        )?))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -660,6 +680,28 @@ media = ["label"]
         );
         match result {
             JobResult::Failed { reason } => assert!(reason.contains("OpenPrinter"), "{reason}"),
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    #[test]
+    fn a_bad_bluetooth_address_fails_honestly() {
+        // Neither a MAC nor a COM port: the job fails before print and
+        // names the shape the address should have had.
+        let factory = BtFactory {
+            address: "Front Desk".to_string(),
+            connect_deadline: Duration::from_secs(2),
+        };
+        let result = run(
+            &JobSpec::new("job", units(1)),
+            &no_status_profile(),
+            &factory,
+        );
+        match result {
+            JobResult::Failed { reason } => {
+                assert!(reason.contains("A4:77:17:22:33:44"), "{reason}")
+            }
             other => panic!("expected Failed, got {other:?}"),
         }
     }

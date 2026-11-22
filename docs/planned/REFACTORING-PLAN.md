@@ -341,6 +341,8 @@ Each phase ends in something testable; no phase is "done" until its exit criteri
 
 ### Phase 3 — Delivery and job verification
 
+*Done 2026-11-23 — all four adapters built and e2e-green against the virtual printers: TCP / JetDirect (`0d026e3`), the Windows spooler (`99157cd`), CUPS/IPP (`107b14d`), and Bluetooth RFCOMM (Linux) / the paired device's COM port (Windows) in the current commit. USB needs no adapter of its own: a USB printer is a CUPS raw queue on Linux and a spooler queue on Windows. Real Bluetooth hardware verification lands in phase 10; `ipps://`/`https://` (TLS) is a documented follow-up.*
+
 - Transport adapters: Bluetooth (RFCOMM), USB, TCP, and the OS print system (Windows spooler, CUPS), with profile-driven pacing, close delay and reply reading; one job at a time per printer, queued.
 - Job result model (§5.7) including **partial success** with counts for multi-label/multi-page jobs.
 - Retry policy, stated honestly: retry only failures that happened before any byte was flushed (connection refused, no data sent). A failure mid-transfer is a hard `failed`/`partially printed` result — no blind retry; the user restarts the job explicitly.

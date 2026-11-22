@@ -53,3 +53,11 @@ Unreleased.
 - Delivery e2e against the virtual printer's IPP endpoint: a page job is
   sent and its bytes verified on disk, and a printer that cannot print
   fails the job with the reason in plain words
+- Phase 3 delivery (Bluetooth RFCOMM increment): a Bluetooth transport —
+  Linux dials the paired device's RFCOMM socket directly (non-blocking,
+  deadlines of its own; a wedged link cannot outlive them), Windows
+  writes to the device's own SPP COM port (`COM7` named directly, or a
+  MAC whose port is looked up in the device enumeration), and both read
+  the status reply on the same byte stream. The address parser (MAC with
+  an optional RFCOMM channel 1–30, or `COM{n}`) is shared and tested on
+  every platform; real-hardware verification lands in phase 10

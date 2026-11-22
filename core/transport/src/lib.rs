@@ -1,5 +1,6 @@
-//! Transports: raw TCP / JetDirect, the Windows spooler and IPP/CUPS so
-//! far, with Bluetooth to complete phase 3 (plan §5.6).
+//! Transports: raw TCP / JetDirect, the Windows spooler, IPP/CUPS and
+//! Bluetooth (RFCOMM on Linux, the paired device's COM port on Windows) —
+//! the four phase 3 adapters (plan §5.6).
 //!
 //! A transport moves bytes to one printer and reports byte-level facts.
 //! It is language-blind and profile-blind (plan §5.11): it does not know
@@ -7,10 +8,13 @@
 //! deadlines and close delay arrive in a [`SendPlan`] that the job
 //! orchestrator derives from the profile.
 
+pub mod bluetooth;
 pub mod ipp;
 pub mod spooler;
 mod tcp;
 
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub use bluetooth::BluetoothTransport;
 pub use ipp::IppTransport;
 #[cfg(windows)]
 pub use spooler::WindowsSpoolerTransport;
