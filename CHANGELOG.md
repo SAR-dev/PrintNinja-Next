@@ -41,3 +41,15 @@ Unreleased.
   (PDF-vs-RAW, the 1804 "invalid data type" refusal read as plain words,
   and the PRINTER_INFO_2 fault bits with their priority order) — unit
   tested on every platform
+- Phase 3 delivery (CUPS/IPP increment): an IPP transport for page
+  printers (CUPS, or a printer's own IPP interface) — one Print-Job per
+  unit over plain HTTP, the reply checked for honesty (operation status
+  and the reported job-state), plus the pure IPP request builders and
+  response parsers and the CUPS queue helpers (queue listing, base-URL
+  resolution, queue health, and the blocking-reason vocabulary read as
+  plain words) — unit tested on every platform. `ipps://`/`https://`
+  endpoints are a documented follow-up: TLS is not in the zero-dep
+  transport yet
+- Delivery e2e against the virtual printer's IPP endpoint: a page job is
+  sent and its bytes verified on disk, and a printer that cannot print
+  fails the job with the reason in plain words

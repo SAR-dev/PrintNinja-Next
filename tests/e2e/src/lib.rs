@@ -20,6 +20,8 @@ pub struct Printer {
     child: Child,
     /// Raw / JetDirect port — where print jobs go.
     pub raw_port: u16,
+    /// IPP port — where page-printer jobs go (CUPS-style endpoint).
+    pub ipp_port: u16,
     /// HTTP port — where `/set?state=…` state control lives.
     pub http_port: u16,
     /// Where the fixture writes one file per received job.
@@ -67,6 +69,7 @@ impl Printer {
         Printer {
             child,
             raw_port: ports["raw"],
+            ipp_port: ports["ipp"],
             http_port: ports["http"],
             jobs_dir: jobs,
             root,
@@ -146,6 +149,7 @@ fn read_ports_file(path: &Path, child: &mut Child) -> std::collections::HashMap<
                     if let Ok(port) = v.trim().parse::<u16>() {
                         let key: &'static str = match k {
                             "raw" => "raw",
+                            "ipp" => "ipp",
                             "http" => "http",
                             _ => continue,
                         };
@@ -153,7 +157,7 @@ fn read_ports_file(path: &Path, child: &mut Child) -> std::collections::HashMap<
                     }
                 }
             }
-            if out.contains_key("raw") && out.contains_key("http") {
+            if out.contains_key("raw") && out.contains_key("ipp") && out.contains_key("http") {
                 return out;
             }
         }

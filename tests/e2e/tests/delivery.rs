@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use pn_e2e::Printer;
-use pn_job::{run, JobQueue, JobResult, JobSpec, TcpFactory};
+use pn_job::{run, IppFactory, JobQueue, JobResult, JobSpec, TcpFactory};
 use pn_profiles::Profile;
 use pn_transport::Transport;
 
@@ -95,6 +95,38 @@ fn labels(n: u32) -> Vec<Vec<u8>> {
     (0..n)
         .map(|i| format!("^XA^FO0,{i}^FDlabel-{i}^XZ").into_bytes())
         .collect()
+}
+
+fn pages(n: u32) -> Vec<Vec<u8>> {
+    (0..n)
+        .map(|i| format!("%PDF-1.4 page-{i} fake-content %EOF").into_bytes())
+        .collect()
+}
+
+/// A page profile with no status dialect: page printers confirm through the
+/// IPP reply, not through a query on the line.
+fn pdf_profile() -> Profile {
+    parse(
+        r#"
+[profile]
+model = "Virtual Page"
+language = "pdf"
+media = ["page"]
+[delivery]
+chunk_bytes = 512
+pause_ms = 0
+close_delay_ms = 0
+keep_open_for_status = false
+"#,
+    )
+}
+
+fn ipp_factory(ipp_port: u16) -> IppFactory {
+    IppFactory {
+        address: format!("{HOST}:{}", ipp_port),
+        user: None,
+        document_format: "application/pdf",
+    }
 }
 
 fn contains_bytes(haystack: &[u8], needle: &[u8]) -> bool {
@@ -231,4 +263,43 @@ fn back_to_back_jobs_on_one_printer_are_serialized() {
     // One saved job per connection: two jobs, two files.
     let jobs = vp.wait_for_jobs(2, Duration::from_secs(5));
     assert_eq!(jobs.len(), 2, "each serialized job is its own saved file");
+}
+
+#[test]
+fn ipp_job_is_sent_and_reached_the_printer() {
+    let vp = Printer::spawn("ok");
+    let units = pages(2);
+    let spec = JobSpec::new("two pages", units.clone());
+    let result = run(&spec, &pdf_profile(), &ipp_factory(vp.ipp_port));
+    // Page printers speak no status dialect: the job ends unconfirmed,
+    // with the honesty living in the per-unit IPP replies.
+    assert_eq!(result, JobResult::SentUnconfirmed);
+
+    // One Print-Job per unit: one saved job file per unit, each holding
+    // exactly its own document bytes.
+    let jobs = vp.wait_for_jobs(2, Duration::from_secs(5));
+    assert_eq!(jobs.len(), 2, "one Print-Job per unit is one saved file");
+    for unit in &units {
+        assert!(
+            jobs.iter().any(|p| contains_bytes(&vp.read_job(p), unit)),
+            "a unit is missing from the saved jobs"
+        );
+    }
+}
+
+#[test]
+fn an_ipp_printer_that_cannot_print_fails_the_job_with_the_reason() {
+    let vp = Printer::spawn("paperout");
+    let spec = JobSpec::new("one page", pages(1));
+    let result = run(&spec, &pdf_profile(), &ipp_factory(vp.ipp_port));
+    // The Print-Job reply reports job-state 6 (processing-stopped) with
+    // `printer-stopped`: that is a per-unit failure, and with one unit the
+    // whole job fails — naming the cause.
+    match result {
+        JobResult::Failed { reason } => {
+            assert!(reason.to_lowercase().contains("paused"), "{reason}");
+            assert!(reason.contains("printer-stopped"), "{reason}");
+        }
+        other => panic!("a stopped printer should fail the job, got {other:?}"),
+    }
 }

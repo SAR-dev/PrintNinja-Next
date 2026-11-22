@@ -301,6 +301,29 @@ impl TransportFactory for SpoolerFactory {
     }
 }
 
+/// A factory over one IPP endpoint (CUPS, or a page printer's own IPP
+/// interface). `document_format` is the MIME type declared for each unit —
+/// `"application/pdf"` for PDF jobs, `"application/octet-stream"` for
+/// everything else (see `pn_transport::ipp::ipp_document_format`); the
+/// caller picks it from the render result.
+pub struct IppFactory {
+    pub address: String,
+    pub user: Option<String>,
+    pub document_format: &'static str,
+}
+
+impl TransportFactory for IppFactory {
+    fn connect(&self) -> Result<Box<dyn Transport>, SendError> {
+        let mut transport = pn_transport::IppTransport::connect(&self.address)?;
+        if let Some(user) = &self.user {
+            transport = transport.with_user(user.clone());
+        }
+        Ok(Box::new(
+            transport.with_document_format(self.document_format),
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
