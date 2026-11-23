@@ -200,3 +200,104 @@ export const printJob = (
     copies,
     transport,
   });
+
+/**
+ * The community registry (plan phase 9): accounts, the change feed's
+ * local mirror, and this device's publications. The shapes mirror
+ * `app/src/registry.rs` and `app/src/store.rs` field for field.
+ */
+
+/** What a status probe of the registry adds up to. */
+export interface RegistryStatus {
+  /** The signed-in handle, or null when signed out. */
+  handle: string | null;
+  /** Whether the registry answered its last probe. */
+  online: boolean;
+  /** Operations queued while offline. */
+  pending: number;
+}
+
+/** A row of the community mirror: one published template. */
+export interface CommunityTemplate {
+  owner: string;
+  slug: string;
+  name: string;
+  /** The registry's readme, as the tab shows it. */
+  readme: string;
+  /** "scene" or "document". */
+  track: string;
+  /** The template document, as JSON text. */
+  template: string;
+  /** The data field's starting records, as JSON text. */
+  sample: string;
+  /** When the registry last changed it (Unix seconds). */
+  changedAt: number;
+  /** Whether the signed-in account has saved it. */
+  saved: boolean;
+}
+
+/** A local template's publication on the registry. */
+export interface Publication {
+  id: string;
+  localTemplateId: string;
+  owner: string;
+  slug: string;
+  name: string;
+  readme: string;
+  lastTemplate: string;
+  lastSample: string;
+  /** When it last went up, as Date.now() milliseconds. */
+  publishedAt: number;
+}
+
+/** The registry server the app talks to, as the app resolves it. */
+export const registryUrl = () => invoke<string>("registry_url");
+
+/** Sign in on the registry — or create the account, when `create`. */
+export const registryLogin = (
+  handle: string,
+  password: string,
+  create: boolean,
+) => invoke<string>("registry_login", { handle, password, create });
+
+/** Sign out of the registry; the local queue keeps waiting. */
+export const registryLogout = () => invoke<void>("registry_logout");
+
+/** A status probe, without syncing. */
+export const registryStatus = () => invoke<RegistryStatus>("registry_status");
+
+/** The whole sync: replay the queue, push local edits, pull the feed. */
+export const registryRefresh = () => invoke<RegistryStatus>("registry_refresh");
+
+/** Queue a local template for publishing (the sync pushes it). */
+export const publishTemplate = (
+  localTemplateId: string,
+  name: string,
+  slug: string,
+  readme: string,
+) =>
+  invoke<void>("publish_template", {
+    localTemplateId,
+    name,
+    slug,
+    readme,
+  });
+
+/** Queue a publication for removal (the sync pushes the tombstone). */
+export const unpublishTemplate = (localTemplateId: string) =>
+  invoke<void>("unpublish_template", { localTemplateId });
+
+/** Save a community template to the account. */
+export const saveCommunityTemplate = (owner: string, slug: string) =>
+  invoke<void>("save_community_template", { owner, slug });
+
+/** Take a community template off the account's saved list. */
+export const unsaveCommunityTemplate = (owner: string, slug: string) =>
+  invoke<void>("unsave_community_template", { owner, slug });
+
+/** The community mirror, as the last sync applied it. */
+export const communityTemplates = () =>
+  invoke<CommunityTemplate[]>("community_templates");
+
+/** This device's publications, the order they went up. */
+export const publications = () => invoke<Publication[]>("publications");

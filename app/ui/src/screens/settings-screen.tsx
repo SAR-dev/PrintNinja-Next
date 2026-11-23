@@ -12,6 +12,7 @@ import {
   listPrinters,
   loadSettings,
   pairedDevices,
+  registryUrl,
   revokeDevice,
   saveSetting,
   setAutostart,
@@ -63,6 +64,10 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [devices, setDevices] = useState<PairedDevice[]>([]);
   const [pairCode, setPairCode] = useState<string | null>(null);
   const [pairLeft, setPairLeft] = useState(0);
+  /** The registry's server address, the text in the field. */
+  const [registryUrlText, setRegistryUrlText] = useState("");
+  /** The address the app resolves to now, shown as the placeholder. */
+  const [registryDefault, setRegistryDefault] = useState("");
 
   const lanOn = settings["api.lan"] === "true";
 
@@ -75,7 +80,11 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         setSettings(rows);
         if (rows.theme === "dark" || rows.theme === "light")
           setTheme(rows.theme);
+        setRegistryUrlText(rows["registry.url"] ?? "");
       })
+      .catch((e) => setError(String(e)));
+    registryUrl()
+      .then(setRegistryDefault)
       .catch((e) => setError(String(e)));
     isAutostart()
       .then(setAutostartState)
@@ -300,6 +309,32 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               )}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Registry</CardTitle>
+          <CardDescription>
+            The server the community templates live on. Leave it empty to use
+            the server on this computer (
+            {registryDefault || "http://127.0.0.1:8787"}
+            ).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          <Label htmlFor="registry-url">Server address</Label>
+          <Input
+            id="registry-url"
+            value={registryUrlText}
+            onChange={(e) => setRegistryUrlText(e.target.value)}
+            onBlur={() => save("registry.url", registryUrlText.trim())}
+            placeholder={registryDefault}
+          />
+          <span className="text-caption text-muted-foreground">
+            A shared server, like <code>https://registry.example.com</code> —
+            the same one your team uses. It applies at the next sync.
+          </span>
         </CardContent>
       </Card>
 

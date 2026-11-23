@@ -11,6 +11,7 @@ mod api;
 mod deeplink;
 mod pairing;
 mod pipeline;
+mod registry;
 mod store;
 
 use std::collections::BTreeMap;
@@ -31,7 +32,8 @@ pub use pipeline::{
     delivery_key, factory, load_profiles, prepare_units, print_units, profile_infos, report_of,
     JobReport, PipelineError, PrepareReport, ProfileInfo, Transport, Units,
 };
-pub use store::{PairedDevice, Store, StoredJob, StoredTemplate};
+pub use registry::RegistryStatus;
+pub use store::{CommunityTemplate, PairedDevice, Publication, Store, StoredJob, StoredTemplate};
 
 /// The printer profiles, loaded once at startup (plan phase 7: the
 /// profile set *is* the printer list). An `Arc` because the local
@@ -241,6 +243,188 @@ fn parse_deeplink(url: String) -> Result<deeplink::DeepLinkPrint, String> {
     deeplink::parse_deep_link(&url)
 }
 
+/// The registry the app talks to: the stored URL, the environment
+/// override, or the local default (plan phase 9 — any shared server
+/// works, the way the old app's shared server URL did).
+#[tauri::command]
+fn registry_url(state: State<'_, Arc<Store>>) -> Result<String, String> {
+    Ok(registry::Registry::base_url(
+        &state.load_settings().unwrap_or_default(),
+    ))
+}
+
+/// What the header chip shows without syncing: the signed-in handle,
+/// whether the registry answers, and what is queued for it.
+#[tauri::command]
+async fn registry_status(state: State<'_, Arc<Store>>) -> Result<RegistryStatus, String> {
+    Ok(registry::Registry::from_settings(&state)?
+        .status(&state)
+        .await)
+}
+
+/// The whole sync: replay the queued operations, push the local edits,
+/// pull the change feed, and refresh the saved flags. Offline is a
+/// state, not an error — the queue waits.
+#[tauri::command]
+async fn registry_refresh(state: State<'_, Arc<Store>>) -> Result<RegistryStatus, String> {
+    registry::Registry::from_settings(&state)?
+        .refresh(&state)
+        .await
+}
+
+/// Sign in to the registry — or create the account when `create`. The
+/// session is stored, so the next call signs in as the same account;
+/// the account's handle, as the registry serves it, comes back.
+#[tauri::command]
+async fn registry_login(
+    state: State<'_, Arc<Store>>,
+    handle: String,
+    password: String,
+    create: bool,
+) -> Result<String, String> {
+    registry::Registry::from_settings(&state)?
+        .login(&state, &handle, &password, create)
+        .await
+}
+
+/// Sign out: the session is revoked (best effort) and the stored
+/// account is cleared. The community mirror and the local copies stay
+/// — they are the app's own rows.
+#[tauri::command]
+async fn registry_logout(state: State<'_, Arc<Store>>) -> Result<(), String> {
+    registry::Registry::from_settings(&state)?
+        .logout(&state)
+        .await
+}
+
+/// Publish a local template to the registry (plan phase 9): the
+/// operation is queued with the document as a JSON value — the
+/// registry's format — and the sync replays it, online or later.
+#[tauri::command]
+async fn publish_template(
+    state: State<'_, Arc<Store>>,
+    local_template_id: String,
+    name: String,
+    slug: String,
+    readme: String,
+) -> Result<(), String> {
+    let t = state
+        .load_templates()?
+        .into_iter()
+        .find(|t| t.id == local_template_id)
+        .ok_or_else(|| format!("no template named \"{local_template_id}\""))?;
+    // A blank slug means the app drafts one from the name; the
+    // registry checks the result itself.
+    let slug = if slug.trim().is_empty() {
+        registry::slugify(&name)
+    } else {
+        slug
+    };
+    let template: serde_json::Value =
+        serde_json::from_str(&t.template).map_err(|e| format!("the template is not JSON: {e}"))?;
+    let sample: serde_json::Value =
+        serde_json::from_str(&t.sample).unwrap_or_else(|_| serde_json::Value::Array(Vec::new()));
+    let body = serde_json::json!({
+        "localTemplateId": t.id,
+        "name": name,
+        "slug": slug,
+        "readme": readme,
+        "template": template,
+        "sample": sample,
+    });
+    state
+        .enqueue_op(
+            "publish",
+            &body.to_string(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0),
+        )
+        .map_err(|e| format!("the operation could not be queued: {e}"))?;
+    registry::Registry::from_settings(&state)?
+        .refresh(&state)
+        .await?;
+    Ok(())
+}
+
+/// Unpublish a local template: the registry's copy is deleted, the
+/// operation queued, and the sync applies it — the tombstone drops the
+/// mirror row.
+#[tauri::command]
+async fn unpublish_template(
+    state: State<'_, Arc<Store>>,
+    local_template_id: String,
+) -> Result<(), String> {
+    let pub_ = state
+        .publication_for_local(&local_template_id)?
+        .ok_or_else(|| format!("\"{local_template_id}\" is not published to the registry"))?;
+    let body = serde_json::json!({ "owner": pub_.owner, "slug": pub_.slug });
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    state.enqueue_op("unpublish", &body.to_string(), ms)?;
+    registry::Registry::from_settings(&state)?
+        .refresh(&state)
+        .await?;
+    Ok(())
+}
+
+/// Save a community template: the flag is queued, the sync sets it on
+/// the registry, and the template lands as an editable local copy
+/// (id `saved-{owner}-{slug}`).
+#[tauri::command]
+async fn save_community_template(
+    state: State<'_, Arc<Store>>,
+    owner: String,
+    slug: String,
+) -> Result<(), String> {
+    let body = serde_json::json!({ "owner": owner, "slug": slug });
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    state.enqueue_op("save", &body.to_string(), ms)?;
+    registry::Registry::from_settings(&state)?
+        .refresh(&state)
+        .await?;
+    Ok(())
+}
+
+/// Unsave a community template: the flag falls, the local copy stays.
+#[tauri::command]
+async fn unsave_community_template(
+    state: State<'_, Arc<Store>>,
+    owner: String,
+    slug: String,
+) -> Result<(), String> {
+    let body = serde_json::json!({ "owner": owner, "slug": slug });
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    state.enqueue_op("unsave", &body.to_string(), ms)?;
+    registry::Registry::from_settings(&state)?
+        .refresh(&state)
+        .await?;
+    Ok(())
+}
+
+/// The community mirror: what the change feed has put there, the
+/// saved flags as the registry says them.
+#[tauri::command]
+fn community_templates(state: State<'_, Arc<Store>>) -> Result<Vec<CommunityTemplate>, String> {
+    state.community_templates()
+}
+
+/// What this account has published: the local template each one came
+/// from, and the text the last push sent.
+#[tauri::command]
+fn publications(state: State<'_, Arc<Store>>) -> Result<Vec<Publication>, String> {
+    state.publications()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -356,7 +540,18 @@ pub fn run() {
             begin_pairing,
             paired_devices,
             revoke_device,
-            parse_deeplink
+            parse_deeplink,
+            registry_url,
+            registry_status,
+            registry_refresh,
+            registry_login,
+            registry_logout,
+            publish_template,
+            unpublish_template,
+            save_community_template,
+            unsave_community_template,
+            community_templates,
+            publications
         ])
         .build(tauri::generate_context!())
         .expect("error while building PrintNinja");

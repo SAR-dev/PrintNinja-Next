@@ -398,3 +398,20 @@ Unreleased.
   unpublish is a tombstone (`deleted: true`, documents gone, the
   owner and slug kept) so a client drops the local copy it made from
   it; a replayed unpublish appends no second tombstone
+- Phase 9 registry (client increment): the sync engine in the app —
+  the registry's change feed pulled into a local mirror (the
+  Community list works offline, showing what the last sync saw), the
+  signed-in account's session kept in the store, an offline queue
+  that replays publishes, unpublishes, saves and unsaves when the
+  connection returns, and a status probe: online, who is signed in,
+  how many operations are waiting. The server address is the
+  `registry.url` setting (shown and editable in Settings) over the
+  `PN_REGISTRY_URL` environment variable, over the local default
+- Phase 9 registry (UI increment): the template list grows
+  Community and Saved tabs beside Mine; a sign-in dialog (handle and
+  password, no email) that creates the account when new; a publish
+  flow from any template (name, an optional slug drafted from the
+  name, a readme); Publish and Unpublish buttons on local templates
+  with a "published" badge; Save/Unsave on community rows that
+  materialize an editable local copy; and a registry status chip —
+  online, the handle, and the waiting count — with a Sync button

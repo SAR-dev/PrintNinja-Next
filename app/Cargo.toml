@@ -17,7 +17,10 @@ tauri-build = "2"
 # middleware layer.
 axum = "0.8"
 tower = { version = "0.5", features = ["util"] }
-tokio = { version = "1", features = ["net", "time"] }
+tokio = { version = "1", features = ["net", "time", "macros", "rt"] }
+# The community registry client (plan phase 9): the sync engine's
+# HTTP calls.
+reqwest = { workspace = true }
 # Job ids for the local print API, and the pairing codes and tokens.
 uuid = { version = "1", features = ["v4"] }
 rand = "0.8"
@@ -45,3 +48,8 @@ pn-render = { path = "../core/render" }
 pn-browser = { path = "../core/browser" }
 pn-job = { path = "../core/job" }
 pn-transport = { path = "../core/transport" }
+
+[dev-dependencies]
+# The registry client's tests speak to a live pn-server on a
+# throwaway port (plan phase 9).
+pn-server = { path = "../server" }

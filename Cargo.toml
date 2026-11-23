@@ -41,3 +41,6 @@ ab_glyph = "0.2"
 barcoders = { version = "2", default-features = false }
 flate2 = "1"
 qrcode = { version = "0.14", default-features = false }
+# The app's registry client (plan phase 9): rustls so the Linux gate
+# needs no OpenSSL at all.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

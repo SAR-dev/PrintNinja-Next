@@ -96,6 +96,66 @@ pub struct PairedDevice {
     pub paired_at: i64,
 }
 
+/// A row of the community registry's change feed as the app has
+/// applied it (plan phase 9): the local mirror the Community tab
+/// shows. `template` and `sample` are always full on a live row — the
+/// feed carries them inline.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommunityTemplate {
+    pub owner: String,
+    pub slug: String,
+    pub name: String,
+    /// The registry's readme, as the tab shows it.
+    pub readme: String,
+    /// "scene" or "document".
+    pub track: String,
+    /// The template document, as JSON text.
+    pub template: String,
+    /// The data field's starting records, as JSON text.
+    pub sample: String,
+    /// When the registry last changed it (Unix seconds).
+    pub changed_at: i64,
+    /// Whether the signed-in account has saved it.
+    pub saved: bool,
+}
+
+/// A local template's publication on the registry (plan phase 9): the
+/// last document that went up, so a refresh can tell when a local edit
+/// is newer than what the registry has.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Publication {
+    pub id: String,
+    pub local_template_id: String,
+    /// The owner's handle, as the registry serves it.
+    pub owner: String,
+    pub slug: String,
+    pub name: String,
+    pub readme: String,
+    /// The template document last pushed, as JSON text.
+    pub last_template: String,
+    /// The sample last pushed, as JSON text.
+    pub last_sample: String,
+    /// When it last went up, as `Date.now()` milliseconds.
+    pub published_at: i64,
+}
+
+/// A registry operation waiting for a connection (plan phase 9,
+/// offline-first): kind plus the operation as JSON text, kept in the
+/// order it was queued.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueuedOp {
+    pub id: i64,
+    /// "publish", "unpublish", "save" or "unsave".
+    pub kind: String,
+    /// The operation, as JSON text.
+    pub payload: String,
+    /// When it was queued, as `Date.now()` milliseconds.
+    pub created_at: i64,
+}
+
 /// The app's storage: one SQLite connection behind a mutex.
 /// `rusqlite::Connection` is not `Sync` and Tauri's managed state must
 /// be, so the lock is part of the type.
@@ -438,6 +498,229 @@ impl Store {
         Ok(n > 0)
     }
 
+    /// The community mirror, as the change feed last left it.
+    pub fn community_templates(&self) -> Result<Vec<CommunityTemplate>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT owner, slug, name, readme, track, template, sample,
+                        changed_at, saved
+                 FROM registry_templates ORDER BY owner, slug",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], community_from_row)
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    /// One mirror row by owner and slug, the key the feed applies by.
+    pub fn community_template(
+        &self,
+        owner: &str,
+        slug: &str,
+    ) -> Result<Option<CommunityTemplate>, String> {
+        let conn = self.lock();
+        let row: Option<CommunityTemplate> = conn
+            .query_row(
+                "SELECT owner, slug, name, readme, track, template, sample,
+                        changed_at, saved
+                 FROM registry_templates WHERE owner = ?1 AND slug = ?2",
+                params![owner, slug],
+                community_from_row,
+            )
+            .ok();
+        Ok(row)
+    }
+
+    /// Apply one feed entry to the mirror: a live entry upserts, a
+    /// tombstone drops the row.
+    pub fn upsert_community_template(&self, t: &CommunityTemplate) -> Result<(), String> {
+        self.lock()
+            .execute(
+                "INSERT OR REPLACE INTO registry_templates
+                     (owner, slug, name, readme, track, template, sample, changed_at, saved)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    t.owner,
+                    t.slug,
+                    t.name,
+                    t.readme,
+                    t.track,
+                    t.template,
+                    t.sample,
+                    t.changed_at,
+                    t.saved as i64
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// A tombstone goes through: the local copy of the feed entry is
+    /// gone. False when the mirror did not hold it.
+    pub fn drop_community_template(&self, owner: &str, slug: &str) -> Result<bool, String> {
+        let n = self
+            .lock()
+            .execute(
+                "DELETE FROM registry_templates WHERE owner = ?1 AND slug = ?2",
+                params![owner, slug],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(n > 0)
+    }
+
+    /// The account's saved list changed: the flag on one mirror row.
+    pub fn set_community_saved(&self, owner: &str, slug: &str, saved: bool) -> Result<(), String> {
+        self.lock()
+            .execute(
+                "UPDATE registry_templates SET saved = ?3 WHERE owner = ?1 AND slug = ?2",
+                params![owner, slug, saved as i64],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// Every publication the app has on the registry.
+    pub fn publications(&self) -> Result<Vec<Publication>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, local_template_id, owner, slug, name, readme,
+                        last_template, last_sample, published_at
+                 FROM publications ORDER BY published_at, rowid",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(Publication {
+                    id: r.get(0)?,
+                    local_template_id: r.get(1)?,
+                    owner: r.get(2)?,
+                    slug: r.get(3)?,
+                    name: r.get(4)?,
+                    readme: r.get(5)?,
+                    last_template: r.get(6)?,
+                    last_sample: r.get(7)?,
+                    published_at: r.get(8)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    /// The publication of one local template, if it has one.
+    pub fn publication_for_local(
+        &self,
+        local_template_id: &str,
+    ) -> Result<Option<Publication>, String> {
+        let conn = self.lock();
+        let row: Option<Publication> = conn
+            .query_row(
+                "SELECT id, local_template_id, owner, slug, name, readme,
+                        last_template, last_sample, published_at
+                 FROM publications WHERE local_template_id = ?1",
+                params![local_template_id],
+                |r| {
+                    Ok(Publication {
+                        id: r.get(0)?,
+                        local_template_id: r.get(1)?,
+                        owner: r.get(2)?,
+                        slug: r.get(3)?,
+                        name: r.get(4)?,
+                        readme: r.get(5)?,
+                        last_template: r.get(6)?,
+                        last_sample: r.get(7)?,
+                        published_at: r.get(8)?,
+                    })
+                },
+            )
+            .ok();
+        Ok(row)
+    }
+
+    /// Record that a local template is on the registry. One
+    /// publication per local template: publishing the same template
+    /// again is an update of the same row.
+    pub fn upsert_publication(&self, p: &Publication) -> Result<(), String> {
+        self.lock()
+            .execute(
+                "INSERT OR REPLACE INTO publications
+                     (id, local_template_id, owner, slug, name, readme,
+                      last_template, last_sample, published_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    p.id,
+                    p.local_template_id,
+                    p.owner,
+                    p.slug,
+                    p.name,
+                    p.readme,
+                    p.last_template,
+                    p.last_sample,
+                    p.published_at
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// The template is off the registry: its publication row goes.
+    /// False when it had none.
+    pub fn delete_publication_for_local(&self, local_template_id: &str) -> Result<bool, String> {
+        let n = self
+            .lock()
+            .execute(
+                "DELETE FROM publications WHERE local_template_id = ?1",
+                params![local_template_id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(n > 0)
+    }
+
+    /// The offline queue, oldest first — the order the refresh replays
+    /// it in.
+    pub fn queued_ops(&self) -> Result<Vec<QueuedOp>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare("SELECT id, kind, payload, created_at FROM sync_queue ORDER BY id")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(QueuedOp {
+                    id: r.get(0)?,
+                    kind: r.get(1)?,
+                    payload: r.get(2)?,
+                    created_at: r.get(3)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    /// Queue one operation; its id comes back so the caller can say
+    /// which one it queued.
+    pub fn enqueue_op(&self, kind: &str, payload: &str, now: i64) -> Result<i64, String> {
+        let conn = self.lock();
+        conn.execute(
+            "INSERT INTO sync_queue (kind, payload, created_at) VALUES (?1, ?2, ?3)",
+            params![kind, payload, now],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// One operation left the queue: it is done (or dead).
+    pub fn drop_queued_op(&self, id: i64) -> Result<(), String> {
+        self.lock()
+            .execute("DELETE FROM sync_queue WHERE id = ?1", params![id])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     /// A done or cancelled job goes back to queued, its result cleared.
     /// False when it is still in flight — queued or running.
     pub fn retry_finished_job(&self, id: &str) -> Result<bool, String> {
@@ -494,6 +777,36 @@ CREATE TABLE IF NOT EXISTS paired_devices (
   token_hash TEXT NOT NULL,
   paired_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS registry_templates (
+  owner TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  name TEXT NOT NULL,
+  readme TEXT NOT NULL,
+  track TEXT NOT NULL,
+  template TEXT NOT NULL,
+  sample TEXT NOT NULL,
+  changed_at INTEGER NOT NULL,
+  saved INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (owner, slug)
+);
+CREATE TABLE IF NOT EXISTS publications (
+  id TEXT PRIMARY KEY,
+  local_template_id TEXT NOT NULL UNIQUE,
+  owner TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  name TEXT NOT NULL,
+  readme TEXT NOT NULL,
+  last_template TEXT NOT NULL,
+  last_sample TEXT NOT NULL,
+  published_at INTEGER NOT NULL,
+  UNIQUE (owner, slug)
+);
+CREATE TABLE IF NOT EXISTS sync_queue (
+  id INTEGER PRIMARY KEY,
+  kind TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS api_jobs (
   id TEXT PRIMARY KEY,
   idempotency_key TEXT UNIQUE,
@@ -523,6 +836,20 @@ fn job_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<StoredJob> {
         transport: r.get(7)?,
         result: r.get(8)?,
         at: r.get(9)?,
+    })
+}
+
+fn community_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<CommunityTemplate> {
+    Ok(CommunityTemplate {
+        owner: r.get(0)?,
+        slug: r.get(1)?,
+        name: r.get(2)?,
+        readme: r.get(3)?,
+        track: r.get(4)?,
+        template: r.get(5)?,
+        sample: r.get(6)?,
+        changed_at: r.get(7)?,
+        saved: r.get::<_, i64>(8)? != 0,
     })
 }
 
@@ -714,6 +1041,99 @@ mod tests {
         assert_eq!(j.status, "queued");
         assert_eq!(j.result, None, "the old result is cleared");
         assert_eq!(j.finished_at, None);
+    }
+
+    fn community(owner: &str, slug: &str) -> CommunityTemplate {
+        CommunityTemplate {
+            owner: owner.into(),
+            slug: slug.into(),
+            name: format!("{owner}/{slug}"),
+            readme: "use it".into(),
+            track: "scene".into(),
+            template: r#"{"format":"scene"}"#.into(),
+            sample: "[]".into(),
+            changed_at: 1,
+            saved: false,
+        }
+    }
+
+    #[test]
+    fn the_community_mirror_upserts_and_drops() {
+        let s = store();
+        s.upsert_community_template(&community("ana", "labels"))
+            .unwrap();
+        let mut c = community("ana", "labels");
+        c.name = "renamed".into();
+        c.changed_at = 2;
+        s.upsert_community_template(&c).unwrap();
+
+        let rows = s.community_templates().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].name, "renamed");
+        assert_eq!(rows[0].changed_at, 2);
+        assert!(!rows[0].saved);
+
+        assert!(s.set_community_saved("ana", "labels", true).is_ok());
+        assert!(
+            s.community_template("ana", "labels")
+                .unwrap()
+                .unwrap()
+                .saved
+        );
+        assert!(s.drop_community_template("ana", "labels").unwrap());
+        assert!(!s.drop_community_template("ana", "labels").unwrap());
+        assert!(s.community_templates().unwrap().is_empty());
+    }
+
+    fn publication(local_id: &str) -> Publication {
+        Publication {
+            id: format!("pub-{local_id}"),
+            local_template_id: local_id.into(),
+            owner: "ana".into(),
+            slug: "labels".into(),
+            name: "T".into(),
+            readme: "r".into(),
+            last_template: r#"{"format":"scene"}"#.into(),
+            last_sample: "[]".into(),
+            published_at: 1,
+        }
+    }
+
+    #[test]
+    fn one_publication_per_local_template() {
+        let s = store();
+        s.upsert_publication(&publication("t1")).unwrap();
+        let mut p = publication("t1");
+        p.published_at = 5;
+        s.upsert_publication(&p).unwrap();
+        let mut p2 = publication("t2");
+        // A different slug: the registry has one entry per owner/slug.
+        p2.slug = "tags".into();
+        s.upsert_publication(&p2).unwrap();
+
+        assert_eq!(s.publications().unwrap().len(), 2);
+        let p = s.publication_for_local("t1").unwrap().unwrap();
+        assert_eq!(p.published_at, 5);
+        assert!(s.publication_for_local("nope").unwrap().is_none());
+        assert!(s.delete_publication_for_local("t1").unwrap());
+        assert!(!s.delete_publication_for_local("t1").unwrap());
+        assert_eq!(s.publications().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn the_sync_queue_keeps_its_order_and_releases_ops() {
+        let s = store();
+        let a = s.enqueue_op("publish", "{}", 1).unwrap();
+        let b = s.enqueue_op("save", "{}", 2).unwrap();
+        let c = s.enqueue_op("unsave", "{}", 3).unwrap();
+
+        let ops = s.queued_ops().unwrap();
+        assert_eq!(ops.iter().map(|o| o.id).collect::<Vec<_>>(), vec![a, b, c]);
+        assert_eq!(ops[1].kind, "save");
+
+        s.drop_queued_op(b).unwrap();
+        let ops = s.queued_ops().unwrap();
+        assert_eq!(ops.iter().map(|o| o.id).collect::<Vec<_>>(), vec![a, c]);
     }
 
     #[test]
