@@ -357,6 +357,9 @@ pub struct Template {
     /// Which track renders this template (default `scene`).
     #[serde(default)]
     pub format: Format,
+    /// The document's HTML, when `format: html` (plan §5.3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub html: Option<String>,
     pub media: Media,
     /// Declared data fields (optional; see [`Field`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -386,6 +389,29 @@ impl Template {
         }
 
         let declared: Vec<&Field> = self.fields.iter().collect();
+        // The document track (plan §5.3): an html template carries the
+        // document in `html`, not scene elements.
+        if self.format == Format::Html {
+            match self.html.as_deref().map(str::trim) {
+                None | Some("") => return Err(TemplateError::NoHtml),
+                Some(html) => {
+                    if !self.elements.is_empty() {
+                        return Err(TemplateError::HtmlHasElements);
+                    }
+                    if !declared.is_empty() {
+                        for name in binding_names(html) {
+                            if !declared.iter().any(|f| f.name == name) {
+                                return Err(TemplateError::UnknownBinding(name));
+                            }
+                        }
+                    }
+                }
+            }
+        } else if let Some(html) = self.html.as_deref().map(str::trim) {
+            if !html.is_empty() {
+                return Err(TemplateError::HtmlOnScene);
+            }
+        }
         for el in &self.elements {
             Self::validate_element(el, w, h, &declared, 0)?;
         }
@@ -555,6 +581,39 @@ pub fn binding_names(s: &str) -> Vec<String> {
     names
 }
 
+/// One record's values into a document: every binding [`binding_names`]
+/// would recognize is replaced by the record's value (a missing field
+/// becomes the empty string); anything else between braces is left
+/// exactly as written, so what the validator sees and what the browser
+/// prints are the same text.
+pub fn substitute(html: &str, record: &Record) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(open) = rest.find("{{") {
+        out.push_str(&rest[..open]);
+        let after = &rest[open + 2..];
+        let name: String = after
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect();
+        let recognized = !name.is_empty()
+            && name
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && after.get(name.len()..name.len() + 2) == Some("}}");
+        if recognized {
+            out.push_str(record.get(&name).map(Value::as_text).unwrap_or(""));
+            rest = &after[name.len() + 2..];
+        } else {
+            out.push_str("{{");
+            rest = after;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Serialization
 
@@ -579,6 +638,13 @@ impl Template {
 pub enum TemplateError {
     /// `format: html` on label or roll media (plan §5.3).
     HtmlOnThermalMedia(f32, f32),
+    /// `format: html` but the `html` field is missing or empty.
+    NoHtml,
+    /// `format: html` with scene elements — the document track renders
+    /// the document, not elements.
+    HtmlHasElements,
+    /// `format: scene` but the template carries HTML content.
+    HtmlOnScene,
     /// Media geometry is missing or non-positive.
     BadGeometry { width_mm: f32, height_mm: f32 },
     /// A group placed without `page: flow`.
@@ -614,6 +680,21 @@ impl fmt::Display for TemplateError {
                 f,
                 "an HTML template needs page media (A4, letter, …); this one is \
                  {w}×{h} mm thermal media — use format \"scene\""
+            ),
+            TemplateError::NoHtml => write!(
+                f,
+                "the format is \"html\" but the template carries no HTML \
+                 document — put the document in the \"html\" field"
+            ),
+            TemplateError::HtmlHasElements => write!(
+                f,
+                "the format is \"html\" renders the document, not scene \
+                 elements — move the design into the HTML"
+            ),
+            TemplateError::HtmlOnScene => write!(
+                f,
+                "the format is \"scene\" but the template carries an HTML \
+                 document — use format \"html\" for the document track"
             ),
             TemplateError::BadGeometry {
                 width_mm,
@@ -719,6 +800,7 @@ mod tests {
     fn a_minimal_label_template_round_trips_to_the_same_bytes() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: label(),
             fields: vec![Field {
                 name: "customer".to_string(),
@@ -763,6 +845,7 @@ mod tests {
     fn an_html_template_is_rejected_on_thermal_media() {
         let t = Template {
             format: Format::Html,
+            html: None,
             media: label(),
             fields: vec![],
             elements: vec![],
@@ -773,14 +856,15 @@ mod tests {
             "{err}"
         );
         assert!(!err.to_string().is_empty());
-        // The same template on page media is fine.
-        let ok = Template {
+        // The same template with its document, on page media, is fine.
+        let mut ok = Template {
             media: Media::Page {
                 width_mm: 210.0,
                 height_mm: 297.0,
             },
             ..t.clone()
         };
+        ok.html = Some("<html></html>".into());
         ok.validate().unwrap();
     }
 
@@ -800,6 +884,7 @@ mod tests {
         };
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: label(),
             fields: vec![],
             elements: vec![flow],
@@ -875,6 +960,7 @@ mod tests {
         };
         let declared_string = Template {
             format: Format::Scene,
+            html: None,
             media: label(),
             fields: vec![Field {
                 name: "lines".to_string(),
@@ -901,6 +987,7 @@ mod tests {
     fn a_declared_binding_set_catches_a_typo() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: label(),
             fields: vec![Field {
                 name: "customer".to_string(),
@@ -925,6 +1012,7 @@ mod tests {
     fn an_element_that_runs_off_the_page_is_named() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: label(),
             fields: vec![],
             elements: vec![text(38.0, "too low")], // y 38 + h 4 = 42 > 40
@@ -939,6 +1027,7 @@ mod tests {
     fn zero_is_not_a_page_number() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: Media::Page {
                 width_mm: 210.0,
                 height_mm: 297.0,
@@ -956,6 +1045,7 @@ mod tests {
     fn a_fixed_template_serializes_to_the_pinned_golden_bytes() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: Media::Label {
                 width_mm: 58.0,
                 height_mm: 40.0,
@@ -997,5 +1087,108 @@ mod tests {
         );
         assert!(binding_names("no bindings here").is_empty());
         assert_eq!(binding_names("{{a"), vec![] as Vec<String>);
+    }
+
+    fn html_template(html: &str) -> Template {
+        Template {
+            format: Format::Html,
+            html: Some(html.to_string()),
+            media: Media::Page {
+                width_mm: 210.0,
+                height_mm: 297.0,
+            },
+            fields: Vec::new(),
+            elements: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn an_html_template_on_page_media_is_the_document_track() {
+        let t = html_template("<html><body>{{title}}</body></html>");
+        t.validate()
+            .expect("an html document on page media is valid");
+    }
+
+    #[test]
+    fn an_html_format_without_a_document_is_rejected() {
+        let mut missing = html_template("<html></html>");
+        missing.html = None;
+        assert!(matches!(missing.validate(), Err(TemplateError::NoHtml)));
+        let blank = html_template("   ");
+        assert!(matches!(blank.validate(), Err(TemplateError::NoHtml)));
+    }
+
+    #[test]
+    fn a_scene_format_with_html_content_is_rejected() {
+        let mut t = Template {
+            format: Format::Scene,
+            html: None,
+            media: label(),
+            fields: Vec::new(),
+            elements: Vec::new(),
+        };
+        t.html = Some("<html></html>".into());
+        assert!(matches!(t.validate(), Err(TemplateError::HtmlOnScene)));
+    }
+
+    #[test]
+    fn an_html_template_with_scene_elements_is_rejected() {
+        let mut t = html_template("<html></html>");
+        t.elements = vec![text(10.0, "x")];
+        assert!(matches!(t.validate(), Err(TemplateError::HtmlHasElements)));
+    }
+
+    #[test]
+    fn an_html_binding_is_checked_against_the_declared_fields() {
+        let mut t = html_template("<html><body>{{title}} {{missing}}</body></html>");
+        t.fields = vec![Field {
+            name: "title".into(),
+            kind: Default::default(),
+        }];
+        assert!(matches!(
+            t.validate(),
+            Err(TemplateError::UnknownBinding(n)) if n == "missing"
+        ));
+        // No declared fields: bindings are left to the data, like scene.
+        t.fields = Vec::new();
+        t.validate()
+            .expect("without declared fields, any binding goes");
+    }
+
+    #[test]
+    fn the_html_field_round_trips_and_is_omitted_when_absent() {
+        let t = html_template("<html></html>");
+        let json = t.to_json().unwrap();
+        assert!(json.contains("\"html\":\"<html></html>\""));
+        assert_eq!(Template::from_json(&json).unwrap(), t);
+        let scene = Template {
+            format: Format::Scene,
+            html: None,
+            media: label(),
+            fields: Vec::new(),
+            elements: Vec::new(),
+        };
+        let scene_json = scene.to_json().unwrap();
+        assert!(
+            !scene_json.contains("html"),
+            "an absent html field does not change the scene bytes: {scene_json}"
+        );
+    }
+
+    #[test]
+    fn substitute_fills_the_record_and_keeps_the_rest_of_the_document() {
+        let records = Records::from_json(r#"[{"title":"INVOICE 1042","qty":2}]"#).unwrap();
+        let record = &records.0[0];
+        let doc = "<html><body><h1>{{title}}</h1>× {{qty}} — {{missing}}</body></html>";
+        assert_eq!(
+            substitute(doc, record),
+            "<html><body><h1>INVOICE 1042</h1>× 2 — </body></html>"
+        );
+        // Non-bindings between braces stay exactly as written:
+        // `{{ a }}` (a space is not a name) and the outer braces of
+        // `{{{{title}}}}` survive, and only the inner `{{title}}` is a
+        // binding — the same text `binding_names` sees.
+        let tricky = "{{ a }} {{x1}} {{{{title}}}}";
+        assert_eq!(substitute(tricky, record), "{{ a }}  {{INVOICE 1042}}");
     }
 }

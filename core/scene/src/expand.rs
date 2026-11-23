@@ -562,6 +562,7 @@ mod tests {
     fn a_batch_of_labels_is_one_page_each_with_its_own_data() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: label(58.0, 40.0),
             fields: vec![Field {
                 name: "customer".to_string(),
@@ -593,6 +594,7 @@ mod tests {
     fn an_empty_batch_is_an_error_not_an_empty_print() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: label(58.0, 40.0),
             fields: vec![],
             elements: vec![text(4.0, 6.0, 50.0, 4.0, "x")],
@@ -607,6 +609,7 @@ mod tests {
     fn a_missing_group_field_is_named() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: label(58.0, 40.0),
             fields: vec![],
             elements: vec![group(
@@ -629,6 +632,7 @@ mod tests {
     fn a_label_full_of_rows_overflows_instead_of_silently_dropping() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: label(58.0, 40.0),
             fields: vec![],
             elements: vec![group(
@@ -658,6 +662,7 @@ mod tests {
     fn a_missing_binding_reads_as_empty_not_as_an_error() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: label(58.0, 40.0),
             fields: vec![],
             elements: vec![text(4.0, 6.0, 50.0, 4.0, "Hi {{who}}")],
@@ -681,6 +686,7 @@ mod tests {
     fn a_batch_of_labels_expands_to_the_pinned_golden_pages() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: label(58.0, 40.0),
             fields: vec![
                 Field {
@@ -722,6 +728,7 @@ mod tests {
     fn an_n_page_document_expands_to_the_pinned_golden_pages() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: Media::Page {
                 width_mm: 100.0,
                 height_mm: 80.0,
@@ -758,6 +765,7 @@ mod tests {
     fn a_variable_length_receipt_expands_to_the_pinned_golden_pages() {
         let t = Template {
             format: Format::Scene,
+            html: None,
             media: Media::Roll {
                 width_mm: 58.0,
                 label_height_mm: 60.0,

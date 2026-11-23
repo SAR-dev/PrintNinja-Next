@@ -2609,9 +2609,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pn-browser"
+version = "0.0.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "pn-e2e"
 version = "0.0.0"
 dependencies = [
+ "pn-browser",
  "pn-encoders",
  "pn-job",
  "pn-planner",

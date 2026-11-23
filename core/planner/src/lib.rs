@@ -134,6 +134,7 @@ mod tests {
     fn template(format: Format, media: TemplateMedia) -> Template {
         Template {
             format,
+            html: None,
             media,
             fields: Vec::new(),
             elements: Vec::new(),

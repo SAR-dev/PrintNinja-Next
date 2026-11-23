@@ -64,6 +64,7 @@ poll_after_ms = 200
 fn label_template() -> Template {
     Template {
         format: Format::Scene,
+        html: None,
         media: Media::Label {
             width_mm: 40.0,
             height_mm: 50.0,

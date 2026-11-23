@@ -1,7 +1,7 @@
 # PrintNinja (next) — Rust workspace.
 #
 # Layout per docs/planned/REFACTORING-PLAN.md §5.11:
-#   core/{scene,render,planner,profiles,encoders,transport,job}
+#   core/{scene,browser,render,planner,profiles,encoders,transport,job}
 #   app/                Tauri shell (Windows, Linux; Android in phase 11)
 #   tests/golden        golden-file harness + committed golden byte files
 #
@@ -13,6 +13,7 @@ resolver = "2"
 members = [
     "app",
     "core/scene",
+    "core/browser",
     "core/render",
     "core/planner",
     "core/profiles",

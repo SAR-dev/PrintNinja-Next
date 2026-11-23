@@ -146,6 +146,8 @@ export interface Field {
 export interface Template {
   /** Which track renders this template (default `scene`). */
   format?: Format;
+  /** The document's HTML, when `format: "html"` (plan §5.3). */
+  html?: string;
   media: Media;
   /** Declared data fields (optional). */
   fields?: Field[];

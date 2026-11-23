@@ -174,3 +174,24 @@ Unreleased.
   the pipeline produced. The scene → render bridge (`paint_page`) is the
   one both the production pipeline and the preview draw through, so
   preview and print show the same dots
+- Phase 5 document track (schema and renderer increments): the html
+  document track's missing piece — the template's `html` field (plan
+  §5.3). `format: html` now carries the document itself: validation
+  requires it (and only it — an html template with scene elements, or a
+  scene template with HTML content, is rejected in plain words),
+  bindings in the document are checked against the declared fields like
+  scene bindings, and `substitute()` fills one record's values into the
+  document (a missing field becomes empty text; anything that is not a
+  binding — the same rule `binding_names` applies — stays exactly as
+  written). The field is mirrored in TypeScript, and a scene template
+  without it serializes to exactly the old bytes. `pn-browser` renders
+  the filled document to a PDF with the desktop OS's own headless
+  browser in one shot (Edge on Windows, Chromium/Chrome on Linux, a
+  `PRINTNINJA_BROWSER` override, a 60 s deadline, stderr to a file so a
+  chatty browser can never hang the render) — and when no browser is
+  found, or none comes out, the failure says so in plain words with the
+  browser's own stderr excerpt, never a placeholder PDF. An e2e runs
+  the whole track against the virtual printer: html template → one
+  record substituted → browser PDF → IPP delivery, byte-verified on
+  disk; where the machine has no browser (the CI container) it verifies
+  the honest no-browser error instead
