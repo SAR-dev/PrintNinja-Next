@@ -2748,8 +2748,19 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 name = "printninja"
 version = "0.0.0"
 dependencies = [
+ "pn-browser",
+ "pn-encoders",
+ "pn-job",
+ "pn-planner",
+ "pn-profiles",
+ "pn-render",
+ "pn-scene",
+ "pn-transport",
+ "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

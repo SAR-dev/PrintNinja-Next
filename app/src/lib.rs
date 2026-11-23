@@ -1,10 +1,131 @@
 //! PrintNinja (next) — Tauri shell. Windows and Linux first; Android in
 //! phase 11. The frontend lives in `app/ui` and is embedded at compile
 //! time via `tauri::generate_context!` (build it first).
+//!
+//! This file is the thin Tauri layer: it holds the loaded printer
+//! profiles, exposes the `pipeline` module through three commands —
+//! list printers, prepare a job, print a job — and keeps the heavy
+//! work off the UI thread.
+
+mod pipeline;
+
+use std::path::PathBuf;
+
+use pn_job::JobResult;
+use pn_profiles::{Profile, ProfileSet};
+use pn_scene::{Records, Template};
+use tauri::{Manager, State};
+
+pub use pipeline::{
+    factory, load_profiles, prepare_units, print_units, profile_infos, report_of, JobReport,
+    PipelineError, PrepareReport, ProfileInfo, Transport, Units,
+};
+
+/// The printer profiles, loaded once at startup (plan phase 7: the
+/// profile set *is* the printer list).
+struct AppProfiles {
+    profiles: ProfileSet,
+}
+
+/// Where the profiles live: an explicit override, then the shipped set
+/// next to the source tree (dev), then the bundled resource directory
+/// (release; the bundling lands with the packaging phase).
+fn profiles_dir(handle: &tauri::AppHandle) -> PathBuf {
+    if let Ok(dir) = std::env::var("PN_PROFILES_DIR") {
+        return PathBuf::from(dir);
+    }
+    let dev = PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../core/profiles/profiles"
+    ));
+    if dev.is_dir() {
+        return dev;
+    }
+    handle
+        .path()
+        .resource_dir()
+        .expect("the app must have a resource directory")
+        .join("profiles")
+}
+
+/// The three inputs every job command shares, checked before any
+/// work: the template parses, the printer exists, the data is records.
+fn load_inputs<'a>(
+    profiles: &'a ProfileSet,
+    template_json: &str,
+    profile_name: &str,
+    data_json: &str,
+) -> Result<(&'a Profile, Template, Records), String> {
+    let template = Template::from_json(template_json).map_err(|e| e.to_string())?;
+    let profile = profiles
+        .find(profile_name)
+        .ok_or_else(|| format!("no printer profile named \"{profile_name}\""))?;
+    let records = Records::from_json(data_json).map_err(|e| e.to_string())?;
+    Ok((profile, template, records))
+}
+
+/// The printer list, in the shape the UI shows it.
+#[tauri::command]
+fn list_printers(state: State<'_, AppProfiles>) -> Vec<ProfileInfo> {
+    profile_infos(&state.profiles)
+}
+
+/// Prepare a job: pick the output path, encode the units, render the
+/// preview. Returns the report; nothing has touched the wire.
+#[tauri::command]
+async fn plan_job(
+    state: State<'_, AppProfiles>,
+    template: String,
+    profile: String,
+    data: String,
+    copies: u32,
+) -> Result<PrepareReport, String> {
+    let (profile, template, records) = load_inputs(&state.profiles, &template, &profile, &data)?;
+    let (profile, template, records) = (profile.clone(), template.clone(), records.clone());
+    tauri::async_runtime::spawn_blocking(move || {
+        prepare_units(&template, &profile, &records, copies).map(|units| units.report)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e: PipelineError| e.to_string())
+}
+
+/// Prepare and print a job in one call, over the given transport.
+/// The report is what actually happened — every state in the plan's
+/// result vocabulary is possible.
+#[tauri::command]
+async fn print_job(
+    state: State<'_, AppProfiles>,
+    template: String,
+    profile: String,
+    data: String,
+    copies: u32,
+    transport: Transport,
+) -> Result<JobReport, String> {
+    let (profile, template, records) = load_inputs(&state.profiles, &template, &profile, &data)?;
+    let (profile, template, records) = (profile.clone(), template.clone(), records.clone());
+    let report = tauri::async_runtime::spawn_blocking(move || {
+        let units = prepare_units(&template, &profile, &records, copies)?;
+        let factory = factory(&transport, units.document_format);
+        let result: JobResult = print_units(&units.spec, &profile, factory);
+        Ok::<_, PipelineError>(report_of(result))
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    report.map_err(|e| e.to_string())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            let dir = profiles_dir(app.handle());
+            let profiles = load_profiles(&dir)
+                .unwrap_or_else(|e| panic!("the profile set at {} must load: {e}", dir.display()));
+            app.manage(AppProfiles { profiles });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![list_printers, plan_job, print_job])
         .run(tauri::generate_context!())
         .expect("error while running PrintNinja");
 }

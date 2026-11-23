@@ -1,0 +1,879 @@
+//! The print pipeline the UI drives (plan phase 7): template + data +
+//! printer profile → prepared units → an honest job result.
+//!
+//! Every caller goes through the same path — the UI now, the local API
+//! in phase 8: the template is validated, the records expand to pages,
+//! the planner picks the output path (native, raster, pdf or browser),
+//! the encoders (or the browser) produce the units, and the job state
+//! machine delivers them and reports what actually happened.
+//!
+//! The functions here are plain Rust: the Tauri commands in `lib.rs`
+//! are thin wrappers, and the tests drive the pipeline directly.
+
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::Duration;
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+use pn_job::BtFactory;
+#[cfg(windows)]
+use pn_job::SpoolerFactory;
+use pn_job::{run, IppFactory, JobResult, JobSpec, TcpFactory, TransportFactory};
+use pn_planner::{plan, OutputPath};
+use pn_profiles::{load_dir, Media, Profile, ProfileSet};
+use pn_render::{dots_for_mm, fit_to_head, paint_page, render_pdf, RasterPage, Renderer};
+use pn_scene::{expand, substitute, ExpandedJob, Page, Records, Template};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+/// A job that cannot be prepared.
+#[derive(Debug, Error)]
+pub enum PipelineError {
+    /// The template does not hold together.
+    #[error("the template is not valid: {0}")]
+    Template(String),
+    /// The data and the template do not meet.
+    #[error("the data is not records: {0}")]
+    Data(String),
+    /// No output path can print the template's media on this printer.
+    #[error("{0}")]
+    Media(String),
+    /// The scene could not be encoded.
+    #[error("the scene cannot be encoded: {0}")]
+    Encode(String),
+    /// The document could not be rendered.
+    #[error("the document cannot be rendered: {0}")]
+    Document(String),
+}
+
+/// How the app reaches a printer. The profile says *what* the printer
+/// is; the transport says *where*.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum Transport {
+    /// A raw command port over TCP — the classic label printer.
+    Tcp { host: String, port: u16 },
+    /// An IPP endpoint — CUPS or the printer's own interface.
+    Ipp {
+        address: String,
+        #[serde(default)]
+        user: Option<String>,
+    },
+    /// A Windows spooler queue, by printer name.
+    Spooler { name: String },
+    /// A paired Bluetooth device: a MAC, or a COM port on Windows.
+    Bluetooth { address: String },
+}
+
+/// The path a job takes, in the words the UI shows.
+fn path_word(path: OutputPath) -> &'static str {
+    match path {
+        OutputPath::Native => "native",
+        OutputPath::Raster => "raster",
+        OutputPath::Pdf => "pdf",
+        OutputPath::Browser => "browser",
+    }
+}
+
+/// The first page of the job, rendered the way the job prints (§3.4).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum Preview {
+    /// A scene page as 1-bit dots: packed eight dots per byte, row by
+    /// row, at the printer's dpi.
+    Bitmap {
+        width: u32,
+        height: u32,
+        packed: Vec<u8>,
+        width_mm: f32,
+        height_mm: f32,
+    },
+    /// A document job as the PDF it will be sent as.
+    Pdf { pdf: Vec<u8> },
+}
+
+/// What a prepared job looks like before it goes to the wire.
+#[derive(Debug, Clone, Serialize)]
+pub struct PrepareReport {
+    /// "native", "raster", "pdf" or "browser".
+    pub path: &'static str,
+    /// The recorded fallback reason, when the track's preferred path
+    /// was refused (plan §5.3).
+    pub fallback: Option<String>,
+    /// How many data records the job carries.
+    pub records: u32,
+    /// The pages the data expands to.
+    pub pages: u32,
+    /// The units delivered to the printer — one label or cut each,
+    /// copies included.
+    pub units: u32,
+    /// The job's size on the wire, in bytes.
+    pub bytes: u64,
+    pub preview: Option<Preview>,
+}
+
+/// A job ready for delivery: the units, the report, and how the bytes
+/// must be declared to the spooler or IPP.
+#[derive(Debug)]
+pub struct Units {
+    pub report: PrepareReport,
+    pub spec: JobSpec,
+    /// `"application/octet-stream"` for raw command bytes,
+    /// `"application/pdf"` for PDF jobs.
+    pub document_format: &'static str,
+}
+
+/// What happened to a printed job, in words the UI can show.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct JobReport {
+    /// "confirmed", "sent_unconfirmed", "partially_printed", "failed"
+    /// or "wrong_mode_suspected".
+    pub result: String,
+    /// The "N of M" counts, for partial jobs.
+    pub counts: Option<(u32, u32)>,
+    /// The plain-word reason, when there is one.
+    pub reason: Option<String>,
+}
+
+/// A profile as the UI's printer list shows it.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProfileInfo {
+    pub model: String,
+    pub aliases: Vec<String>,
+    /// The profile's language, in words: "zpl", "escpos", "pdf", …
+    pub language: String,
+    /// The media kinds the printer takes: "label", "continuous", "page".
+    pub media: Vec<String>,
+    pub dpi: Option<u32>,
+    pub head_width_dots: Option<u32>,
+    /// Whether this printer can confirm a job with its own reply
+    /// (plan §5.7: a profile with no status dialect never ends
+    /// confirmed).
+    pub can_confirm: bool,
+}
+
+fn media_word(media: &Media) -> &'static str {
+    match media {
+        Media::Label => "label",
+        Media::Continuous => "continuous",
+        Media::Page => "page",
+    }
+}
+
+/// The profile set's printers, in the shape the UI lists them.
+pub fn profile_infos(set: &ProfileSet) -> Vec<ProfileInfo> {
+    set.profiles()
+        .map(|(_, p)| {
+            let meta = &p.profile;
+            ProfileInfo {
+                model: meta.model.clone(),
+                aliases: meta.aliases.clone(),
+                language: meta.language.to_string(),
+                media: meta
+                    .media
+                    .iter()
+                    .map(|m| media_word(m).to_string())
+                    .collect(),
+                dpi: meta.dpi.map(u16::into),
+                head_width_dots: meta.head_width_dots,
+                can_confirm: p.answers_status() && p.delivery.keep_open_for_status,
+            }
+        })
+        .collect()
+}
+
+/// Load and validate a directory of profile TOMLs.
+pub fn load_profiles(dir: &Path) -> Result<ProfileSet, String> {
+    load_dir(dir).map_err(|e| e.to_string())
+}
+
+/// The template's page size in millimetres — one page's worth, the
+/// same for every page of a label, roll or page template.
+fn page_mm(template: &Template) -> (f32, f32) {
+    match template.media {
+        pn_scene::Media::Label {
+            width_mm,
+            height_mm,
+        } => (width_mm, height_mm),
+        pn_scene::Media::Roll {
+            width_mm,
+            label_height_mm,
+        } => (width_mm, label_height_mm),
+        pn_scene::Media::Page {
+            width_mm,
+            height_mm,
+        } => (width_mm, height_mm),
+    }
+}
+
+/// Paint one expanded page at the printer's dpi — the same dots the
+/// raster path ships. A profile without a dpi (page printers) renders
+/// at 300, the document-resolution the spooler and CUPS expect.
+fn render_scene_page(page: &Page, profile: &Profile, w_mm: f32, h_mm: f32) -> RasterPage {
+    let dpi = profile.profile.dpi.map_or(300, u16::into);
+    let w = fit_to_head(dots_for_mm(w_mm, dpi), profile.profile.head_width_dots);
+    let h = dots_for_mm(h_mm, dpi);
+    let mut renderer = Renderer::new(dpi, w, h);
+    paint_page(page, &mut renderer);
+    RasterPage::new(renderer.into_page(), w_mm, h_mm)
+}
+
+/// The first page of the job, the way the job prints it: a scene page
+/// as its 1-bit dots, a document job as its PDF.
+fn first_page_preview(
+    job: &ExpandedJob,
+    profile: &Profile,
+    w_mm: f32,
+    h_mm: f32,
+) -> Option<Preview> {
+    let page = job.outputs.first()?.pages.first()?;
+    let rendered = render_scene_page(page, profile, w_mm, h_mm);
+    Some(Preview::Bitmap {
+        width: rendered.bitmap.width(),
+        height: rendered.bitmap.height(),
+        packed: rendered.bitmap.to_bytes().to_vec(),
+        width_mm: w_mm,
+        height_mm: h_mm,
+    })
+}
+
+/// Validate the template, expand the records, pick the path, encode the
+/// units. Nothing here touches the wire — `print_units` does.
+pub fn prepare_units(
+    template: &Template,
+    profile: &Profile,
+    records: &Records,
+    copies: u32,
+) -> Result<Units, PipelineError> {
+    template
+        .validate()
+        .map_err(|e| PipelineError::Template(e.to_string()))?;
+    let job = expand(template, records).map_err(|e| PipelineError::Data(e.to_string()))?;
+    let chosen = plan(&job, template, profile).map_err(|e| PipelineError::Media(e.to_string()))?;
+    let (w_mm, h_mm) = page_mm(template);
+    let copies = copies.max(1);
+
+    // The units for one copy, and how the bytes are declared.
+    let once = match chosen.path {
+        // The planner already verified the scene fits the native
+        // language, so the same call here cannot refuse it.
+        OutputPath::Native => native_units(&job, template, profile)?,
+        OutputPath::Raster => {
+            let mut units = Vec::new();
+            for output in &job.outputs {
+                for page in &output.pages {
+                    let rendered = render_scene_page(page, profile, w_mm, h_mm);
+                    units.push(
+                        pn_encoders::raster(std::slice::from_ref(&rendered), profile)
+                            .map_err(|e| PipelineError::Encode(e.to_string()))?,
+                    );
+                }
+            }
+            units
+        }
+        OutputPath::Pdf => {
+            let pages: Vec<RasterPage> = job
+                .outputs
+                .iter()
+                .flat_map(|o| o.pages.iter())
+                .map(|p| render_scene_page(p, profile, w_mm, h_mm))
+                .collect();
+            vec![render_pdf(&pages)]
+        }
+        OutputPath::Browser => {
+            let html = template.html.as_deref().ok_or_else(|| {
+                PipelineError::Document("the document template has no html".into())
+            })?;
+            let mut units = Vec::new();
+            for record in &records.0 {
+                let doc = substitute(html, record);
+                let pdf = pn_browser::render_pdf(&doc, &scratch_dir())
+                    .map_err(|e| PipelineError::Document(e.to_string()))?;
+                units.push(pdf);
+            }
+            units
+        }
+    };
+
+    let document_format = if matches!(chosen.path, OutputPath::Pdf | OutputPath::Browser) {
+        "application/pdf"
+    } else {
+        "application/octet-stream"
+    };
+
+    let mut units = Vec::with_capacity(once.len().saturating_mul(copies as usize));
+    for _ in 0..copies {
+        units.extend(once.iter().cloned());
+    }
+
+    let preview = match chosen.path {
+        OutputPath::Native | OutputPath::Raster => first_page_preview(&job, profile, w_mm, h_mm),
+        OutputPath::Pdf | OutputPath::Browser => {
+            units.first().cloned().map(|pdf| Preview::Pdf { pdf })
+        }
+    };
+
+    let pages = job.outputs.iter().map(|o| o.pages.len()).sum::<usize>() as u32;
+    let report = PrepareReport {
+        path: path_word(chosen.path),
+        fallback: chosen.fallback,
+        records: records.0.len() as u32,
+        pages,
+        units: units.len() as u32,
+        bytes: units.iter().map(|u| u.len() as u64).sum(),
+        preview,
+    };
+    let spec = JobSpec::new(
+        format!(
+            "{} job — {} record(s), {} unit(s)",
+            path_word(chosen.path),
+            records.0.len(),
+            units.len()
+        ),
+        units,
+    );
+    Ok(Units {
+        report,
+        spec,
+        document_format,
+    })
+}
+
+/// The whole job as one native stream (the established e2e convention).
+fn native_units(
+    job: &ExpandedJob,
+    template: &Template,
+    profile: &Profile,
+) -> Result<Vec<Vec<u8>>, PipelineError> {
+    let stream = pn_encoders::native(job, template, profile)
+        .map_err(|e| PipelineError::Encode(e.to_string()))?;
+    Ok(vec![stream])
+}
+
+/// A transport factory for the wire: the profile says how to pace the
+/// bytes, the transport says where they go.
+pub fn factory(transport: &Transport, document_format: &'static str) -> DynFactory {
+    DynFactory(match transport {
+        Transport::Tcp { host, port } => Box::new(TcpFactory {
+            host: host.clone(),
+            port: *port,
+            connect_deadline: Duration::from_secs(5),
+        }) as Box<dyn TransportFactory>,
+        Transport::Ipp { address, user } => Box::new(IppFactory {
+            address: address.clone(),
+            user: user.clone(),
+            document_format,
+        }) as Box<dyn TransportFactory>,
+        Transport::Spooler { name } => {
+            #[cfg(windows)]
+            {
+                Box::new(SpoolerFactory {
+                    printer_name: name.clone(),
+                    datatype: if document_format == "application/pdf" {
+                        "PDF"
+                    } else {
+                        "RAW"
+                    },
+                }) as Box<dyn TransportFactory>
+            }
+            #[cfg(not(windows))]
+            {
+                Box::new(Unavailable {
+                    reason: format!(
+                        "the spooler transport is Windows only — there is no spooler queue \"{name}\" here"
+                    ),
+                }) as Box<dyn TransportFactory>
+            }
+        }
+        Transport::Bluetooth { address } => {
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            {
+                Box::new(BtFactory {
+                    address: address.clone(),
+                    connect_deadline: Duration::from_secs(5),
+                }) as Box<dyn TransportFactory>
+            }
+            #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+            {
+                Box::new(Unavailable {
+                    reason: format!("no bluetooth transport on this platform for {address}"),
+                }) as Box<dyn TransportFactory>
+            }
+        }
+    })
+}
+
+/// `pn_job::run` is generic over its factory; this newtype lets a
+/// transport chosen at runtime cross that boundary.
+pub struct DynFactory(Box<dyn TransportFactory>);
+
+impl TransportFactory for DynFactory {
+    fn connect(&self) -> Result<Box<dyn pn_transport::Transport>, pn_transport::SendError> {
+        self.0.connect()
+    }
+}
+
+/// A transport this platform cannot build: it fails on connect with a
+/// plain-word reason instead of a compile error. On Windows neither
+/// fallback branch is active, so the struct is unused there.
+#[allow(dead_code)]
+struct Unavailable {
+    reason: String,
+}
+
+impl TransportFactory for Unavailable {
+    fn connect(&self) -> Result<Box<dyn pn_transport::Transport>, pn_transport::SendError> {
+        Err(pn_transport::SendError::Connect(self.reason.clone()))
+    }
+}
+
+/// Deliver a prepared job and report what actually happened.
+pub fn print_units(spec: &JobSpec, profile: &Profile, factory: DynFactory) -> JobResult {
+    run(spec, profile, &factory)
+}
+
+/// The job result in words the UI can show.
+pub fn report_of(result: JobResult) -> JobReport {
+    let (state, reason) = match &result {
+        JobResult::Confirmed => ("confirmed", None),
+        JobResult::SentUnconfirmed => ("sent_unconfirmed", None),
+        JobResult::PartiallyPrinted { reason, .. } => ("partially_printed", Some(reason.clone())),
+        JobResult::Failed { reason } => ("failed", Some(reason.clone())),
+        JobResult::WrongModeSuspected => (
+            "wrong_mode_suspected",
+            Some(
+                "the printer answered in a language other than its profile's — check the printer's mode"
+                    .into(),
+            ),
+        ),
+    };
+    JobReport {
+        result: state.to_string(),
+        counts: result.counts(),
+        reason,
+    }
+}
+
+/// A scratch directory for one browser render; unique per call.
+static SCRATCH_SEQ: AtomicUsize = AtomicUsize::new(0);
+
+fn scratch_dir() -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "pn-print-{}-{}",
+        std::process::id(),
+        SCRATCH_SEQ.fetch_add(1, Ordering::Relaxed)
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Read, Write};
+    use std::sync::{Arc, Mutex};
+    use std::thread::{self, JoinHandle};
+
+    use pn_scene::{
+        Align, Element, Field, Format, Media as TemplateMedia, Placement, Size, TextStyle,
+    };
+
+    /// A ZPL label printer with a status dialect — the same shape as the
+    /// e2e's virtual ZPL profile, so a live job can end `Confirmed`.
+    fn zpl_profile() -> Profile {
+        pn_profiles::parse(
+            r#"
+[profile]
+model = "Fake Label"
+language = "zpl"
+mode = "zpl"
+media = ["label"]
+dpi = 203
+head_width_dots = 384
+printable_width_mm = 48
+[fonts]
+native = ["0"]
+code_pages = ["437"]
+[barcodes]
+native = ["CODE128"]
+[delivery]
+chunk_bytes = 512
+pause_ms = 10
+close_delay_ms = 0
+keep_open_for_status = true
+[status]
+query = "~HS"
+expected_prefix = "\u0002"
+poll_after_ms = 200
+"#,
+        )
+        .unwrap()
+    }
+
+    fn page_profile() -> Profile {
+        pn_profiles::parse(
+            r#"[profile]
+model = "Fake Page"
+language = "pdf"
+media = ["page"]
+"#,
+        )
+        .unwrap()
+    }
+
+    /// A 40 × 50 mm label with one bound heading.
+    fn label_template(bold: bool) -> Template {
+        Template {
+            format: Format::Scene,
+            html: None,
+            media: TemplateMedia::Label {
+                width_mm: 40.0,
+                height_mm: 50.0,
+            },
+            fields: vec![Field {
+                name: "name".into(),
+                kind: Default::default(),
+            }],
+            elements: vec![Element::Text {
+                at: pn_scene::At {
+                    x_mm: 2.0,
+                    y_mm: 2.0,
+                },
+                size: Size {
+                    w_mm: 36.0,
+                    h_mm: 4.0,
+                },
+                content: "{{name}}".into(),
+                style: TextStyle {
+                    size_mm: 3.0,
+                    font: None,
+                    bold,
+                    italic: false,
+                    align: Align::Left,
+                },
+                page: Placement::Every,
+            }],
+        }
+    }
+
+    fn two_records() -> Records {
+        Records::from_json(r#"[{"name":"BOLT M8"},{"name":"NUT M8"}]"#).unwrap()
+    }
+
+    /// A fake raw printer: a TCP listener that answers the status query
+    /// and records every byte it was sent.
+    struct FakePrinter {
+        port: u16,
+        got: Arc<Mutex<Vec<u8>>>,
+        handle: Option<JoinHandle<()>>,
+    }
+
+    impl FakePrinter {
+        fn spawn(status_ok: bool) -> Self {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let got = Arc::new(Mutex::new(Vec::new()));
+            let log = got.clone();
+            let handle = thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let ready = b"\x02030,0,0,1234,000,0,0,0,000,0,0,0\x03\r\n";
+                let fault = b"\x02030,1,0,1234,000,0,0,0,000,0,0,0\x03\r\n";
+                let mut byte = [0u8; 1];
+                let mut prev = 0u8;
+                loop {
+                    if stream.read(&mut byte).unwrap() == 0 {
+                        break;
+                    }
+                    if prev == b'~' && byte[0] == b'H' {
+                        // The status query (~HS): answer ready or fault.
+                        stream
+                            .write_all(if status_ok { ready } else { fault })
+                            .unwrap();
+                        stream.flush().unwrap();
+                    } else {
+                        log.lock().unwrap().extend_from_slice(&byte);
+                    }
+                    prev = byte[0];
+                }
+            });
+            FakePrinter {
+                port,
+                got,
+                handle: Some(handle),
+            }
+        }
+
+        fn received(&self) -> Vec<u8> {
+            self.got.lock().unwrap().clone()
+        }
+    }
+
+    impl Drop for FakePrinter {
+        fn drop(&mut self) {
+            if let Some(handle) = self.handle.take() {
+                let _ = handle.join();
+            }
+        }
+    }
+
+    fn tcp(port: u16) -> Transport {
+        Transport::Tcp {
+            host: "127.0.0.1".into(),
+            port,
+        }
+    }
+
+    /// A scene the printer's language can draw plans native, with a
+    /// 1-bit preview of the first label.
+    #[test]
+    fn a_drawable_label_plans_native_with_a_dots_preview() {
+        let units = prepare_units(&label_template(false), &zpl_profile(), &two_records(), 1)
+            .expect("the scene fits the native path");
+        let report = &units.report;
+        assert_eq!(report.path, "native");
+        assert_eq!(report.fallback, None);
+        assert_eq!(report.records, 2);
+        assert_eq!(report.pages, 2);
+        assert_eq!(report.units, 1, "one native stream per copy");
+        match &report.preview {
+            Some(Preview::Bitmap {
+                width,
+                height,
+                packed,
+                width_mm,
+                height_mm,
+            }) => {
+                // 40 × 50 mm at 203 dpi is 320 × 400 dots, 40 bytes per
+                // row.
+                assert_eq!(*width, 320);
+                assert_eq!(*height, 400);
+                assert_eq!(packed.len(), 40 * 400);
+                assert_eq!(*width_mm, 40.0);
+                assert_eq!(*height_mm, 50.0);
+            }
+            other => panic!("expected a bitmap preview, got {other:?}"),
+        }
+        // Native is a handful of commands, not an image.
+        assert!(report.bytes < 2048, "native is {} bytes", report.bytes);
+    }
+
+    /// Bold text on a plain-font printer: the raster path takes the
+    /// job, the reason is recorded, one unit per page.
+    #[test]
+    fn a_scene_beyond_the_native_language_falls_back_to_raster() {
+        let units = prepare_units(&label_template(true), &zpl_profile(), &two_records(), 1)
+            .expect("raster always takes the scene");
+        let report = &units.report;
+        assert_eq!(report.path, "raster");
+        assert!(report.fallback.as_deref().unwrap().contains("bold"));
+        assert_eq!(report.units, 2, "one raster unit per page");
+    }
+
+    /// Copies repeat the units.
+    #[test]
+    fn copies_repeat_the_units() {
+        let units = prepare_units(&label_template(false), &zpl_profile(), &two_records(), 3)
+            .expect("the scene fits the native path");
+        assert_eq!(units.report.units, 3, "three copies of the native stream");
+    }
+
+    /// A label scene on a page-only printer: no path takes it.
+    #[test]
+    fn a_media_mismatch_is_named_in_plain_words() {
+        let err =
+            prepare_units(&label_template(false), &page_profile(), &two_records(), 1).unwrap_err();
+        let words = err.to_string();
+        assert!(words.contains("label media"), "{words}");
+        assert!(words.contains("not this printer's media"), "{words}");
+    }
+
+    /// Empty data is a data error, not a zero-unit job.
+    #[test]
+    fn empty_records_fail_before_the_wire() {
+        let err = prepare_units(
+            &label_template(false),
+            &zpl_profile(),
+            &Records::from_json("[]").unwrap(),
+            1,
+        )
+        .unwrap_err();
+        assert!(matches!(err, PipelineError::Data(_)));
+    }
+
+    /// A page scene on a pdf-language printer: one PDF unit, a PDF
+    /// preview.
+    #[test]
+    fn a_page_scene_prepares_one_pdf_unit() {
+        let template = Template {
+            format: Format::Scene,
+            html: None,
+            media: TemplateMedia::Page {
+                width_mm: 210.0,
+                height_mm: 297.0,
+            },
+            fields: Vec::new(),
+            elements: vec![Element::Text {
+                at: pn_scene::At {
+                    x_mm: 20.0,
+                    y_mm: 20.0,
+                },
+                size: Size {
+                    w_mm: 100.0,
+                    h_mm: 10.0,
+                },
+                content: "TOTAL 12.00".into(),
+                style: TextStyle {
+                    size_mm: 5.0,
+                    font: None,
+                    bold: false,
+                    italic: false,
+                    align: Align::Left,
+                },
+                page: Placement::Every,
+            }],
+        };
+        let units = prepare_units(
+            &template,
+            &page_profile(),
+            &Records::from_json("[{}]").unwrap(),
+            1,
+        )
+        .expect("the page scene renders to pdf");
+        assert_eq!(units.report.path, "pdf");
+        assert_eq!(units.report.units, 1);
+        assert_eq!(units.document_format, "application/pdf");
+        match &units.report.preview {
+            Some(Preview::Pdf { pdf }) => assert!(pdf.starts_with(b"%PDF-")),
+            other => panic!("expected a pdf preview, got {other:?}"),
+        }
+    }
+
+    /// The document track: one PDF per record, or an honest no-browser
+    /// error where no headless browser is installed.
+    #[test]
+    fn an_html_document_previews_a_pdf_or_says_there_is_no_browser() {
+        let template = Template {
+            format: Format::Html,
+            html: Some(
+                "<!doctype html><html><head><meta charset=\"utf-8\"><style>\
+                 @page{size:210mm 297mm;margin:20mm}</style></head>\
+                 <body><h1>{{title}}</h1></body></html>"
+                    .into(),
+            ),
+            media: TemplateMedia::Page {
+                width_mm: 210.0,
+                height_mm: 297.0,
+            },
+            fields: vec![Field {
+                name: "title".into(),
+                kind: Default::default(),
+            }],
+            elements: Vec::new(),
+        };
+        let records = Records::from_json(r#"[{"title":"INVOICE 1042"}]"#).unwrap();
+        match prepare_units(&template, &page_profile(), &records, 1) {
+            Ok(units) => {
+                assert_eq!(units.report.path, "browser");
+                assert_eq!(units.report.units, 1, "one document per record");
+                match &units.report.preview {
+                    Some(Preview::Pdf { pdf }) => assert!(pdf.starts_with(b"%PDF-")),
+                    other => panic!("expected a pdf preview, got {other:?}"),
+                }
+            }
+            Err(PipelineError::Document(words)) => {
+                assert!(
+                    words.to_lowercase().contains("browser"),
+                    "the honest error names the missing browser: {words}"
+                );
+            }
+            Err(e) => panic!("unexpected error: {e}"),
+        }
+    }
+
+    /// The whole thermal track against a live (fake) printer: prepared
+    /// native units are delivered over TCP, the reply confirms.
+    #[test]
+    fn a_prepared_job_prints_confirmed_over_tcp() {
+        let fake = FakePrinter::spawn(true);
+        let units = prepare_units(&label_template(false), &zpl_profile(), &two_records(), 1)
+            .expect("the scene fits the native path");
+        let factory = factory(&tcp(fake.port), units.document_format);
+        let result = print_units(&units.spec, &zpl_profile(), factory);
+        assert_eq!(result, JobResult::Confirmed, "the reply says ready");
+        let received = fake.received();
+        let text = String::from_utf8_lossy(&received);
+        assert!(
+            text.contains("^XA"),
+            "the native stream reached the printer"
+        );
+        assert!(text.contains("BOLT M8"), "the binding made it to the wire");
+    }
+
+    /// A fault before print is an honest failure with the printer's
+    /// own words.
+    #[test]
+    fn a_printer_fault_before_print_fails_honestly() {
+        let fake = FakePrinter::spawn(false);
+        let units = prepare_units(&label_template(false), &zpl_profile(), &two_records(), 1)
+            .expect("the scene fits the native path");
+        let factory = factory(&tcp(fake.port), units.document_format);
+        let report = report_of(print_units(&units.spec, &zpl_profile(), factory));
+        assert_eq!(report.result, "failed");
+        assert!(
+            report.reason.as_deref().unwrap().contains("out of paper"),
+            "the printer's own words: {:?}",
+            report.reason
+        );
+    }
+
+    /// A refused port is a failed job, and the reason says connect.
+    #[test]
+    fn a_refused_port_fails_with_a_connect_reason() {
+        // Bind and drop a listener to learn a port that is (just)
+        // closed.
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+
+        let units = prepare_units(&label_template(false), &zpl_profile(), &two_records(), 1)
+            .expect("the scene fits the native path");
+        let factory = factory(&tcp(port), units.document_format);
+        let report = report_of(print_units(&units.spec, &zpl_profile(), factory));
+        assert_eq!(report.result, "failed");
+        assert!(
+            report.reason.as_deref().unwrap().contains("connect"),
+            "the reason says connect: {:?}",
+            report.reason
+        );
+    }
+
+    /// The printer list reports language, media and confirmation
+    /// honestly.
+    #[test]
+    fn profile_infos_report_language_media_and_confirmation() {
+        let dir = scratch_dir();
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("fake-label.toml"),
+            r#"[profile]
+model = "Fake Label"
+language = "zpl"
+media = ["label"]
+[status]
+query = "~HS"
+expected_prefix = "\u0002"
+"#,
+        )
+        .unwrap();
+        let set = load_profiles(&dir).expect("one valid profile");
+        let infos = profile_infos(&set);
+        std::fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(infos.len(), 1);
+        let info = &infos[0];
+        assert_eq!(info.model, "Fake Label");
+        assert_eq!(info.language, "zpl");
+        assert_eq!(info.media, vec!["label".to_string()]);
+        assert!(
+            info.can_confirm,
+            "a status dialect means confirmed is reachable"
+        );
+    }
+}
