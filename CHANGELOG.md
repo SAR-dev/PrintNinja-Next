@@ -153,3 +153,14 @@ Unreleased.
   framed label and a QR label on four shipped profiles are pinned by
   golden cases; the native (printer-side fonts and barcodes) encoders
   join in phase 6
+- Phase 5 raster renderer (planner increment): `pn-planner` — the
+  output-path decision for a job (plan §5.3). Track routing first: the
+  template's `format` and media kind pick the track — `html` documents
+  go through the headless browser track, a `scene` on `page` media is
+  rendered to PDF in the Rust renderer for the OS print path, and a
+  `scene` on label or roll media is rastered in the profile's thermal
+  language (the native command path, preferred over raster when the
+  scene fits, joins in phase 6). The printer's media must take the
+  template's media or the plan fails in plain words; a thermal scene on
+  a pdf-language printer falls back to the PDF path with the reason
+  recorded, the way §5.3 asks for every fallback
