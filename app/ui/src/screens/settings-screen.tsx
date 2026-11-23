@@ -1,16 +1,21 @@
 /**
  * Settings (plan phase 7): appearance (light/dark), start-with-
- * computer, and the per-printer delivery overrides — pacing (chunk
+ * computer, the LAN switch with device pairing (plan phase 8, LAN
+ * increment), and the per-printer delivery overrides — pacing (chunk
  * size and the pause between chunks) and the close delay. A field left
  * empty uses the profile's own value, shown as the placeholder.
  */
 import { useEffect, useState } from "react";
 import {
+  beginPairing,
   isAutostart,
   listPrinters,
   loadSettings,
+  pairedDevices,
+  revokeDevice,
   saveSetting,
   setAutostart,
+  type PairedDevice,
   type ProfileInfo,
 } from "@/api";
 import { Button } from "@/components/ui/button";
@@ -55,6 +60,11 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     document.documentElement.dataset.theme === "dark" ? "dark" : "light",
   );
+  const [devices, setDevices] = useState<PairedDevice[]>([]);
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  const [pairLeft, setPairLeft] = useState(0);
+
+  const lanOn = settings["api.lan"] === "true";
 
   useEffect(() => {
     listPrinters()
@@ -71,6 +81,30 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       .then(setAutostartState)
       .catch((e) => setError(String(e)));
   }, []);
+
+  useEffect(() => {
+    if (!lanOn) return;
+    pairedDevices()
+      .then(setDevices)
+      .catch((e) => setError(String(e)));
+  }, [lanOn]);
+
+  // The one-time code's clock: it runs while the code is on screen and
+  // takes the code down when it is up.
+  useEffect(() => {
+    if (pairCode === null) return;
+    const t = setInterval(() => {
+      setPairLeft((n) => {
+        if (n <= 1) {
+          clearInterval(t);
+          setPairCode(null);
+          return 0;
+        }
+        return n - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [pairCode]);
 
   const save = (key: string, value: string) => {
     void saveSetting(key, value)
@@ -90,6 +124,24 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       setAutostartState(!on);
       setError(String(e));
     });
+  };
+
+  const refreshDevices = () =>
+    pairedDevices().then(setDevices).catch((e) => setError(String(e)));
+
+  const pair = () => {
+    void beginPairing()
+      .then((code) => {
+        setPairCode(code);
+        setPairLeft(90);
+      })
+      .catch((e) => setError(String(e)));
+  };
+
+  const revoke = (id: string) => {
+    void revokeDevice(id)
+      .then(refreshDevices)
+      .catch((e) => setError(String(e)));
   };
 
   const overrideFor = (p: ProfileInfo) => readOverride(settings, p.model);
@@ -176,6 +228,76 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             onCheckedChange={toggleAutostart}
             aria-label="Start PrintNinja at sign-in"
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Network</CardTitle>
+          <CardDescription>
+            When on, other devices on the network can send jobs to this PC —
+            each one paired by a one-time code and holding its own token.
+            Off by default; the switch applies from the next start.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-body">
+              Let other devices print to this PC
+            </span>
+            <Switch
+              checked={lanOn}
+              onCheckedChange={(on) => save("api.lan", on ? "true" : "false")}
+              aria-label="Let other devices print to this PC"
+            />
+          </div>
+          {lanOn && (
+            <div className="flex flex-col gap-3">
+              {pairCode !== null ? (
+                <div className="flex flex-col gap-1 rounded-lg border p-3">
+                  <span className="text-body">
+                    Enter this code on the device, before it runs out:
+                  </span>
+                  <span className="font-mono text-title tracking-[0.3em]">
+                    {pairCode.replace(/(.{4})/g, "$1 ").trim()}
+                  </span>
+                  <span className="text-caption text-muted-foreground">
+                    {pairLeft} seconds left
+                  </span>
+                </div>
+              ) : (
+                <Button variant="outline" size="sm" onClick={pair}>
+                  Pair a device
+                </Button>
+              )}
+              {devices.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  {devices.map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center justify-between gap-4"
+                    >
+                      <span className="text-body">
+                        {d.name}
+                        <span className="text-caption text-muted-foreground">
+                          {" "}
+                          · {d.platform} ·{" "}
+                          {new Date(d.pairedAt).toLocaleDateString()}
+                        </span>
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => revoke(d.id)}
+                      >
+                        Revoke
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

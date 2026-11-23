@@ -3,8 +3,14 @@
 //! same machine prints without touching the app.
 //!
 //! Local by default: the listener binds `127.0.0.1` only, so nothing
-//! off this PC can reach it. LAN exposure with per-device pairing and
-//! device tokens is a later increment of the same phase.
+//! off this PC can reach it. With the LAN switch on (the setting
+//! `api.lan`), the listener binds the whole network instead, and a
+//! request from off this PC must carry the `X-PrintNinja-Device-Token`
+//! of a paired device. Pairing: the PC opens a short-lived window with
+//! a one-time code (`begin_pairing` in the settings screen), the
+//! device presents the code to `POST /v1/pair/claim` and receives its
+//! token; `GET /v1/pair/hello` tells a device whether this PC is a
+//! PrintNinja and whether a window is open.
 //!
 //! A job is accepted with `POST /v1/print` — a saved template by
 //! name, a printer, the data, the copies, and a transport (or the
@@ -18,24 +24,32 @@
 //! printed.
 
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use axum::extract::{Path, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::body::Body;
+use axum::extract::{ConnectInfo, Path, State};
+use axum::http::{HeaderMap, Request, StatusCode};
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use pn_job::JobResult;
 use pn_profiles::ProfileSet;
 use pn_scene::{Records, Template};
 use serde::{Deserialize, Serialize};
+use tower::layer::Layer;
+use tower::Service;
 
+use crate::pairing::{self, PairingWindow};
 use crate::pipeline::{
     factory, prepare_units, print_units, profile_infos, report_of, with_delivery_overrides,
     JobReport, Transport,
 };
-use crate::store::{ApiJob, Store};
+use crate::store::{ApiJob, PairedDevice, Store};
 
 /// The port the API listens on — the same one the app it replaces used.
 pub const DEFAULT_PORT: u16 = 17717;
@@ -46,17 +60,21 @@ pub const MAX_COPIES: u32 = 1000;
 /// How many accepted jobs `GET /v1/jobs` reports.
 const JOB_LIST_LIMIT: usize = 50;
 
-/// What the API's handlers can reach: the loaded profiles and the
-/// local store, shared with the Tauri commands that run the same
-/// pipeline.
+/// What the API's handlers can reach: the loaded profiles, the local
+/// store, and the pairing window — shared with the Tauri commands that
+/// run the same pipeline.
 #[derive(Clone)]
 pub struct ApiState {
     pub profiles: Arc<ProfileSet>,
     pub store: Arc<Store>,
+    /// The one open pairing window, if any. Memory only: the code is
+    /// never written to the store.
+    pub window: Arc<Mutex<Option<PairingWindow>>>,
 }
 
 /// The router, held apart from the socket so the endpoints can be
-/// tested without binding a port.
+/// tested without binding a port. The LAN gate is not here — it reads
+/// the peer address, which only the listener knows.
 pub fn router(state: ApiState) -> Router {
     Router::new()
         .route("/v1/health", get(health))
@@ -66,13 +84,27 @@ pub fn router(state: ApiState) -> Router {
         .route("/v1/jobs", get(list_jobs))
         .route("/v1/jobs/{id}", get(get_job).delete(cancel_job))
         .route("/v1/jobs/{id}/retry", post(retry_job))
+        .route("/v1/pair/hello", get(pair_hello))
+        .route("/v1/pair/claim", post(pair_claim))
         .with_state(state)
 }
 
-/// Listen on 127.0.0.1. When the port is taken the app keeps running —
-/// the failure is named, nothing else changes.
-pub async fn serve(state: ApiState) {
-    let addr: SocketAddr = ([127, 0, 0, 1], DEFAULT_PORT).into();
+/// Listen. With the LAN switch off the listener binds `127.0.0.1`
+/// only; with it on, the whole network, behind the device-token gate.
+/// The switch is read at start, so flipping it applies from the next
+/// start. When the port is taken the app keeps running — the failure
+/// is named, nothing else changes.
+pub async fn serve(state: Arc<ApiState>) {
+    let lan_on = state
+        .store
+        .load_settings()
+        .ok()
+        .is_some_and(|s| s.get("api.lan").is_some_and(|v| v == "true"));
+    let addr: SocketAddr = if lan_on {
+        ([0, 0, 0, 0], DEFAULT_PORT).into()
+    } else {
+        ([127, 0, 0, 1], DEFAULT_PORT).into()
+    };
     let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(listener) => listener,
         Err(e) => {
@@ -80,8 +112,14 @@ pub async fn serve(state: ApiState) {
             return;
         }
     };
-    eprintln!("the local print API is listening on http://{addr}");
-    if let Err(e) = axum::serve(listener, router(state)).await {
+    let scope = if lan_on { "the network" } else { "127.0.0.1" };
+    eprintln!("the local print API is listening on http://{addr} ({scope})");
+    let app = router(state.as_ref().clone())
+        .layer(LanGate {
+            store: state.store.clone(),
+        })
+        .into_make_service_with_connect_info::<SocketAddr>();
+    if let Err(e) = axum::serve(listener, app).await {
         eprintln!("the local print API stopped: {e}");
     }
 }
@@ -420,6 +458,241 @@ fn store_error(e: &str) -> (StatusCode, Json<serde_json::Value>) {
     )
 }
 
+/// The word for a pairing attempt when there is no pairing to attempt
+/// — LAN off or no window open. One wording, so a scanner cannot tell
+/// the two apart.
+fn pairing_unavailable() -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::FORBIDDEN,
+        Json(serde_json::json!({
+            "error": "pairing is not available on this device"
+        })),
+    )
+}
+
+/// Tell a device on the network that this PC is a PrintNinja — and
+/// whether a pairing window is open right now.
+async fn pair_hello(
+    State(state): State<ApiState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    let lan_on = state
+        .store
+        .load_settings()
+        .map(|s| s.get("api.lan").is_some_and(|v| v == "true"))
+        .unwrap_or(false);
+    if !lan_on {
+        return Err(pairing_unavailable());
+    }
+    let window_open = state
+        .window
+        .lock()
+        .expect("the pairing window lock is not poisoned")
+        .as_ref()
+        .is_some_and(|w| w.is_open(std::time::Instant::now()));
+    Ok(Json(serde_json::json!({
+        "protocol": 1,
+        "provider": "printninja",
+        "windowOpen": window_open,
+    })))
+}
+
+/// A device claiming the pairing window: the one-time code in, a
+/// per-device token out — shown once, the PC keeps its hash.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaimRequest {
+    code: String,
+    device_name: Option<String>,
+    platform: Option<String>,
+}
+
+async fn pair_claim(
+    State(state): State<ApiState>,
+    Json(req): Json<ClaimRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    let lan_on = state
+        .store
+        .load_settings()
+        .map(|s| s.get("api.lan").is_some_and(|v| v == "true"))
+        .unwrap_or(false);
+    if !lan_on {
+        return Err(pairing_unavailable());
+    }
+    let now = std::time::Instant::now();
+    let mut guard = state
+        .window
+        .lock()
+        .expect("the pairing window lock is not poisoned");
+    let Some(window) = guard.as_mut() else {
+        return Err(pairing_unavailable());
+    };
+    match window.claim(&req.code, now) {
+        Ok(()) => {
+            let token = pairing::mint_token();
+            let hash = pairing::token_hash(&token);
+            let device = PairedDevice {
+                id: uuid::Uuid::new_v4().to_string(),
+                name: req
+                    .device_name
+                    .filter(|n| !n.trim().is_empty())
+                    .unwrap_or_else(|| "unnamed device".into()),
+                platform: req
+                    .platform
+                    .filter(|p| !p.trim().is_empty())
+                    .unwrap_or_else(|| "unknown".into()),
+                paired_at: now_ms(),
+            };
+            state
+                .store
+                .add_paired_device(&device, &hash)
+                .map_err(|e| store_error(&e))?;
+            Ok((
+                StatusCode::CREATED,
+                Json(serde_json::json!({
+                    "token": token,
+                    "deviceId": device.id,
+                })),
+            ))
+        }
+        Err(pairing::ClaimError::Wrong { left }) => Err(bad(&format!(
+            "the code is not right; {left} tries left on this window"
+        ))),
+        Err(pairing::ClaimError::BadFormat) => Err(bad(&format!(
+            "a pairing code has {} characters",
+            pairing::CODE_LEN
+        ))),
+        Err(pairing::ClaimError::Unavailable) => Err(pairing_unavailable()),
+    }
+}
+
+/// The LAN gate: a request that reaches the listener from off this
+/// PC must carry a paired device's token. Applied only in `serve` —
+/// the peer address is not part of a router-level test.
+#[derive(Clone)]
+struct LanGate {
+    store: Arc<Store>,
+}
+
+/// The whole decision, in pure form so it can be tested with a store
+/// and a fake peer, socket or not. `None` means the request goes
+/// through; `Some` is the response the caller gets instead.
+fn lan_rejection(
+    store: &Store,
+    peer: Option<SocketAddr>,
+    path: &str,
+    token: Option<&str>,
+) -> Option<Response> {
+    // From this PC — or the peer unknown, which only a router-level
+    // test can be — the API is local and needs no token.
+    if peer.is_none_or(|p| p.ip().is_loopback()) {
+        return None;
+    }
+    // The pairing routes are reachable from the network: that is how
+    // a device finds the PC and claims the window.
+    if path == "/v1/pair/hello" || path == "/v1/pair/claim" {
+        return None;
+    }
+    let lan_on = store
+        .load_settings()
+        .ok()
+        .is_some_and(|s| s.get("api.lan").is_some_and(|v| v == "true"));
+    if !lan_on {
+        // LAN off: the listener binds 127.0.0.1, so this should not
+        // be reachable at all. Say not found, name nothing.
+        return Some(not_found_404());
+    }
+    let Some(token) = token.filter(|t| !t.trim().is_empty()) else {
+        return Some(unpaired());
+    };
+    let known = store
+        .has_paired_device(&pairing::token_hash(token))
+        .unwrap_or(false);
+    if !known {
+        return Some(unpaired());
+    }
+    None
+}
+
+/// The word for a device that is not paired with this PC.
+fn unpaired() -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(serde_json::json!({
+            "error": "this device is not paired with this PC"
+        })),
+    )
+        .into_response()
+}
+
+/// A plain 404, the shape of an unknown path.
+fn not_found_404() -> Response {
+    (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({ "error": "not found" })),
+    )
+        .into_response()
+}
+
+impl<S> Layer<S> for LanGate
+where
+    S: Service<Request<Body>, Response = Response, Error = std::convert::Infallible>
+        + Clone
+        + Send
+        + 'static,
+{
+    type Service = LanGateService<S>;
+    fn layer(&self, inner: S) -> Self::Service {
+        LanGateService {
+            inner,
+            store: self.store.clone(),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct LanGateService<S> {
+    inner: S,
+    store: Arc<Store>,
+}
+
+impl<S> Service<Request<Body>> for LanGateService<S>
+where
+    S: Service<Request<Body>, Response = Response, Error = std::convert::Infallible>
+        + Clone
+        + Send
+        + 'static,
+    S::Future: Send,
+{
+    type Response = Response;
+    type Error = std::convert::Infallible;
+    type Future = Pin<Box<dyn Future<Output = Result<Response, std::convert::Infallible>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        let store = self.store.clone();
+        let path = req.uri().path().to_string();
+        let token = req
+            .headers()
+            .get("X-PrintNinja-Device-Token")
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_string);
+        let peer = req
+            .extensions()
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|c| c.0);
+        let mut inner = self.inner.clone();
+        Box::pin(async move {
+            if let Some(rejection) = lan_rejection(&store, peer, &path, token.as_deref()) {
+                return Ok(rejection);
+            }
+            inner.call(req).await
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -440,7 +713,11 @@ mod tests {
             .expect("the shipped profile set must load in the test"),
         );
         let store = Arc::new(Store::in_memory().expect("an in-memory store must open"));
-        ApiState { profiles, store }
+        ApiState {
+            profiles,
+            store,
+            window: Arc::new(Mutex::new(None)),
+        }
     }
 
     /// The fake ZPL label printer with a status dialect — the same
@@ -533,6 +810,7 @@ poll_after_ms = 200
         ApiState {
             profiles: Arc::new(profiles),
             store,
+            window: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -1066,6 +1344,242 @@ poll_after_ms = 200
                 .unwrap()
                 .contains("neither JSON nor CSV"),
             "the reason is named, not empty: {report:?}"
+        );
+    }
+
+    /// A store with the LAN switch as named — the gate's other input.
+    fn lan_store(lan_on: bool) -> Arc<Store> {
+        let store = Arc::new(Store::in_memory().expect("an in-memory store must open"));
+        store
+            .save_setting("api.lan", if lan_on { "true" } else { "false" })
+            .expect("the setting must be saved");
+        store
+    }
+
+    /// A peer off this PC — the gate's network side.
+    fn lan_peer() -> SocketAddr {
+        "10.0.0.5:5555".parse().expect("a valid peer")
+    }
+
+    /// A peer on this PC — the gate's local side.
+    fn local_peer() -> SocketAddr {
+        "127.0.0.1:5555".parse().expect("a valid peer")
+    }
+
+    /// The gate lets this PC through, whatever the switch and the
+    /// token.
+    #[test]
+    fn the_lan_gate_lets_this_pc_through() {
+        for lan_on in [false, true] {
+            let store = lan_store(lan_on);
+            assert!(lan_rejection(&store, Some(local_peer()), "/v1/print", None).is_none());
+            assert!(lan_rejection(&store, None, "/v1/print", None).is_none());
+        }
+    }
+
+    /// With LAN off a peer off this PC gets a plain not-found — the
+    /// listener should not be reachable, and if it is, it says
+    /// nothing.
+    #[test]
+    fn lan_off_hides_the_api_from_the_network() {
+        let store = lan_store(false);
+        let res = lan_rejection(&store, Some(lan_peer()), "/v1/print", None).unwrap();
+        assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    }
+
+    /// With LAN on, a peer off this PC is unpaired without a token,
+    /// with a token the PC has not minted, and through with a token
+    /// it has.
+    #[tokio::test]
+    async fn lan_on_needs_a_paired_token() {
+        let store = lan_store(true);
+        let res = lan_rejection(&store, Some(lan_peer()), "/v1/print", None).unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            body_of(res).await["error"].as_str(),
+            Some("this device is not paired with this PC")
+        );
+
+        let res =
+            lan_rejection(&store, Some(lan_peer()), "/v1/print", Some("not-a-token")).unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        let token = pairing::mint_token();
+        let device = PairedDevice {
+            id: "d1".into(),
+            name: "the till".into(),
+            platform: "windows".into(),
+            paired_at: 1,
+        };
+        store
+            .add_paired_device(&device, &pairing::token_hash(&token))
+            .unwrap();
+        assert!(lan_rejection(&store, Some(lan_peer()), "/v1/print", Some(&token)).is_none());
+    }
+
+    /// The pairing routes stay reachable from the network — that is
+    /// how a device finds the PC.
+    #[test]
+    fn the_pairing_routes_are_exempt_from_the_gate() {
+        let store = lan_store(true);
+        for path in ["/v1/pair/hello", "/v1/pair/claim"] {
+            assert!(lan_rejection(&store, Some(lan_peer()), path, None).is_none());
+        }
+    }
+
+    /// The body of a rejection, as JSON.
+    async fn body_of(res: Response) -> serde_json::Value {
+        let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        serde_json::from_slice(&bytes).unwrap()
+    }
+
+    /// Open the one pairing window the API state holds.
+    fn open_window(st: &ApiState, code: &str) {
+        *st.window.lock().unwrap() = Some(PairingWindow::new(code.to_string()));
+    }
+
+    fn lan_state() -> ApiState {
+        let st = state();
+        st.store
+            .save_setting("api.lan", "true")
+            .expect("the setting must be saved");
+        st
+    }
+
+    /// With LAN off, hello says pairing is not available — the same
+    /// words a closed window gives.
+    #[tokio::test]
+    async fn hello_says_no_when_lan_is_off() {
+        let st = state();
+        let res = get(st.clone(), "/v1/pair/hello").await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            body(res).await["error"].as_str(),
+            Some("pairing is not available on this device")
+        );
+    }
+
+    /// With LAN on and no window, hello says the PC is here but the
+    /// window is closed.
+    #[tokio::test]
+    async fn hello_reports_the_window() {
+        let st = lan_state();
+        let res = get(st.clone(), "/v1/pair/hello").await;
+        assert_eq!(res.status(), StatusCode::OK);
+        let v = body(res).await;
+        assert_eq!(v["protocol"], 1);
+        assert_eq!(v["windowOpen"], false);
+
+        open_window(&st, "K7QM4XPD");
+        let res = get(st.clone(), "/v1/pair/hello").await;
+        assert_eq!(body(res).await["windowOpen"], true);
+    }
+
+    /// A claim with the right code takes the window up, mints the
+    /// token, and stores its hash — a second claim gets nothing.
+    #[tokio::test]
+    async fn a_claim_with_the_right_code_paired_once() {
+        let st = lan_state();
+        open_window(&st, "K7QM4XPD");
+        let res = post(
+            st.clone(),
+            "/v1/pair/claim",
+            &serde_json::json!({
+                "code": "k7qm 4xpd",
+                "deviceName": "the till",
+                "platform": "android",
+            })
+            .to_string(),
+            HeaderMap::new(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::CREATED);
+        let v = body(res).await;
+        let token = v["token"].as_str().unwrap();
+        assert_eq!(token.len(), 32);
+        assert!(v["deviceId"].as_str().is_some());
+
+        let devices = st.store.list_paired_devices().unwrap();
+        assert_eq!(devices.len(), 1);
+        assert_eq!(devices[0].name, "the till");
+        assert_eq!(devices[0].platform, "android");
+        assert!(st
+            .store
+            .has_paired_device(&pairing::token_hash(token))
+            .unwrap());
+
+        // The window is single use.
+        let res = post(
+            st.clone(),
+            "/v1/pair/claim",
+            &serde_json::json!({ "code": "K7QM4XPD" }).to_string(),
+            HeaderMap::new(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    }
+
+    /// A wrong code is named as such, and a misshapen one is its own
+    /// error; neither touches the window's life.
+    #[tokio::test]
+    async fn a_wrong_or_misshapen_code_is_rejected() {
+        let st = lan_state();
+        open_window(&st, "K7QM4XPD");
+        let res = post(
+            st.clone(),
+            "/v1/pair/claim",
+            &serde_json::json!({ "code": "AAAAAAAA" }).to_string(),
+            HeaderMap::new(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        assert!(body(res).await["error"]
+            .as_str()
+            .unwrap()
+            .contains("not right"));
+
+        let res = post(
+            st.clone(),
+            "/v1/pair/claim",
+            &serde_json::json!({ "code": "short" }).to_string(),
+            HeaderMap::new(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        assert!(body(res).await["error"]
+            .as_str()
+            .unwrap()
+            .contains("8 characters"));
+
+        // The window still works for the right code.
+        let res = post(
+            st.clone(),
+            "/v1/pair/claim",
+            &serde_json::json!({ "code": "K7QM4XPD" }).to_string(),
+            HeaderMap::new(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::CREATED);
+    }
+
+    /// With LAN on but no window open, a claim gets the closed-window
+    /// wording, not a hint that the window was ever opened.
+    #[tokio::test]
+    async fn a_claim_without_a_window_is_not_available() {
+        let st = lan_state();
+        let res = post(
+            st.clone(),
+            "/v1/pair/claim",
+            &serde_json::json!({ "code": "K7QM4XPD" }).to_string(),
+            HeaderMap::new(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            body(res).await["error"].as_str(),
+            Some("pairing is not available on this device")
         );
     }
 }

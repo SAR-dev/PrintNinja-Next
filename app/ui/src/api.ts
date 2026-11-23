@@ -90,6 +90,19 @@ export interface StoredTemplate {
   sample: string;
 }
 
+/**
+ * A device paired to the local print API over the LAN (plan phase 8,
+ * LAN increment). The token itself is not in this shape — the PC keeps
+ * only its hash.
+ */
+export interface PairedDevice {
+  id: string;
+  name: string;
+  platform: string;
+  /** When it paired, as `Date.now()` milliseconds. */
+  pairedAt: number;
+}
+
 /** A saved recent job: the job frozen at print time, its last result. */
 export interface StoredJob {
   id: string;
@@ -134,6 +147,20 @@ export const isAutostart = () => invoke<boolean>("is_autostart");
 /** Turn start-with-computer on or off. */
 export const setAutostart = (enabled: boolean) =>
   invoke<void>("set_autostart", { enabled });
+
+/**
+ * Open the pairing window and return the one-time code to show on the
+ * screen (plan phase 8, LAN). The code is read off the screen by the
+ * person pairing the device.
+ */
+export const beginPairing = () => invoke<string>("begin_pairing");
+
+/** The paired devices, the order they paired in. */
+export const pairedDevices = () => invoke<PairedDevice[]>("paired_devices");
+
+/** Revoke a paired device: its token stops working at once. */
+export const revokeDevice = (id: string) =>
+  invoke<void>("revoke_device", { id });
 
 /** Prepare: pick the output path, encode, render the preview. */
 export const planJob = (

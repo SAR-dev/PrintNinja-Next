@@ -8,6 +8,7 @@
 //! work off the UI thread.
 
 mod api;
+mod pairing;
 mod pipeline;
 mod store;
 
@@ -29,7 +30,7 @@ pub use pipeline::{
     delivery_key, factory, load_profiles, prepare_units, print_units, profile_infos, report_of,
     JobReport, PipelineError, PrepareReport, ProfileInfo, Transport, Units,
 };
-pub use store::{Store, StoredJob, StoredTemplate};
+pub use store::{PairedDevice, Store, StoredJob, StoredTemplate};
 
 /// The printer profiles, loaded once at startup (plan phase 7: the
 /// profile set *is* the printer list). An `Arc` because the local
@@ -197,6 +198,39 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
     result.map_err(|e| e.to_string())
 }
 
+/// Open the pairing window (plan phase 8, LAN): mint the one-time
+/// code, leave the window open for its TTL, and hand the code back to
+/// show on the screen. A new call takes the place of any window left
+/// open.
+#[tauri::command]
+fn begin_pairing(state: State<'_, Arc<api::ApiState>>) -> Result<String, String> {
+    let code = pairing::generate_code();
+    *state.window.lock().map_err(|e| e.to_string())? =
+        Some(pairing::PairingWindow::new(code.clone()));
+    Ok(code)
+}
+
+/// The devices paired to the local API, the order they paired in
+/// (plan phase 8, LAN). The tokens are not among them — only their
+/// names.
+#[tauri::command]
+fn paired_devices(state: State<'_, Arc<Store>>) -> Result<Vec<PairedDevice>, String> {
+    state.list_paired_devices()
+}
+
+/// Revoke a paired device: its token stops being accepted at once —
+/// the gate checks the store on every request.
+#[tauri::command]
+fn revoke_device(state: State<'_, Arc<Store>>, id: String) -> Result<(), String> {
+    state.revoke_paired_device(&id).and_then(|gone| {
+        if gone {
+            Ok(())
+        } else {
+            Err(format!("no paired device named \"{id}\""))
+        }
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -236,12 +270,20 @@ pub fn run() {
             if let Some(store) = &store {
                 app.manage(store.clone());
             }
-            // The local print API (plan phase 8): 127.0.0.1, the
-            // profiles and the store shared with the commands above.
-            // Without a store the templates and the print endpoint
-            // could only fail, so the API does not start at all.
+            // The local print API (plan phase 8): 127.0.0.1 by
+            // default, the whole network with the LAN switch on —
+            // the profiles, the store and the pairing window shared
+            // with the commands above. Without a store the templates
+            // and the print endpoint could only fail, so the API does
+            // not start at all.
             if let Some(store) = store {
-                tauri::async_runtime::spawn(api::serve(api::ApiState { profiles, store }));
+                let api_state = Arc::new(api::ApiState {
+                    profiles,
+                    store: store.clone(),
+                    window: Arc::new(std::sync::Mutex::new(None)),
+                });
+                app.manage(api_state.clone());
+                tauri::async_runtime::spawn(api::serve(api_state));
             }
             // The tray icon (plan phase 7): the app lives in the tray,
             // so the window's close button hides it instead of
@@ -284,7 +326,10 @@ pub fn run() {
             load_settings,
             save_setting,
             is_autostart,
-            set_autostart
+            set_autostart,
+            begin_pairing,
+            paired_devices,
+            revoke_device
         ])
         .build(tauri::generate_context!())
         .expect("error while building PrintNinja");

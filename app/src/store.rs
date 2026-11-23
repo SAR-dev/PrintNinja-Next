@@ -83,6 +83,19 @@ pub struct ApiJob {
     pub finished_at: Option<i64>,
 }
 
+/// A device paired to the local print API over the LAN (plan phase 8,
+/// LAN increment): what the settings screen lists and can revoke. The
+/// token itself is not stored — only its hash.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PairedDevice {
+    pub id: String,
+    pub name: String,
+    pub platform: String,
+    /// When it paired, as `Date.now()` milliseconds.
+    pub paired_at: i64,
+}
+
 /// The app's storage: one SQLite connection behind a mutex.
 /// `rusqlite::Connection` is not `Sync` and Tauri's managed state must
 /// be, so the lock is part of the type.
@@ -366,6 +379,65 @@ impl Store {
         Ok(())
     }
 
+    /// The paired devices, oldest first.
+    pub fn list_paired_devices(&self) -> Result<Vec<PairedDevice>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, name, platform, paired_at
+                 FROM paired_devices ORDER BY paired_at, rowid",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(PairedDevice {
+                    id: r.get(0)?,
+                    name: r.get(1)?,
+                    platform: r.get(2)?,
+                    paired_at: r.get(3)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    /// A device that claimed a pairing code, under the hash of its
+    /// token. The claimant keeps the token; the PC keeps the hash.
+    pub fn add_paired_device(&self, d: &PairedDevice, token_hash: &str) -> Result<(), String> {
+        self.lock()
+            .execute(
+                "INSERT INTO paired_devices (id, name, platform, token_hash, paired_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![d.id, d.name, d.platform, token_hash, d.paired_at],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// Whether a paired device holds the token with this hash — the
+    /// LAN gate's check on the `X-PrintNinja-Device-Token` header.
+    pub fn has_paired_device(&self, token_hash: &str) -> Result<bool, String> {
+        let conn = self.lock();
+        let found: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM paired_devices WHERE token_hash = ?1)",
+                params![token_hash],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(found)
+    }
+
+    /// A paired device is gone. False when no device has that id.
+    pub fn revoke_paired_device(&self, id: &str) -> Result<bool, String> {
+        let n = self
+            .lock()
+            .execute("DELETE FROM paired_devices WHERE id = ?1", params![id])
+            .map_err(|e| e.to_string())?;
+        Ok(n > 0)
+    }
+
     /// A done or cancelled job goes back to queued, its result cleared.
     /// False when it is still in flight — queued or running.
     pub fn retry_finished_job(&self, id: &str) -> Result<bool, String> {
@@ -414,6 +486,13 @@ CREATE TABLE IF NOT EXISTS recent_jobs (
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS paired_devices (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  token_hash TEXT NOT NULL,
+  paired_at INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS api_jobs (
   id TEXT PRIMARY KEY,

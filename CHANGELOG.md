@@ -323,3 +323,17 @@ Unreleased.
   re-runs a finished one. A retried request with the same
   `Idempotency-Key` header comes back the same job — 409, the original
   id, nothing new printed
+- Phase 8 local print API (LAN increment): an opt-in switch in
+  Settings ("Let other devices print to this PC", the setting
+  `api.lan`, off by default) — on, the listener binds the whole
+  network instead of `127.0.0.1`, from the next start, and a request
+  from off this PC must carry its paired device's token in the
+  `X-PrintNinja-Device-Token` header. Pairing: the PC opens a
+  short-lived window with a one-time 8-character code (90 seconds,
+  single use, five wrong codes lock it) shown on the Network card, a
+  device presents the code to `POST /v1/pair/claim` and receives its
+  token — shown once, the PC stores only its SHA-256; `GET
+  /v1/pair/hello` tells a device whether this PC is a PrintNinja and
+  whether a window is open. The paired-devices list on the same card
+  names each device (name, platform, date) and can revoke it — the
+  token stops working at once

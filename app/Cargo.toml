@@ -13,11 +13,15 @@ tauri-build = "2"
 
 [dependencies]
 # The local print API (plan phase 8): axum on the app's own tokio
-# runtime (tauri's), a listener of its own.
+# runtime (tauri's), a listener of its own; tower for the LAN gate's
+# middleware layer.
 axum = "0.8"
+tower = { version = "0.5", features = ["util"] }
 tokio = { version = "1", features = ["net", "time"] }
-# Job ids for the local print API.
+# Job ids for the local print API, and the pairing codes and tokens.
 uuid = { version = "1", features = ["v4"] }
+rand = "0.8"
+sha2 = "0.10"
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
@@ -32,6 +36,3 @@ pn-render = { path = "../core/render" }
 pn-browser = { path = "../core/browser" }
 pn-job = { path = "../core/job" }
 pn-transport = { path = "../core/transport" }
-
-[dev-dependencies]
-tower = { version = "0.5", features = ["util"] }
