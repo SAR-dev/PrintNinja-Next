@@ -60,7 +60,9 @@ fn load_inputs<'a>(
     let profile = profiles
         .find(profile_name)
         .ok_or_else(|| format!("no printer profile named \"{profile_name}\""))?;
-    let records = Records::from_json(data_json).map_err(|e| e.to_string())?;
+    // The data field is JSON or CSV, whichever the text is (a local
+    // data file lands here as plain text).
+    let records = Records::from_text(data_json).map_err(|e| e.to_string())?;
     Ok((profile, template, records))
 }
 

@@ -111,6 +111,8 @@ export function PrintScreen({
   const [spoolerName, setSpoolerName] = useState("");
   const [btAddress, setBtAddress] = useState("");
   const [data, setData] = useState(starter.sample);
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null);
   const [copies, setCopies] = useState("1");
   const [plan, setPlan] = useState<PrepareReport | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -140,6 +142,17 @@ export function PrintScreen({
         return { kind: "spooler", name: spoolerName };
       case "bluetooth":
         return { kind: "bluetooth", address: btAddress };
+    }
+  };
+
+  /** A local data file, as its text — JSON or CSV, the parser's call. */
+  const loadFile = async (f: File) => {
+    try {
+      setData(await f.text());
+      setLoaded(f.name);
+      setPlanError(null);
+    } catch (e) {
+      setPlanError(String(e));
     }
   };
 
@@ -323,8 +336,9 @@ export function PrintScreen({
             <CardHeader>
               <CardTitle>Data</CardTitle>
               <CardDescription>
-                One JSON object per record; {"{{name}}"} in the template is
-                filled from each record's fields.
+                JSON (one object per record) or CSV (a header row and its rows);{" "}
+                {"{{name}}"} in the template is filled from each record's
+                fields.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
@@ -332,8 +346,36 @@ export function PrintScreen({
                 rows={5}
                 spellCheck={false}
                 value={data}
-                onChange={(e) => setData(e.target.value)}
+                onChange={(e) => {
+                  setData(e.target.value);
+                  setLoaded(null);
+                }}
               />
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInput?.click()}
+                >
+                  Load from file…
+                </Button>
+                <input
+                  ref={setFileInput}
+                  type="file"
+                  accept=".json,.csv,.txt"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void loadFile(f);
+                    e.target.value = "";
+                  }}
+                />
+                {loaded && (
+                  <span className="text-caption text-muted-foreground">
+                    loaded {loaded}
+                  </span>
+                )}
+              </div>
               <div className="flex w-24 flex-col gap-1">
                 <Label htmlFor="copies">Copies</Label>
                 <Input
@@ -352,8 +394,8 @@ export function PrintScreen({
             <CardHeader>
               <CardTitle>Preview</CardTitle>
               <CardDescription>
-                Prepared with the same path as the print — nothing touches the
-                wire.
+                Every page of the prepared job — the same path as the print,
+                nothing touches the wire.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
@@ -390,7 +432,9 @@ export function PrintScreen({
                       Fell back from the track's preferred path: {plan.fallback}
                     </div>
                   )}
-                  {plan.preview && <JobPreview preview={plan.preview} />}
+                  {plan.preview && plan.preview.length > 0 && (
+                    <JobPreview previews={plan.preview} />
+                  )}
                 </>
               )}
             </CardContent>

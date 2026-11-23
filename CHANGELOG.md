@@ -267,3 +267,15 @@ Unreleased.
   in the document are listed, "new template" now offers both tracks,
   and the document rows in the list get an Edit button. The richer CSS
   designer toolbar is post-v1
+- Phase 7 UI (data input and expanded preview increment): the print
+  screen's data field now takes CSV as well as JSON (a header row and
+  its rows, the same RFC 4180 rules the core has always parsed), and a
+  "load from file" button reads a local JSON or CSV file into the field
+  as text, so it stays inspectable and editable; the job commands parse
+  the data as JSON first and then CSV, and name the data as neither
+  when both readings fail. The preview now expands to every page: a
+  scene job lists all its pages in order (a thumbnail grid when there
+  is more than one), a document job shows the PDF(s) the printer will
+  receive — one per record on the browser path, the whole document on
+  the pdf path — and the editor's one-record preview shows every page
+  of that record

@@ -75,7 +75,7 @@ fn path_word(path: OutputPath) -> &'static str {
     }
 }
 
-/// The first page of the job, rendered the way the job prints (§3.4).
+/// One page of the job, rendered the way the job prints (§3.4).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum Preview {
@@ -109,7 +109,11 @@ pub struct PrepareReport {
     pub units: u32,
     /// The job's size on the wire, in bytes.
     pub bytes: u64,
-    pub preview: Option<Preview>,
+    /// The job's pages, in order — one copy's worth, the copies repeat
+    /// it. Scene jobs carry every page as its 1-bit dots; document jobs
+    /// carry the PDF the printer will receive (one per record on the
+    /// browser path, the whole document on the pdf path).
+    pub preview: Option<Vec<Preview>>,
 }
 
 /// A job ready for delivery: the units, the report, and how the bytes
@@ -218,25 +222,6 @@ fn render_scene_page(page: &Page, profile: &Profile, w_mm: f32, h_mm: f32) -> Ra
     RasterPage::new(renderer.into_page(), w_mm, h_mm)
 }
 
-/// The first page of the job, the way the job prints it: a scene page
-/// as its 1-bit dots, a document job as its PDF.
-fn first_page_preview(
-    job: &ExpandedJob,
-    profile: &Profile,
-    w_mm: f32,
-    h_mm: f32,
-) -> Option<Preview> {
-    let page = job.outputs.first()?.pages.first()?;
-    let rendered = render_scene_page(page, profile, w_mm, h_mm);
-    Some(Preview::Bitmap {
-        width: rendered.bitmap.width(),
-        height: rendered.bitmap.height(),
-        packed: rendered.bitmap.to_bytes().to_vec(),
-        width_mm: w_mm,
-        height_mm: h_mm,
-    })
-}
-
 /// Validate the template, expand the records, pick the path, encode the
 /// units. Nothing here touches the wire — `print_units` does.
 pub fn prepare_units(
@@ -306,11 +291,29 @@ pub fn prepare_units(
         units.extend(once.iter().cloned());
     }
 
-    let preview = match chosen.path {
-        OutputPath::Native | OutputPath::Raster => first_page_preview(&job, profile, w_mm, h_mm),
-        OutputPath::Pdf | OutputPath::Browser => {
-            units.first().cloned().map(|pdf| Preview::Pdf { pdf })
-        }
+    // Every page of the job (one copy's worth — the copies repeat it),
+    // the way the path ships it: scene pages as their 1-bit dots, the
+    // document's PDFs as the bytes the printer receives.
+    let preview: Vec<Preview> = match chosen.path {
+        OutputPath::Native | OutputPath::Raster => job
+            .outputs
+            .iter()
+            .flat_map(|o| o.pages.iter())
+            .map(|p| {
+                let rendered = render_scene_page(p, profile, w_mm, h_mm);
+                Preview::Bitmap {
+                    width: rendered.bitmap.width(),
+                    height: rendered.bitmap.height(),
+                    packed: rendered.bitmap.to_bytes().to_vec(),
+                    width_mm: w_mm,
+                    height_mm: h_mm,
+                }
+            })
+            .collect(),
+        OutputPath::Pdf | OutputPath::Browser => once
+            .iter()
+            .map(|pdf| Preview::Pdf { pdf: pdf.clone() })
+            .collect(),
     };
 
     let pages = job.outputs.iter().map(|o| o.pages.len()).sum::<usize>() as u32;
@@ -321,7 +324,7 @@ pub fn prepare_units(
         pages,
         units: units.len() as u32,
         bytes: units.iter().map(|u| u.len() as u64).sum(),
-        preview,
+        preview: Some(preview),
     };
     let spec = JobSpec::new(
         format!(
@@ -622,7 +625,7 @@ media = ["page"]
     }
 
     /// A scene the printer's language can draw plans native, with a
-    /// 1-bit preview of the first label.
+    /// 1-bit preview of every label in the job.
     #[test]
     fn a_drawable_label_plans_native_with_a_dots_preview() {
         let units = prepare_units(&label_template(false), &zpl_profile(), &two_records(), 1)
@@ -633,14 +636,16 @@ media = ["page"]
         assert_eq!(report.records, 2);
         assert_eq!(report.pages, 2);
         assert_eq!(report.units, 1, "one native stream per copy");
-        match &report.preview {
-            Some(Preview::Bitmap {
+        let pages = report.preview.as_ref().expect("the job previews its pages");
+        assert_eq!(pages.len(), 2, "every page of the job, one copy's worth");
+        match &pages[0] {
+            Preview::Bitmap {
                 width,
                 height,
                 packed,
                 width_mm,
                 height_mm,
-            }) => {
+            } => {
                 // 40 × 50 mm at 203 dpi is 320 × 400 dots, 40 bytes per
                 // row.
                 assert_eq!(*width, 320);
@@ -740,8 +745,14 @@ media = ["page"]
         assert_eq!(units.report.path, "pdf");
         assert_eq!(units.report.units, 1);
         assert_eq!(units.document_format, "application/pdf");
-        match &units.report.preview {
-            Some(Preview::Pdf { pdf }) => assert!(pdf.starts_with(b"%PDF-")),
+        let preview = units
+            .report
+            .preview
+            .as_ref()
+            .expect("the job previews its pages");
+        assert_eq!(preview.len(), 1, "the whole document is one PDF");
+        match &preview[0] {
+            Preview::Pdf { pdf } => assert!(pdf.starts_with(b"%PDF-")),
             other => panic!("expected a pdf preview, got {other:?}"),
         }
     }
@@ -773,8 +784,14 @@ media = ["page"]
             Ok(units) => {
                 assert_eq!(units.report.path, "browser");
                 assert_eq!(units.report.units, 1, "one document per record");
-                match &units.report.preview {
-                    Some(Preview::Pdf { pdf }) => assert!(pdf.starts_with(b"%PDF-")),
+                let preview = units
+                    .report
+                    .preview
+                    .as_ref()
+                    .expect("the job previews its pages");
+                assert_eq!(preview.len(), 1, "one document per record");
+                match &preview[0] {
+                    Preview::Pdf { pdf } => assert!(pdf.starts_with(b"%PDF-")),
                     other => panic!("expected a pdf preview, got {other:?}"),
                 }
             }

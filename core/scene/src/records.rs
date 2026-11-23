@@ -156,6 +156,18 @@ impl Records {
         Ok(Records(out))
     }
 
+    /// Parse the data field as it arrives from the app or a local
+    /// file: JSON first (an array of objects), then CSV (a header row
+    /// and its rows). When both refuse it, the CSV error is the one
+    /// named — it is the more specific reading of the text.
+    pub fn from_text(s: &str) -> Result<Self, RecordsError> {
+        if let Ok(r) = Self::from_json(s) {
+            return Ok(r);
+        }
+        Self::from_csv(s)
+            .map_err(|csv_err| RecordsError(format!("the data is neither JSON nor CSV: {csv_err}")))
+    }
+
     pub fn len(&self) -> usize {
         self.0.len()
     }
@@ -266,5 +278,20 @@ mod tests {
     fn an_empty_csv_is_an_empty_batch() {
         assert!(Records::from_csv("").unwrap().is_empty());
         assert!(Records::from_json("[]").unwrap().is_empty());
+    }
+
+    #[test]
+    fn from_text_reads_json_and_csv_alike() {
+        let json = Records::from_text(r#"[{"name":"Ada"}]"#).unwrap();
+        assert_eq!(json.0[0]["name"].as_text(), "Ada");
+        let csv = Records::from_text("name,qty\nAda,3\n").unwrap();
+        assert_eq!(csv.0[0]["name"].as_text(), "Ada");
+        assert_eq!(csv.0[0]["qty"].as_text(), "3");
+    }
+
+    #[test]
+    fn from_text_names_data_that_is_neither() {
+        let err = Records::from_text("a,b\n1,2,3\n").unwrap_err();
+        assert!(err.to_string().contains("neither JSON nor CSV"));
     }
 }

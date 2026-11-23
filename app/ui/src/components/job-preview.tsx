@@ -1,11 +1,19 @@
 /**
- * The prepared job's preview (plan §3.4: what you see is what gets
- * printed). Scene templates show the first page as the printer will
- * raster it — 1 bit per dot, at the profile's dpi. Document templates
- * show the actual PDF the printer will receive.
+ * The prepared job's pages (plan §3.4: what you see is what gets
+ * printed). Scene templates show every page as the printer will raster
+ * it — 1 bit per dot, at the profile's dpi. Document templates show the
+ * actual PDF(s) the printer will receive — one per record on the
+ * browser path, the whole document on the pdf path.
  */
 import { useEffect, useRef, useState } from "react";
 import type { Preview } from "@/api";
+
+type Bitmap = Extract<Preview, { kind: "bitmap" }>;
+type Pdf = Extract<Preview, { kind: "pdf" }>;
+
+function isBitmap(p: Preview): p is Bitmap {
+  return p.kind === "bitmap";
+}
 
 /** Unpack the 1-bit raster into RGBA pixels: bit set = dot on. */
 function packedToImageData(
@@ -33,12 +41,17 @@ function BitmapPreview({
   packed,
   width_mm,
   height_mm,
+  scale,
+  caption,
 }: {
   width: number;
   height: number;
   packed: number[];
   width_mm: number;
   height_mm: number;
+  /** Display pixels per millimetre. */
+  scale: number;
+  caption: string;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -51,9 +64,6 @@ function BitmapPreview({
     if (ctx) ctx.putImageData(packedToImageData(packed, width, height), 0, 0);
   }, [packed, width, height]);
 
-  // Show at ~15 px per mm regardless of the printer's dpi, so a
-  // 40 × 50 label reads as 40 × 50 on screen.
-  const scale = 15;
   return (
     <div className="flex flex-col items-center gap-2">
       <canvas
@@ -64,11 +74,9 @@ function BitmapPreview({
           imageRendering: "pixelated",
         }}
         className="rounded-sm border border-border bg-white"
-        aria-label={`Preview: ${width} by ${height} dots`}
+        aria-label={caption}
       />
-      <span className="text-caption text-muted-foreground">
-        {width_mm} × {height_mm} mm — first of the pages
-      </span>
+      <span className="text-caption text-muted-foreground">{caption}</span>
     </div>
   );
 }
@@ -98,17 +106,58 @@ function PdfPreview({ pdf }: { pdf: number[] }) {
   );
 }
 
-export function JobPreview({ preview }: { preview: Preview }) {
-  if (preview.kind === "bitmap") {
+/**
+ * Every page of the prepared job, in order. Scene pages show as a
+ * thumbnail grid when there is more than one of them; document PDFs
+ * stack one per record.
+ */
+export function JobPreview({ previews }: { previews: Preview[] }) {
+  if (previews.length === 0) return null;
+  const bitmaps = previews.filter(isBitmap);
+
+  if (bitmaps.length === previews.length) {
+    const multi = previews.length > 1;
     return (
-      <BitmapPreview
-        width={preview.width}
-        height={preview.height}
-        packed={preview.packed}
-        width_mm={preview.width_mm}
-        height_mm={preview.height_mm}
-      />
+      <div
+        className={
+          multi
+            ? "grid max-h-[520px] grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 overflow-y-auto pr-1"
+            : "flex flex-col items-center gap-2"
+        }
+      >
+        {bitmaps.map((p, i) => (
+          <BitmapPreview
+            key={i}
+            width={p.width}
+            height={p.height}
+            packed={p.packed}
+            width_mm={p.width_mm}
+            height_mm={p.height_mm}
+            scale={multi ? Math.min(15, 150 / p.width_mm) : 15}
+            caption={
+              multi
+                ? `page ${i + 1} of ${bitmaps.length}`
+                : `${p.width_mm} × ${p.height_mm} mm`
+            }
+          />
+        ))}
+      </div>
     );
   }
-  return <PdfPreview pdf={preview.pdf} />;
+
+  const pdfs = previews.filter((p): p is Pdf => p.kind === "pdf");
+  return (
+    <div className="flex flex-col gap-4">
+      {pdfs.map((p, i) => (
+        <div key={i} className="flex flex-col gap-2">
+          <PdfPreview pdf={p.pdf} />
+          {pdfs.length > 1 && (
+            <span className="text-caption text-muted-foreground">
+              document {i + 1} of {pdfs.length}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }

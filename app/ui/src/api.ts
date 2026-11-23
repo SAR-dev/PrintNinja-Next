@@ -20,7 +20,7 @@ export interface ProfileInfo {
   can_confirm: boolean;
 }
 
-/** The preview the prepared job carries (plan §3.4). */
+/** One page of the prepared job, the way the job prints it (§3.4). */
 export type Preview =
   | {
       kind: "bitmap";
@@ -43,7 +43,10 @@ export interface PrepareReport {
   pages: number;
   units: number;
   bytes: number;
-  preview: Preview | null;
+  /** The job's pages in order — one copy's worth. Scene jobs: every
+   * page as its 1-bit dots; document jobs: the PDF(s) the printer
+   * receives (one per record on the browser path). */
+  preview: Preview[] | null;
 }
 
 /** What actually happened to a printed job (plan §5.7). */

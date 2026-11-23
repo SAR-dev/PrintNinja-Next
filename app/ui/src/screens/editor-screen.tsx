@@ -779,8 +779,8 @@ export function EditorScreen({
             <CardHeader>
               <CardTitle>Preview</CardTitle>
               <CardDescription>
-                Prepared on the chosen printer, the same path as the print — one
-                record.
+                Prepared on the chosen printer, the same path as the print —
+                every page of one record.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
@@ -816,7 +816,9 @@ export function EditorScreen({
                       {preview.fallback}
                     </div>
                   )}
-                  {preview.preview && <JobPreview preview={preview.preview} />}
+                  {preview.preview && preview.preview.length > 0 && (
+                    <JobPreview previews={preview.preview} />
+                  )}
                 </>
               )}
             </CardContent>
