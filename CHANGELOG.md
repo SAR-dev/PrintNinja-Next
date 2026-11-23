@@ -415,3 +415,15 @@ Unreleased.
   with a "published" badge; Save/Unsave on community rows that
   materialize an editable local copy; and a registry status chip —
   online, the handle, and the waiting count — with a Sync button
+- Phase 9 registry (database increment): terminal database commands
+  for `pn-server`, the way the old code did it from the shell —
+  `pn-server migrate make <name>` writes the next numbered
+  `NNNN_name.sql` file (plain portable SQLite, one transaction per
+  file), `migrate apply` runs every file not applied yet,
+  `migrate status` shows which are applied and which are waiting,
+  and `db reset` deletes the database and rebuilds it from every
+  migration in order. Applied files are recorded in
+  `schema_migrations`; a failed migration rolls back only itself.
+  `serve` applies whatever is pending before the first request, and
+  a fresh database self-initializes from the first migration, which
+  is embedded at compile time

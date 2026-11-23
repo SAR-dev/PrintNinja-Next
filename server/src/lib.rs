@@ -12,6 +12,7 @@
 
 pub mod auth;
 pub mod config;
+pub mod migrate;
 pub mod router;
 pub mod store;
 pub mod template;
