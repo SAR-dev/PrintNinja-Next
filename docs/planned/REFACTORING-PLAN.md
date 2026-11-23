@@ -394,6 +394,8 @@ Each phase ends in something testable; no phase is "done" until its exit criteri
 
 **Exit:** a non-developer goes template → data → print → sees a confirmed (or honestly unconfirmed) result, using no developer tooling.
 
+*Done 2026-11-23 — the whole path is in the app: the template list with track badges and the two editors (scene, HTML/CSS document), data as JSON/CSV text or a loaded file with the preview of every expanded page, the print screen over the same pipeline the tests drive, the honest result in the plan's own vocabulary (including the "N of M" counts of a partial batch), the recent-jobs list with reprint/retry, everything persisted in one local SQLite file, and the settings screen (theme, start-with-computer, per-printer pacing and close-delay overrides) with the tray icon and the close-to-tray window (the last of the eight increments, `2f8fd36`). The exit criterion is exercised through exactly this path — no developer tooling involved; the Raw Console stays behind the developer-tools toggle.*
+
 ### Phase 8 — Local print API (REST)
 
 - Local HTTP API in the app crate: list printers and templates, submit a job (`template + data + printer + copies`), track job status/result and retry — the same job pipeline the UI drives, so API jobs get identical verification and result states.
