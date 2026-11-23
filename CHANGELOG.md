@@ -136,3 +136,20 @@ Unreleased.
   Code 128 label as a one-page PDF and a two-page A4 document (bold
   heading, a Japanese line, a QR) are pinned by golden cases, and the
   cross-reference table is checked to point at its own objects
+- Phase 5 raster renderer (encoder increment): `pn-encoders` — the
+  `raster()` entry point that wraps the rendered pages in the
+  profile's language (plan §5.5), one entry point, dispatched on the
+  profile's `language`. The four thermal wrappers are byte-for-byte
+  ports of the old app's default output: ESC/POS as banded `GS v 0`
+  commands (at most 256 rows per band — cheap Bluetooth heads drop
+  oversized commands — with the blank bottom rows trimmed off, keeping
+  at least one, so a test page on an A4-tall canvas does not feed 30 cm
+  of nothing), ZPL and CPCL with the raster hex-encoded in a single
+  `^GFA`/`EG` graphic, and TSPL with raw binary dots and the gap in
+  millimetres derived from the profile's `min_gap_dots` (0.0 for
+  continuous media). A document printer (`language = "pdf"`) has no
+  raster path — its bytes are the PDF — so `raster()` reports that in
+  plain words instead of guessing. A receipt, a Code 128 label, a
+  framed label and a QR label on four shipped profiles are pinned by
+  golden cases; the native (printer-side fonts and barcodes) encoders
+  join in phase 6

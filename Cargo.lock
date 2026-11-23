@@ -2620,6 +2620,13 @@ dependencies = [
 [[package]]
 name = "pn-encoders"
 version = "0.0.0"
+dependencies = [
+ "golden-harness",
+ "pn-profiles",
+ "pn-render",
+ "pn-scene",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "pn-job"

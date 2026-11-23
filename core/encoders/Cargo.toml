@@ -5,3 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+pn-profiles = { path = "../profiles" }
+pn-render = { path = "../render" }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+golden-harness = { path = "../../tests/golden" }
+pn-scene = { path = "../scene" }

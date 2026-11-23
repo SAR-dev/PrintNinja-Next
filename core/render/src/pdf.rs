@@ -141,10 +141,8 @@ pub fn render_pdf(pages: &[RasterPage]) -> Vec<u8> {
         out.extend_from_slice(format!("{at:010} 00000 n \n").as_bytes());
     }
     out.extend_from_slice(
-        format!(
-            "trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n"
-        )
-        .as_bytes(),
+        format!("trailer\n<< /Size {size} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n")
+            .as_bytes(),
     );
 
     out
