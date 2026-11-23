@@ -258,5 +258,12 @@ Unreleased.
   page dimensions in mm); and the declared data fields follow the
   bindings the elements actually use. The editor previews one record
   on the chosen printer with the same path as the print, "new
-  template" chooses the track (the HTML/CSS document editor is the
-  next increment), and the scene rows in the list gain an Edit button
+  template" chooses the track, and the scene rows in the list gain an
+  Edit button
+- Phase 7 UI (HTML/CSS document editor v1): document templates are
+  editable too — the document's code, the paper size (with A4/A5/Letter
+  presets), and the sample data, with a live browser preview that shows
+  the first record substituted the way the print does it; the bindings
+  in the document are listed, "new template" now offers both tracks,
+  and the document rows in the list get an Edit button. The richer CSS
+  designer toolbar is post-v1

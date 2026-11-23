@@ -18,6 +18,34 @@ export interface AppTemplate {
   sample: string;
 }
 
+/** A new, empty document template to start the HTML/CSS track from. */
+export function blankDocument(): AppTemplate {
+  return {
+    id: `user-${Date.now().toString(36)}`,
+    name: "New document",
+    description: "An A4 page in HTML/CSS.",
+    track: "document",
+    template: {
+      format: "html",
+      media: { kind: "page", width_mm: 210, height_mm: 297 },
+      elements: [],
+      html: `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 20mm; color: #1a1a1a; }
+</style>
+</head>
+<body>
+  <h1>{{title}}</h1>
+</body>
+</html>`,
+    },
+    sample: '[{"title":"My document"}]',
+  };
+}
+
 export const starters: AppTemplate[] = [
   {
     id: "parts-label",

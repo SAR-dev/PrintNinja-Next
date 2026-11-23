@@ -16,9 +16,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { blankTemplate } from "@/scene/editor-model";
+import { DocumentEditorScreen } from "@/screens/document-editor-screen";
 import { EditorScreen } from "@/screens/editor-screen";
 import { PrintScreen } from "@/screens/print-screen";
-import { starters, type AppTemplate } from "@/templates";
+import { blankDocument, starters, type AppTemplate } from "@/templates";
 
 function isDark() {
   return document.documentElement.dataset.theme === "dark";
@@ -27,7 +28,8 @@ function isDark() {
 type View =
   | { name: "list" }
   | { name: "print"; template: AppTemplate }
-  | { name: "edit"; template: AppTemplate };
+  | { name: "edit"; template: AppTemplate }
+  | { name: "document-edit"; template: AppTemplate };
 
 function TemplatesScreen({
   templates,
@@ -67,11 +69,9 @@ function TemplatesScreen({
                 <CardDescription>{t.description}</CardDescription>
               </div>
               <div className="flex gap-2">
-                {t.track === "scene" && (
-                  <Button variant="secondary" onClick={() => onEdit(t)}>
-                    Edit
-                  </Button>
-                )}
+                <Button variant="secondary" onClick={() => onEdit(t)}>
+                  Edit
+                </Button>
                 <Button onClick={() => onPrint(t)}>Print</Button>
               </div>
             </CardHeader>
@@ -117,6 +117,18 @@ function App() {
     setView({ name: "edit", template: t });
   };
 
+  const newDocument = () => {
+    setNewOpen(false);
+    setView({ name: "document-edit", template: blankDocument() });
+  };
+
+  const editTemplate = (t: AppTemplate) =>
+    setView(
+      t.track === "scene"
+        ? { name: "edit", template: t }
+        : { name: "document-edit", template: t },
+    );
+
   return (
     <div className="min-h-dvh-safe bg-background">
       {view.name === "print" ? (
@@ -129,7 +141,16 @@ function App() {
           initial={view.template}
           onBack={() => setView({ name: "list" })}
           onSave={(t) => {
-            upsert({ ...t, track: "scene" });
+            upsert(t);
+            setView({ name: "list" });
+          }}
+        />
+      ) : view.name === "document-edit" ? (
+        <DocumentEditorScreen
+          initial={view.template}
+          onBack={() => setView({ name: "list" })}
+          onSave={(t) => {
+            upsert(t);
             setView({ name: "list" });
           }}
         />
@@ -150,7 +171,7 @@ function App() {
           <TemplatesScreen
             templates={templates}
             onPrint={(t) => setView({ name: "print", template: t })}
-            onEdit={(t) => setView({ name: "edit", template: t })}
+            onEdit={editTemplate}
             onNew={() => setNewOpen(true)}
           />
           <Dialog open={newOpen} onOpenChange={setNewOpen}>
@@ -166,8 +187,8 @@ function App() {
                 <Button onClick={newScene}>
                   Scene — labels, rolls and pages
                 </Button>
-                <Button variant="secondary" disabled>
-                  Document — HTML/CSS (next increment)
+                <Button variant="secondary" onClick={newDocument}>
+                  Document — HTML/CSS
                 </Button>
               </div>
               <DialogFooter>

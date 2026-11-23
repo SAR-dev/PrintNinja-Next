@@ -53,14 +53,6 @@ import type {
 } from "@/scene/schema";
 import type { AppTemplate } from "@/templates";
 
-export interface EditorResult {
-  id: string;
-  name: string;
-  description: string;
-  template: Template;
-  sample: string;
-}
-
 /** Rewrite one element in a container, leaving everything else as is. */
 function updateAt(
   template: Template,
@@ -89,7 +81,7 @@ export function EditorScreen({
 }: {
   initial: AppTemplate;
   onBack: () => void;
-  onSave: (t: EditorResult) => void;
+  onSave: (t: AppTemplate) => void;
 }) {
   const [name, setName] = useState(initial.name);
   const [template, setTemplate] = useState<Template>(() =>
@@ -195,6 +187,7 @@ export function EditorScreen({
       id: initial.id,
       name: name.trim() || "Untitled template",
       description: initial.description,
+      track: "scene",
       template: withSyncedFields(template),
       sample: initial.sample,
     });
