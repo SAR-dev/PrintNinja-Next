@@ -20,6 +20,7 @@ members = [
     "core/encoders",
     "core/transport",
     "core/job",
+    "server",
     "tests/golden",
     "tests/e2e",
 ]

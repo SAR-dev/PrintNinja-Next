@@ -349,3 +349,18 @@ Unreleased.
   link that cannot be read says so in plain words instead of doing
   nothing; the cold-start read and the warm-start event can race the
   same link, and it is dispatched once
+- Phase 9 registry server (accounts increment): `pn-server`, a Rust
+  axum service — the community registry the app will publish to.
+  Accounts are keyed by a handle, not an email (1–32 of A-Z a-z 0-9 _
+  -, matched case-insensitively, kept as typed): `POST /v1/account`
+  creates one and signs the user in at once, `POST /v1/login` signs in
+  and issues a session, `GET /v1/me` and `GET /v1/health` read state,
+  `POST /v1/logout` ends a session, `POST /v1/password/change` swaps
+  the password (keeping this session, ending every other one) and
+  `POST /v1/handle` renames the account (a case-only rename is free; a
+  real rename that lands on a taken handle is 409). Passwords are
+  argon2id at the old server's parameters, and only the SHA-256 of a
+  session token is stored — a leaked database leaks no live sessions;
+  logins prune each account to its newest 20 sessions. The store is
+  plain portable SQLite on a local file, so the production backend can
+  be Turso (cloud SQLite) without the SQL changing
