@@ -127,6 +127,32 @@ impl Renderer {
     }
 }
 
+/// The module width of a linear symbol at the renderer's quiet zones:
+/// the pattern's dark/light runs plus 10 quiet modules on each side.
+/// `None` when the value is empty or the symbology cannot carry it —
+/// the same rules the raster renderer applies, so the native encoders'
+/// sizing agrees with the preview.
+pub fn barcode_module_count(kind: &BarcodeKind, value: &str) -> Option<usize> {
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    encode(kind, value).map(|m| m.len() + 2 * QUIET_MODULES)
+}
+
+/// The side of a QR matrix in modules, at error correction M (the
+/// renderer's level), quiet zone excluded. `None` when the value is
+/// empty or too long for the smallest code.
+pub fn qr_module_side(value: &str) -> Option<usize> {
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    QrCode::with_error_correction_level(value.as_bytes(), EcLevel::M)
+        .ok()
+        .map(|c| c.width())
+}
+
 /// Encode `value` as the dark/light module pattern of a linear
 /// symbology: `1` dark, `0` light, quiet zone excluded. `None` when the
 /// symbology cannot carry the value.
@@ -302,6 +328,32 @@ mod tests {
         assert!(!inks("upca", "03600029145")); // 11 digits
         assert!(inks("itf", "1234567890"));
         assert!(!inks("itf", "123456789")); // odd count
+    }
+
+    /// The module-count helpers agree with the renderer's rules: a
+    /// scannable value counts pattern plus 20 quiet modules, and an
+    /// empty or unencodable value is `None` — the same value the
+    /// native encoders will skip rather than emit.
+    #[test]
+    fn the_module_helpers_match_the_renderers_rules() {
+        assert!(barcode_module_count(&BarcodeKind::Code128, "HELLO123").is_some());
+        assert!(barcode_module_count(&BarcodeKind::Ean13, "5901234123457").is_some());
+        assert!(barcode_module_count(&BarcodeKind::Code128, "").is_none());
+        assert!(barcode_module_count(&BarcodeKind::Code128, "   ").is_none());
+        assert!(barcode_module_count(&BarcodeKind::Ean13, "59012341234").is_none());
+        assert!(barcode_module_count(&BarcodeKind::Code128, "プリント").is_none());
+        // The count is pattern plus the two quiet zones.
+        let count = barcode_module_count(&BarcodeKind::Code128, "HELLO123").unwrap();
+        let pattern = encode(&BarcodeKind::Code128, "HELLO123").unwrap();
+        assert_eq!(count, pattern.len() + 2 * QUIET_MODULES);
+
+        assert_eq!(qr_module_side(""), None);
+        assert_eq!(qr_module_side("  "), None);
+        // The same level the renderer draws at (M).
+        let side = qr_module_side("https://example.com/o/1042").unwrap();
+        let code =
+            QrCode::with_error_correction_level(b"https://example.com/o/1042", EcLevel::M).unwrap();
+        assert_eq!(side, code.width());
     }
 
     /// The symbol stays inside its box, quiet zone and all.

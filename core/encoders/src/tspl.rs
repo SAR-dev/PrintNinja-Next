@@ -8,8 +8,10 @@
 //! `BITMAP` command and `PRINT 1`.
 
 use pn_profiles::{Media, Profile};
-use pn_render::Bitmap;
-use pn_render::RasterPage;
+use pn_render::{dots_for_mm, Bitmap, RasterPage};
+use pn_scene::{Align, BarcodeKind, ExpandedJob, Placed, PlacedKind};
+
+use crate::NativeCtx;
 
 /// All the pages, each as one TSPL label.
 pub(crate) fn raster(pages: &[RasterPage], profile: &Profile) -> Vec<u8> {
@@ -47,6 +49,121 @@ fn gap_mm(profile: &Profile) -> String {
         }
     }
     "0.0".to_string()
+}
+
+/// All the pages, each as one TSPL label in the printer's own language:
+/// a built-in font for text, a printer-generated `BARCODE` and `BAR`/
+/// `BOX` shapes instead of a `BITMAP`. The header (SIZE, GAP,
+/// DIRECTION, REFERENCE, CLS) is the raster's, so a native label sizes
+/// itself the same way.
+pub(crate) fn native(job: &ExpandedJob, ctx: &NativeCtx) -> Vec<u8> {
+    let gap = gap_mm(ctx.profile);
+    // The printer's first built-in font; the shared check already
+    // refused a profile with none.
+    let font = ctx
+        .profile
+        .fonts
+        .native
+        .first()
+        .cloned()
+        .unwrap_or_default();
+    let mut out = String::new();
+    for output in &job.outputs {
+        for page in &output.pages {
+            out.push_str(&format!(
+                "SIZE {:.1} mm,{:.1} mm\r\n",
+                ctx.page_w_mm, ctx.page_h_mm
+            ));
+            out.push_str(&format!("GAP {gap} mm,0 mm\r\n"));
+            out.push_str("DIRECTION 1\r\n");
+            out.push_str("REFERENCE 0,0\r\n");
+            out.push_str("CLS\r\n");
+            for el in &page.elements {
+                emit(el, &font, ctx, &mut out);
+            }
+            out.push_str("PRINT 1\r\n");
+        }
+    }
+    out.into_bytes()
+}
+
+fn emit(el: &Placed, font: &str, ctx: &NativeCtx, out: &mut String) {
+    let x = dots_for_mm(el.x_mm, ctx.dpi);
+    let y = dots_for_mm(el.y_mm, ctx.dpi);
+    match &el.kind {
+        PlacedKind::Text {
+            w_mm,
+            content,
+            style,
+            ..
+        } => {
+            if content.trim().is_empty() {
+                return;
+            }
+            // TSPL's `TEXT` size parameters are multipliers of the
+            // printer's base font, not a dot height, so v1 maps every
+            // text size onto the base font (1,1) and centers the line
+            // with the same character-width estimate the support check
+            // uses. Phase 10 reconciles the multiplier per printer on
+            // real hardware through the raw console.
+            let h = dots_for_mm(style.size_mm, ctx.dpi).max(1);
+            let cw = crate::char_width_dots(ctx.lang, h);
+            let box_w = dots_for_mm(*w_mm, ctx.dpi).min(ctx.page_w_dots);
+            let text_w = content.chars().count() as u32 * cw;
+            let x = match style.align {
+                Align::Center => x + box_w.saturating_sub(text_w) / 2,
+                Align::Right => x + box_w.saturating_sub(text_w),
+                Align::Left => x,
+            };
+            out.push_str(&format!("TEXT {x},{y},\"{font}\",0,1,1,\"{content}\"\r\n"));
+        }
+        // TSPL picks the module width itself, so only the box height
+        // matters — the shared check already passed the value.
+        PlacedKind::Barcode {
+            h_mm,
+            kind,
+            value,
+            show_text,
+            ..
+        } => {
+            let h = dots_for_mm(*h_mm, ctx.dpi).max(1);
+            let yn = if *show_text { 1 } else { 0 };
+            let ty = match kind {
+                BarcodeKind::Code128 => "128",
+                BarcodeKind::Code39 => "39",
+                BarcodeKind::Code93 => "93",
+                BarcodeKind::Ean13 => "EAN13",
+                BarcodeKind::Upca => "UPCA",
+                BarcodeKind::Itf => "ITF",
+            };
+            out.push_str(&format!(
+                "BARCODE {x},{y},\"{ty}\",{h},{yn},1,0,0,\"{value}\"\r\n"
+            ));
+        }
+        PlacedKind::Qr { .. } => {} // refused by the shared check
+        PlacedKind::Line {
+            length_mm,
+            thickness_mm,
+            vertical,
+        } => {
+            let len = dots_for_mm(*length_mm, ctx.dpi).max(1);
+            let th = dots_for_mm(*thickness_mm, ctx.dpi).max(1);
+            let (w, h) = if *vertical { (th, len) } else { (len, th) };
+            out.push_str(&format!("BAR {x},{y},{w},{h}\r\n"));
+        }
+        PlacedKind::Rect { w_mm, h_mm, fill } => {
+            let w = dots_for_mm(*w_mm, ctx.dpi).max(1);
+            let h = dots_for_mm(*h_mm, ctx.dpi).max(1);
+            if *fill {
+                out.push_str(&format!("BAR {x},{y},{w},{h}\r\n"));
+            } else {
+                // The frame thickness the raster uses (0.5 mm).
+                let t = dots_for_mm(0.5, ctx.dpi).max(1);
+                out.push_str(&format!("BOX {x},{y},{w},{h},{t}\r\n"));
+            }
+        }
+        PlacedKind::Image { .. } => {} // refused by the shared check
+    }
 }
 
 #[cfg(test)]
@@ -127,5 +244,131 @@ mod tests {
         let first = tspl.find("SIZE 40 mm,30 mm").unwrap();
         let second = tspl.find("SIZE 40 mm,50 mm").unwrap();
         assert!(first < second);
+    }
+
+    // ── native ──────────────────────────────────────────────────────
+
+    use pn_render::fit_to_head;
+    use pn_scene::{
+        expand, At, Element, Format, Media as SceneMedia, Placement, Records, Size, Template,
+        TextStyle,
+    };
+
+    /// The shipped TTP-244 Pro: one built-in font, no barcode
+    /// generators — so its native label is text and shapes only.
+    fn ttp244() -> Profile {
+        pn_profiles::parse(
+            r#"
+[profile]
+model = "TTP-244 Pro"
+language = "tspl"
+dpi = 203
+head_width_dots = 812
+media = ["label"]
+min_gap_dots = 16
+[fonts]
+native = ["2"]
+"#,
+        )
+        .expect("test profile is valid")
+    }
+
+    fn ctx_for(profile: &Profile, w_mm: f32, h_mm: f32) -> NativeCtx<'_> {
+        NativeCtx {
+            lang: profile.profile.language,
+            profile,
+            dpi: 203,
+            page_w_dots: fit_to_head(dots_for_mm(w_mm, 203), profile.profile.head_width_dots),
+            page_h_dots: dots_for_mm(h_mm, 203),
+            page_w_mm: w_mm,
+            page_h_mm: h_mm,
+        }
+    }
+
+    /// A 40 × 50 mm label: a 3 mm heading, a rule and a framed box.
+    fn native_label() -> (Profile, ExpandedJob) {
+        let profile = ttp244();
+        let template = Template {
+            format: Format::Scene,
+            html: None,
+            media: SceneMedia::Label {
+                width_mm: 40.0,
+                height_mm: 50.0,
+            },
+            fields: vec![],
+            elements: vec![
+                Element::Text {
+                    at: At {
+                        x_mm: 5.0,
+                        y_mm: 5.0,
+                    },
+                    size: Size {
+                        w_mm: 30.0,
+                        h_mm: 6.0,
+                    },
+                    content: "TEST".into(),
+                    style: TextStyle {
+                        size_mm: 3.0,
+                        font: None,
+                        bold: false,
+                        italic: false,
+                        align: Align::Left,
+                    },
+                    page: Placement::Every,
+                },
+                Element::Line {
+                    at: At {
+                        x_mm: 5.0,
+                        y_mm: 15.0,
+                    },
+                    length_mm: 30.0,
+                    thickness_mm: 0.3,
+                    vertical: false,
+                    page: Placement::Every,
+                },
+                Element::Rect {
+                    at: At {
+                        x_mm: 5.0,
+                        y_mm: 30.0,
+                    },
+                    size: Size {
+                        w_mm: 30.0,
+                        h_mm: 12.0,
+                    },
+                    fill: false,
+                    page: Placement::Every,
+                },
+            ],
+        };
+        let records = Records::from_json("[{}]").unwrap();
+        (profile, expand(&template, &records).unwrap())
+    }
+
+    /// The native label is the printer's own commands — a `TEXT` in the
+    /// built-in font, a `BAR` rule and a `BOX` frame — and no `BITMAP`.
+    #[test]
+    fn a_native_label_is_fonts_and_shapes_not_a_bitmap() {
+        let (profile, job) = native_label();
+        let bytes = native(&job, &ctx_for(&profile, 40.0, 50.0));
+        let out = String::from_utf8_lossy(&bytes);
+        // 16 dots at 203 dpi is the profile's 2.0 mm gap.
+        assert!(out.starts_with(
+            "SIZE 40.0 mm,50.0 mm\r\nGAP 2.0 mm,0 mm\r\nDIRECTION 1\r\nREFERENCE 0,0\r\nCLS\r\n"
+        ));
+        // 3 mm text in the built-in font "2", base size (multiplier 1,1).
+        assert!(out.contains("TEXT 40,40,\"2\",0,1,1,\"TEST\"\r\n"));
+        assert!(out.contains("BAR 40,120,240,2\r\n"));
+        assert!(out.contains("BOX 40,240,240,96,4\r\n"));
+        assert!(out.ends_with("PRINT 1\r\n"));
+        assert!(!out.contains("BITMAP"), "native output has no raster");
+    }
+
+    /// The native label's exact bytes are pinned, the way the
+    /// raster's are.
+    #[test]
+    fn the_native_label_matches_the_pinned_golden_bytes() {
+        let (profile, job) = native_label();
+        let out = native(&job, &ctx_for(&profile, 40.0, 50.0));
+        golden_harness::assert_matches_golden("encoders/tspl-native.bin", &out);
     }
 }

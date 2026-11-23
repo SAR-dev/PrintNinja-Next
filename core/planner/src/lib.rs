@@ -1,29 +1,36 @@
 //! Print planner: picks the output path for a job (plan §5.3).
 //!
 //! Track routing first — the template's `format` and media kind pick the
-//! track (decided 2026-11-20), then the profile's language picks the
-//! path:
+//! track (decided 2026-11-20), then the profile's language and the
+//! scene itself pick the path:
 //!
-//! | track            | media        | path     |
-//! | ---------------- | ------------ | -------- |
-//! | `html`           | `page`       | browser  |
-//! | `scene`          | `page`       | pdf      |
-//! | `scene`          | label/roll   | raster   |
+//! | track            | media        | path                            |
+//! | ---------------- | ------------ | ------------------------------- |
+//! | `html`           | `page`       | browser                         |
+//! | `scene`          | `page`       | pdf                             |
+//! | `scene`          | label/roll   | native → raster (reason recorded) |
 //!
-//! The raster path is what phase 5 selects; the native command path
-//! (preferred over raster when the scene fits the printer's language)
-//! joins in phase 6. The planner never emits bytes — it decides which
-//! bytes the encoders (or the browser, on the document track) produce.
+//! On the thermal track the planner tries the native command path first
+//! — the encoder says, element by element, whether the scene fits the
+//! printer's language. When it does not, the scene falls back to the
+//! raster path and the reason is recorded in the plan. The planner
+//! never emits bytes — it decides which bytes the encoders (or the
+//! browser, on the document track) produce.
 
 use pn_profiles::{Language, Media, Profile};
-use pn_scene::Template;
+use pn_scene::{ExpandedJob, Template};
 use thiserror::Error;
 
 /// The output path a job takes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputPath {
+    /// The scene in the printer's own commands: its built-in fonts,
+    /// printer-generated barcodes and native shapes (plan §5.3) — tens
+    /// of bytes instead of an image.
+    Native,
     /// 1-bit raster commands in the profile's thermal language
-    /// (ESC/POS, ZPL, TSPL or CPCL).
+    /// (ESC/POS, ZPL, TSPL or CPCL) — the fallback when the scene does
+    /// not fit the printer's language.
     Raster,
     /// The scene rendered to PDF by the Rust renderer, sent through the
     /// OS print path (spooler or IPP).
@@ -37,8 +44,10 @@ pub enum OutputPath {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Plan {
     pub path: OutputPath,
-    /// Recorded fallback reason (plan §5.3): set when a path the track
-    /// prefers is refused by a profile rule.
+    /// Recorded fallback reason (plan §5.3): set when the track's
+    /// preferred path is refused — the scene outgrows the printer's
+    /// native language, or the printer speaks no thermal language at
+    /// all.
     pub fallback: Option<String>,
 }
 
@@ -55,8 +64,8 @@ pub struct PlanError {
     pub printer: String,
 }
 
-/// The output path for a template on a printer.
-pub fn plan(template: &Template, profile: &Profile) -> Result<Plan, PlanError> {
+/// The output path for an expanded job on a printer.
+pub fn plan(job: &ExpandedJob, template: &Template, profile: &Profile) -> Result<Plan, PlanError> {
     let meta = &profile.profile;
 
     // The printer's media, in words: "label", "continuous", "page"
@@ -97,10 +106,22 @@ pub fn plan(template: &Template, profile: &Profile) -> Result<Plan, PlanError> {
                 fallback: None,
             }),
             pn_scene::Media::Label { .. } | pn_scene::Media::Roll { .. } => match meta.language {
-                Language::Escpos | Language::Zpl | Language::Tspl | Language::Cpcl => Ok(Plan {
-                    path: OutputPath::Raster,
-                    fallback: None,
-                }),
+                Language::Escpos | Language::Zpl | Language::Tspl | Language::Cpcl => {
+                    // Native first (plan §5.3): the encoder walks the
+                    // scene element by element and says whether the
+                    // printer's language can draw it. One refusal sends
+                    // the whole job to raster, with the reason.
+                    match pn_encoders::native(job, template, profile) {
+                        Ok(_) => Ok(Plan {
+                            path: OutputPath::Native,
+                            fallback: None,
+                        }),
+                        Err(e) => Ok(Plan {
+                            path: OutputPath::Raster,
+                            fallback: Some(e.to_string()),
+                        }),
+                    }
+                }
                 // The template wants thermal output and the printer
                 // speaks no thermal language: raster is refused, the
                 // scene is rendered to PDF and goes through the OS
@@ -119,7 +140,9 @@ pub fn plan(template: &Template, profile: &Profile) -> Result<Plan, PlanError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pn_scene::{Format, Media as TemplateMedia};
+    use pn_scene::{
+        expand, Align, Element, Format, Media as TemplateMedia, Placement, Records, Size, TextStyle,
+    };
     use std::fs;
 
     /// A real shipped profile, parsed from its TOML.
@@ -171,27 +194,107 @@ mod tests {
         )
     }
 
-    /// A label scene on a Zebra label printer: the raster path.
+    /// One empty record, for templates with no bindings.
+    fn one_record() -> Records {
+        Records::from_json("[{}]").unwrap()
+    }
+
+    /// An expanded job for the template.
+    fn expanded(t: &Template) -> ExpandedJob {
+        expand(t, &one_record()).unwrap()
+    }
+
+    /// A text element, plain by default.
+    fn text(y_mm: f32, content: &str, bold: bool) -> Element {
+        Element::Text {
+            at: pn_scene::At { x_mm: 5.0, y_mm },
+            size: Size {
+                w_mm: 30.0,
+                h_mm: 6.0,
+            },
+            content: content.into(),
+            style: TextStyle {
+                size_mm: 3.0,
+                font: None,
+                bold,
+                italic: false,
+                align: Align::Left,
+            },
+            page: Placement::Every,
+        }
+    }
+
+    /// An ESC/POS roll printer with a native font and a Code 128
+    /// generator.
+    fn escpos_roll() -> Profile {
+        pn_profiles::parse(
+            r#"
+[profile]
+model = "V"
+language = "escpos"
+dpi = 180
+head_width_dots = 384
+media = ["continuous"]
+[fonts]
+native = ["default"]
+[barcodes]
+native = ["CODE128"]
+"#,
+        )
+        .unwrap()
+    }
+
+    /// A label scene the printer can draw in its own language: the
+    /// native path, with no fallback recorded.
     #[test]
-    fn a_label_scene_on_a_label_printer_plans_raster() {
-        let plan = plan(&label(), &profile("gk420d")).unwrap();
-        assert_eq!(plan.path, OutputPath::Raster);
+    fn a_label_scene_the_printer_can_draw_natively_plans_native() {
+        let t = Template {
+            elements: vec![text(5.0, "TEST", false)],
+            ..label()
+        };
+        let job = expanded(&t);
+        let plan = plan(&job, &t, &profile("gk420d")).unwrap();
+        assert_eq!(plan.path, OutputPath::Native);
         assert_eq!(plan.fallback, None);
     }
 
-    /// A receipt scene on a continuous thermal roll: the raster path.
+    /// A receipt scene of plain text on a roll printer with a native
+    /// font: the native path.
     #[test]
-    fn a_receipt_scene_on_a_thermal_roll_plans_raster() {
-        let plan = plan(&roll(), &profile("generic-thermal-58mm")).unwrap();
-        assert_eq!(plan.path, OutputPath::Raster);
+    fn a_plain_text_receipt_plans_native() {
+        let t = Template {
+            elements: vec![text(5.0, "TOTAL 12.00", false)],
+            ..roll()
+        };
+        let job = expanded(&t);
+        let plan = plan(&job, &t, &escpos_roll()).unwrap();
+        assert_eq!(plan.path, OutputPath::Native);
         assert_eq!(plan.fallback, None);
+    }
+
+    /// A scene the printer's language cannot draw — bold text on a
+    /// printer whose native fonts are plain: the raster path, with the
+    /// reason the planner recorded.
+    #[test]
+    fn a_scene_the_printer_cannot_draw_natively_falls_back_to_raster_with_a_reason() {
+        let t = Template {
+            elements: vec![text(5.0, "BOLD", true)],
+            ..label()
+        };
+        let job = expanded(&t);
+        let plan = plan(&job, &t, &profile("gk420d")).unwrap();
+        assert_eq!(plan.path, OutputPath::Raster);
+        let why = plan.fallback.as_deref().unwrap();
+        assert!(why.contains("bold"), "{why}");
     }
 
     /// A page scene on a document printer: rendered to PDF in the Rust
     /// renderer and sent through the OS print path.
     #[test]
     fn a_page_scene_on_a_document_printer_plans_pdf() {
-        let plan = plan(&page(), &profile("office-laser-cups")).unwrap();
+        let t = page();
+        let job = expanded(&t);
+        let plan = plan(&job, &t, &profile("office-laser-cups")).unwrap();
         assert_eq!(plan.path, OutputPath::Pdf);
         assert_eq!(plan.fallback, None);
     }
@@ -206,7 +309,10 @@ mod tests {
                 height_mm: 297.0,
             },
         );
-        let plan = plan(&t, &profile("office-laser-cups")).unwrap();
+        // The document track never reads the job; an empty one stands
+        // in for it.
+        let job = ExpandedJob { outputs: vec![] };
+        let plan = plan(&job, &t, &profile("office-laser-cups")).unwrap();
         assert_eq!(plan.path, OutputPath::Browser);
         assert_eq!(plan.fallback, None);
     }
@@ -214,7 +320,8 @@ mod tests {
     /// A label scene on a page-only printer: no path takes it.
     #[test]
     fn a_label_scene_on_a_document_printer_is_a_media_mismatch() {
-        let err = plan(&label(), &profile("office-laser-cups")).unwrap_err();
+        let job = ExpandedJob { outputs: vec![] };
+        let err = plan(&job, &label(), &profile("office-laser-cups")).unwrap_err();
         assert_eq!(err.template, "label");
         assert_eq!(err.printer, "page");
         assert_eq!(
@@ -226,18 +333,22 @@ mod tests {
     /// A page scene on a label-only printer: no path takes it either.
     #[test]
     fn a_page_scene_on_a_label_printer_is_a_media_mismatch() {
-        let err = plan(&page(), &profile("gk420d")).unwrap_err();
+        let job = ExpandedJob { outputs: vec![] };
+        let err = plan(&job, &page(), &profile("gk420d")).unwrap_err();
         assert_eq!(err.template, "page");
         assert_eq!(err.printer, "label");
     }
 
     /// A thermal scene on a pdf-language profile that does take labels:
-    /// raster is refused, the fallback to PDF is taken — and recorded.
+    /// native and raster are both refused, the fallback to PDF is
+    /// taken — and recorded.
     #[test]
     fn a_thermal_scene_on_a_pdf_language_printer_falls_back_to_pdf() {
         let toml = "[profile]\nmodel = \"T\"\nlanguage = \"pdf\"\nmedia = [\"label\"]\n";
         let profile = pn_profiles::parse(toml).unwrap();
-        let plan = plan(&label(), &profile).unwrap();
+        let t = label();
+        let job = expanded(&t);
+        let plan = plan(&job, &t, &profile).unwrap();
         assert_eq!(plan.path, OutputPath::Pdf);
         let why = plan.fallback.as_deref().unwrap();
         assert!(why.contains("raster"), "{why}");

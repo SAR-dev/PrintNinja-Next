@@ -96,8 +96,13 @@ fn an_html_document_is_rendered_by_the_browser_and_printed() {
     template.validate().expect("the document template is valid");
     let profile = pdf_profile();
 
-    // The planner routes an html document to the browser track.
-    assert_eq!(plan(&template, &profile).unwrap().path, OutputPath::Browser);
+    // The planner routes an html document to the browser track. The
+    // document track never reads the job, so an empty one stands in.
+    let job = pn_scene::ExpandedJob { outputs: vec![] };
+    assert_eq!(
+        plan(&job, &template, &profile).unwrap().path,
+        OutputPath::Browser
+    );
 
     // One record fills the document's bindings.
     let records =

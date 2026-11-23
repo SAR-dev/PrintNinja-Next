@@ -45,6 +45,11 @@ media = ["label"]
 dpi = 203
 head_width_dots = 384
 printable_width_mm = 48
+[fonts]
+native = ["0"]
+code_pages = ["437"]
+[barcodes]
+native = ["CODE128"]
 [delivery]
 chunk_bytes = 512
 pause_ms = 10
@@ -164,10 +169,6 @@ fn a_scene_label_job_renders_raster_bytes_and_prints_confirmed() {
     let template = label_template();
     let profile = zpl_profile();
 
-    // The planner picks the raster path for a label scene on a ZPL label
-    // printer, with no fallback recorded.
-    assert_eq!(plan(&template, &profile).unwrap().path, OutputPath::Raster);
-
     // Two records expand to two label outputs, one page each.
     let records = Records::from_json(
         r#"[{"name":"BOLT M8","sn":"SN-1001"},{"name":"NUT M8","sn":"SN-1002"}]"#,
@@ -179,6 +180,13 @@ fn a_scene_label_job_renders_raster_bytes_and_prints_confirmed() {
         job.outputs.iter().all(|o| o.pages.len() == 1),
         "a label output is exactly one page"
     );
+
+    // The planner tries the native path first and refuses it: the
+    // heading is bold, and the printer's native fonts are plain. The
+    // raster path takes the job, and the plan records why.
+    let plan = plan(&job, &template, &profile).unwrap();
+    assert_eq!(plan.path, OutputPath::Raster);
+    assert!(plan.fallback.as_deref().unwrap().contains("bold"));
 
     // Each page renders and wraps into one ZPL unit — a ^XA…^XZ holding
     // the whole label as a single ^GFA graphic.

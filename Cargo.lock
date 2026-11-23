@@ -2652,6 +2652,7 @@ dependencies = [
 name = "pn-planner"
 version = "0.0.0"
 dependencies = [
+ "pn-encoders",
  "pn-profiles",
  "pn-scene",
  "thiserror 2.0.21",

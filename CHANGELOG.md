@@ -195,3 +195,35 @@ Unreleased.
   record substituted → browser PDF → IPP delivery, byte-verified on
   disk; where the machine has no browser (the CI container) it verifies
   the honest no-browser error instead
+- Phase 6 native command path (encoder increment): `native()` per
+  thermal language in `pn-encoders` (plan §5.5) — the scene in the
+  printer's own commands instead of an image: text in the printer's
+  built-in fonts (ZPL `^FD`, TSPL `TEXT` in the base font, CPCL `TEXT`,
+  ESC/POS with alignment, size and bold), printer-generated barcodes
+  (ZPL `^BC`/`^BQ`, TSPL `BARCODE`, ESC/POS `GS k` with a fixed
+  model-2 `GS ( k` QR sequence), and `^GB`/`^GR`, `BAR`/`BOX`, `F`/`B`,
+  or plain rules for lines and boxes. One refusal — a style the
+  language has no native for (bold, italic), text outside the profile's
+  code pages, an image, a barcode the profile does not list, or a
+  profile with no native fonts — sends the whole job to raster, with a
+  reason that names the blocking element in plain words; ESC/POS adds
+  one layout rule (elements must not share a y-range, because the
+  printer draws top to bottom in one column). The native bytes for a
+  ZPL label, a TSPL label, a CPCL label and an ESC/POS receipt are
+  pinned by golden cases, and a simple label prints native in under a
+  tenth of the raster byte count
+- Phase 6 native command path (planner increment): the planner now
+  selects across all three paths (plan §5.3) — a scene on label or
+  roll media first tries the native path, and when the scene outgrows
+  the printer's language it takes the raster path with the refusal
+  reason recorded in the plan, the way every fallback is recorded.
+  Document media on driver-equipped printers keeps defaulting to the
+  OS print path
+- Phase 6 native command path (end-to-end): the native track against
+  the virtual printer — a scene the printer's language can draw plans
+  to native with no fallback, encodes to the printer's own commands
+  (no raster graphic anywhere, the data bindings on the wire), and is
+  delivered over raw TCP ending `Confirmed` with the saved job
+  byte-verified; the raster e2e now plans through the same decision
+  and shows the recorded fallback (a bold heading on a printer whose
+  native fonts are plain falls back to raster, and the plan says why)
