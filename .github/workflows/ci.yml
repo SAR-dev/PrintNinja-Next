@@ -6,6 +6,8 @@
 #   rust-test-linux   workspace tests in the Docker test container +
 #                     virtual-printer fixture tests (host)
 #   rust-test-windows workspace tests natively + fixture tests
+#   chromium-render   the document-track e2e through a real system Chrome
+#   rust-check        gate job: passes only when all Rust jobs passed
 #
 # The app crate embeds app/ui/dist at compile time
 # (tauri::generate_context!), so every Rust job downloads the web-dist
@@ -115,3 +117,38 @@ jobs:
           path: app/ui/dist
       - run: cargo test
       - run: cargo test --manifest-path tests\e2e\support\virtual-printer\Cargo.toml
+
+  # The document track must turn HTML into a PDF through a real browser.
+  # The Docker test container has no browser installed, so its
+  # document-track e2e proves the honest no-browser error; this job
+  # installs system Chrome and runs the same e2e for real (plan §5.3).
+  chromium-render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.90.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+      - name: Install system Chrome
+        uses: browser-actions/setup-chrome@v1
+      - name: Prove a real browser renders the document track
+        env:
+          PRINTNINJA_BROWSER: /opt/google/chrome/chrome
+        run: cargo test -p pn-e2e --test document_track
+
+  # One gate name for branch protection: it passes only when every
+  # Rust job passed (same shape as the old repo's ci.yml).
+  rust-check:
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    needs: [rust-lint, rust-test-linux, rust-test-windows]
+    steps:
+      - name: All Rust jobs must have passed
+        run: |
+          echo "rust-lint:         ${{ needs.rust-lint.result }}"
+          echo "rust-test-linux:   ${{ needs.rust-test-linux.result }}"
+          echo "rust-test-windows: ${{ needs.rust-test-windows.result }}"
+          [ "${{ needs.rust-lint.result }}" = "success" ] && \
+          [ "${{ needs.rust-test-linux.result }}" = "success" ] && \
+          [ "${{ needs.rust-test-windows.result }}" = "success" ]

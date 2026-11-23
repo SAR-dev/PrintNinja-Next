@@ -11,7 +11,9 @@ Unreleased.
 ### Added
 
 - Phase 0 skeleton: Rust workspace (`core/{scene,render,planner,profiles,encoders,transport,job}`, `app`, `tests/golden`)
-- CI: web-check, rust-lint, rust-test-linux (Docker container), rust-test-windows
+- CI: web-check, rust-lint, rust-test-linux (Docker container), rust-test-windows,
+  chromium-render (the document track through a real system Chrome), and rust-check
+  (a gate job that passes only when every Rust job passed)
 - Golden-file test harness with a placeholder case; `GOLDEN_UPDATE=1` regeneration
 - Virtual printer fixture (Raw/IPP/LPD/HTTP, fault states) ported with smoke tests
 - Design system port in `app/ui` (tokens, ui component set, fonts)

@@ -312,6 +312,8 @@ macOS is out of scope for the rewrite, permanently (decided 2026-11-20) — not 
 - **Hardware checklist per profile:** a short script of jobs (minimal text, label, barcode, long job, two jobs back to back) with the expected result, run on the real printer before a profile is marked verified.
 - **Profile status field:** `verified` (hardware-tested), `community` or `untested`, shown to users.
 
+**CI parity with the current repo (added 2026-11-23):** `.github/workflows/ci.yml` runs `web-check`, `rust-lint`, `rust-test-linux` (Docker test container + virtual-printer fixture tests), `rust-test-windows`, `chromium-render` (a real system Chrome proves the document track turns HTML into a PDF; the Docker container has no browser and verifies the honest no-browser error instead), and `rust-check`, a gate job that passes only when every Rust job passed — the same shape as the old repo's branch-protection gate. The old repo's remaining jobs arrive with the phase that owns them: `server-check` / `server-image` / `server-e2e` / `server-publish` with phase 9 (the publishing server), `android-check` / `android-build` with phase 11, and `version-check`, `windows-build`, `linux-build`, `github-release` with phase 10 (the release candidate is cut there). The old repo's Playwright `app-e2e` is not ported — this app's e2e is Rust-driven against virtual printers; a Playwright e2e is a phase 10 decision if wanted.
+
 ## 8. Phase-by-phase plan (greenfield rewrite)
 
 Each phase ends in something testable; no phase is "done" until its exit criteria hold. Phases are sequential in the main line; within a phase, the work items can interleave.
