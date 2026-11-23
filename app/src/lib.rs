@@ -16,11 +16,16 @@ use std::path::PathBuf;
 use pn_job::JobResult;
 use pn_profiles::{Profile, ProfileSet};
 use pn_scene::{Records, Template};
-use tauri::{Manager, State};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Manager, State,
+};
+use tauri_plugin_autostart::ManagerExt;
 
 pub use pipeline::{
-    factory, load_profiles, prepare_units, print_units, profile_infos, report_of, JobReport,
-    PipelineError, PrepareReport, ProfileInfo, Transport, Units,
+    delivery_key, factory, load_profiles, prepare_units, print_units, profile_infos, report_of,
+    JobReport, PipelineError, PrepareReport, ProfileInfo, Transport, Units,
 };
 pub use store::{Store, StoredJob, StoredTemplate};
 
@@ -53,12 +58,16 @@ fn profiles_dir(handle: &tauri::AppHandle) -> PathBuf {
 
 /// The three inputs every job command shares, checked before any
 /// work: the template parses, the printer exists, the data is records.
-fn load_inputs<'a>(
-    profiles: &'a ProfileSet,
+/// The profile comes back with the user's delivery override applied —
+/// pacing and close delay as the settings screen has them (plan
+/// phase 7).
+fn load_inputs(
+    profiles: &ProfileSet,
+    store: &Store,
     template_json: &str,
     profile_name: &str,
     data_json: &str,
-) -> Result<(&'a Profile, Template, Records), String> {
+) -> Result<(Profile, Template, Records), String> {
     let template = Template::from_json(template_json).map_err(|e| e.to_string())?;
     let profile = profiles
         .find(profile_name)
@@ -66,7 +75,12 @@ fn load_inputs<'a>(
     // The data field is JSON or CSV, whichever the text is (a local
     // data file lands here as plain text).
     let records = Records::from_text(data_json).map_err(|e| e.to_string())?;
-    Ok((profile, template, records))
+    let settings = store.load_settings().unwrap_or_default();
+    Ok((
+        pipeline::with_delivery_overrides(profile, &settings),
+        template,
+        records,
+    ))
 }
 
 /// The printer list, in the shape the UI shows it.
@@ -80,12 +94,14 @@ fn list_printers(state: State<'_, AppProfiles>) -> Vec<ProfileInfo> {
 #[tauri::command]
 async fn plan_job(
     state: State<'_, AppProfiles>,
+    store: State<'_, Store>,
     template: String,
     profile: String,
     data: String,
     copies: u32,
 ) -> Result<PrepareReport, String> {
-    let (profile, template, records) = load_inputs(&state.profiles, &template, &profile, &data)?;
+    let (profile, template, records) =
+        load_inputs(&state.profiles, &store, &template, &profile, &data)?;
     let (profile, template, records) = (profile.clone(), template.clone(), records.clone());
     tauri::async_runtime::spawn_blocking(move || {
         prepare_units(&template, &profile, &records, copies).map(|units| units.report)
@@ -101,13 +117,15 @@ async fn plan_job(
 #[tauri::command]
 async fn print_job(
     state: State<'_, AppProfiles>,
+    store: State<'_, Store>,
     template: String,
     profile: String,
     data: String,
     copies: u32,
     transport: Transport,
 ) -> Result<JobReport, String> {
-    let (profile, template, records) = load_inputs(&state.profiles, &template, &profile, &data)?;
+    let (profile, template, records) =
+        load_inputs(&state.profiles, &store, &template, &profile, &data)?;
     let (profile, template, records) = (profile.clone(), template.clone(), records.clone());
     let report = tauri::async_runtime::spawn_blocking(move || {
         let units = prepare_units(&template, &profile, &records, copies)?;
@@ -156,9 +174,35 @@ fn save_setting(state: State<'_, Store>, key: String, value: String) -> Result<(
     state.save_setting(&key, &value)
 }
 
+/// Whether PrintNinja starts with the computer (plan phase 7:
+/// start-with-computer).
+#[tauri::command]
+fn is_autostart(app: AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+/// Turn start-with-computer on or off; the choice outlives the app.
+#[tauri::command]
+fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let launcher = app.autolaunch();
+    let result = if enabled {
+        launcher.enable()
+    } else {
+        launcher.disable()
+    };
+    result.map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
+        // Start-with-computer (plan phase 7): the plugin writes where
+        // the OS looks — a Run key on Windows, an autostart entry on
+        // Linux — and keeps the choice across runs.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::default(),
+            None,
+        ))
         .setup(|app| {
             let dir = profiles_dir(app.handle());
             let profiles = load_profiles(&dir)
@@ -179,6 +223,34 @@ pub fn run() {
                 }
                 Err(e) => eprintln!("the local store at {} did not open: {e}", db_path.display()),
             }
+            // The tray icon (plan phase 7): the app lives in the tray,
+            // so the window's close button hides it instead of
+            // quitting; the menu holds the way back and the way out.
+            let show = MenuItem::with_id(app, "tray-show", "Show PrintNinja", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "tray-quit", "Quit PrintNinja", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+            let _tray = TrayIconBuilder::new()
+                .icon(
+                    app.default_window_icon()
+                        .cloned()
+                        .expect("the app must carry its own icon"),
+                )
+                .tooltip("PrintNinja")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "tray-show" => show_the_main_window(app),
+                    "tray-quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click { button, .. } = event {
+                        if button == tauri::tray::MouseButton::Left {
+                            show_the_main_window(tray.app_handle());
+                        }
+                    }
+                })
+                .build(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -190,8 +262,34 @@ pub fn run() {
             load_recent_jobs,
             remember_job,
             load_settings,
-            save_setting
+            save_setting,
+            is_autostart,
+            set_autostart
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running PrintNinja");
+        .build(tauri::generate_context!())
+        .expect("error while building PrintNinja");
+    app.run(|app_handle, event| match event {
+        // The window's close button hides the app to the tray;
+        // quitting is the tray menu's "Quit PrintNinja".
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::CloseRequested { api, .. },
+            ..
+        } if label == "main" => {
+            if let Some(window) = app_handle.get_webview_window(&label) {
+                let _ = window.hide();
+            }
+            api.prevent_close();
+        }
+        _ => {}
+    });
+}
+
+/// Bring the main window back: shown, focused, unminimised.
+fn show_the_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
 }

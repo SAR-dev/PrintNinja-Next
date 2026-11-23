@@ -298,3 +298,14 @@ Unreleased.
   still runs when the store cannot open: the commands say so, the list
   keeps its in-memory copies, and the footer names the failure in plain
   words instead of losing the edit silently
+- Phase 7 app (settings increment): a settings screen, reached from the
+  list, with the app's appearance (light or dark, remembered on the
+  next start), start-with-computer (the OS autostart entry, on or off),
+  and one card per printer with its pacing — chunk size, the pause
+  between chunks, and the close delay. A field left empty uses the
+  value the profile ships with, shown as the placeholder; the override
+  is saved to the settings store and applied to the profile per job, so
+  the shipped profiles are never touched and a broken saved row can
+  never fail a print. The app now lives in the tray: the window's
+  close button hides it, a tray icon (left-click to bring it back) and
+  its menu hold the way back and the way out

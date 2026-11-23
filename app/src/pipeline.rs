@@ -10,6 +10,7 @@
 //! The functions here are plain Rust: the Tauri commands in `lib.rs`
 //! are thin wrappers, and the tests drive the pipeline directly.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -139,6 +140,15 @@ pub struct JobReport {
     pub reason: Option<String>,
 }
 
+/// The pacing and close delay a profile ships with — the starting
+/// point the settings screen's per-printer overrides sit on top of.
+#[derive(Debug, Clone, Serialize)]
+pub struct DeliveryInfo {
+    pub chunk_bytes: u32,
+    pub pause_ms: u32,
+    pub close_delay_ms: u32,
+}
+
 /// A profile as the UI's printer list shows it.
 #[derive(Debug, Clone, Serialize)]
 pub struct ProfileInfo {
@@ -154,6 +164,8 @@ pub struct ProfileInfo {
     /// (plan §5.7: a profile with no status dialect never ends
     /// confirmed).
     pub can_confirm: bool,
+    /// The profile's own pacing and close delay, before any override.
+    pub delivery: DeliveryInfo,
 }
 
 fn media_word(media: &Media) -> &'static str {
@@ -181,9 +193,58 @@ pub fn profile_infos(set: &ProfileSet) -> Vec<ProfileInfo> {
                 dpi: meta.dpi.map(u16::into),
                 head_width_dots: meta.head_width_dots,
                 can_confirm: p.answers_status() && p.delivery.keep_open_for_status,
+                delivery: DeliveryInfo {
+                    chunk_bytes: p.delivery.chunk_bytes,
+                    pause_ms: p.delivery.pause_ms,
+                    close_delay_ms: p.delivery.close_delay_ms,
+                },
             }
         })
         .collect()
+}
+
+/// The settings key a profile's delivery override is saved under.
+pub fn delivery_key(model: &str) -> String {
+    format!("delivery.{model}")
+}
+
+/// The user's per-profile delivery override, as the settings screen
+/// saves it (plan phase 7: profile overrides, pacing, close delay).
+/// A field left out keeps the profile's own value.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeliveryOverrides {
+    #[serde(default)]
+    pub chunk_bytes: Option<u32>,
+    #[serde(default)]
+    pub pause_ms: Option<u32>,
+    #[serde(default)]
+    pub close_delay_ms: Option<u32>,
+}
+
+/// A copy of the profile with the user's delivery override applied,
+/// for one job. The shipped profile is never touched, so the override
+/// cannot break the profile set's validation. A missing key, or an
+/// override that does not parse, leaves the profile as the file has
+/// it — a bad setting row must not fail a print.
+pub fn with_delivery_overrides(profile: &Profile, settings: &BTreeMap<String, String>) -> Profile {
+    let mut out = profile.clone();
+    let Some(raw) = settings.get(&delivery_key(&profile.profile.model)) else {
+        return out;
+    };
+    let Ok(o) = serde_json::from_str::<DeliveryOverrides>(raw) else {
+        return out;
+    };
+    if let Some(v) = o.chunk_bytes {
+        out.delivery.chunk_bytes = v;
+    }
+    if let Some(v) = o.pause_ms {
+        out.delivery.pause_ms = v;
+    }
+    if let Some(v) = o.close_delay_ms {
+        out.delivery.close_delay_ms = v;
+    }
+    out
 }
 
 /// Load and validate a directory of profile TOMLs.
@@ -891,6 +952,50 @@ expected_prefix = "\u0002"
         assert!(
             info.can_confirm,
             "a status dialect means confirmed is reachable"
+        );
+        // No [delivery] in the file: the shipped defaults flow through.
+        assert_eq!(info.delivery.chunk_bytes, 1024);
+        assert_eq!(info.delivery.pause_ms, 10);
+        assert_eq!(info.delivery.close_delay_ms, 500);
+    }
+
+    /// A saved delivery override changes the job's pacing and close
+    /// delay; fields left out keep the profile's own values, and the
+    /// shipped profile is never touched.
+    #[test]
+    fn a_saved_delivery_override_changes_pacing_and_close_delay() {
+        let base = zpl_profile();
+        assert_eq!(base.delivery.pause_ms, 10);
+
+        let mut settings = BTreeMap::new();
+        settings.insert(
+            delivery_key(&base.profile.model),
+            r#"{"pauseMs":50}"#.to_string(),
+        );
+        let overridden = with_delivery_overrides(&base, &settings);
+        assert_eq!(overridden.delivery.pause_ms, 50);
+        assert_eq!(
+            overridden.delivery.chunk_bytes, base.delivery.chunk_bytes,
+            "a field left out keeps the profile's value"
+        );
+        assert_eq!(
+            overridden.delivery.close_delay_ms, base.delivery.close_delay_ms,
+            "a field left out keeps the profile's value"
+        );
+        assert_eq!(
+            base.delivery.pause_ms, 10,
+            "the shipped profile stays as the file has it"
+        );
+
+        let untouched = with_delivery_overrides(&base, &BTreeMap::new());
+        assert_eq!(untouched.delivery.pause_ms, 10);
+
+        let mut bad = BTreeMap::new();
+        bad.insert(delivery_key(&base.profile.model), "not json".to_string());
+        assert_eq!(
+            with_delivery_overrides(&base, &bad).delivery.pause_ms,
+            10,
+            "an override that does not parse is dropped, not a failure"
         );
     }
 }

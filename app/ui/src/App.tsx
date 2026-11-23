@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   loadRecentJobs,
+  loadSettings,
   loadTemplates,
   printJob,
   rememberJob,
@@ -29,6 +30,7 @@ import { blankTemplate } from "@/scene/editor-model";
 import { DocumentEditorScreen } from "@/screens/document-editor-screen";
 import { EditorScreen } from "@/screens/editor-screen";
 import { PrintScreen } from "@/screens/print-screen";
+import { SettingsScreen } from "@/screens/settings-screen";
 import { RESULT_WORDS, toneClass } from "@/result-words";
 import {
   blankDocument,
@@ -120,15 +122,17 @@ function jobTime(at: number): string {
   return sameDay ? `today ${hm}` : `${d.toLocaleDateString()} ${hm}`;
 }
 
-function isDark() {
-  return document.documentElement.dataset.theme === "dark";
+/** Put the app in the given theme ("dark" or "light"). */
+function applyTheme(theme: string) {
+  document.documentElement.dataset.theme = theme === "dark" ? "dark" : "";
 }
 
 type View =
   | { name: "list" }
   | { name: "print"; template: AppTemplate }
   | { name: "edit"; template: AppTemplate }
-  | { name: "document-edit"; template: AppTemplate };
+  | { name: "document-edit"; template: AppTemplate }
+  | { name: "settings" };
 
 function TemplatesScreen({
   templates,
@@ -277,6 +281,10 @@ function App() {
     loadRecentJobs()
       .then((rows) => setRecent(rows.map(fromStoredJob)))
       .catch((e) => setStorageError(String(e)));
+    // The appearance the settings screen saved; dark until it says so.
+    loadSettings()
+      .then((rows) => applyTheme(rows.theme ?? "dark"))
+      .catch(() => applyTheme("dark"));
   }, []);
 
   const recordJob = (j: RecentJob) => {
@@ -356,6 +364,8 @@ function App() {
             setView({ name: "list" });
           }}
         />
+      ) : view.name === "settings" ? (
+        <SettingsScreen onBack={() => setView({ name: "list" })} />
       ) : view.name === "document-edit" ? (
         <DocumentEditorScreen
           initial={view.template}
@@ -371,12 +381,9 @@ function App() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                const root = document.documentElement;
-                root.dataset.theme = isDark() ? "" : "dark";
-              }}
+              onClick={() => setView({ name: "settings" })}
             >
-              {isDark() ? "Light" : "Dark"}
+              Settings
             </Button>
           </div>
           <TemplatesScreen

@@ -6,6 +6,14 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 
+/** A profile's shipped pacing and close delay — the starting point
+ * the settings screen's per-printer overrides sit on top of. */
+export interface DeliveryInfo {
+  chunk_bytes: number;
+  pause_ms: number;
+  close_delay_ms: number;
+}
+
 /** A printer, as the profile set describes it. */
 export interface ProfileInfo {
   model: string;
@@ -18,6 +26,8 @@ export interface ProfileInfo {
   head_width_dots: number | null;
   /** Whether this printer can confirm a job with its own reply. */
   can_confirm: boolean;
+  /** The profile's own pacing and close delay, before any override. */
+  delivery: DeliveryInfo;
 }
 
 /** One page of the prepared job, the way the job prints it (§3.4). */
@@ -117,6 +127,13 @@ export const loadSettings = () =>
 /** Save or replace one setting. */
 export const saveSetting = (key: string, value: string) =>
   invoke<void>("save_setting", { key, value });
+
+/** Whether the app starts with the computer. */
+export const isAutostart = () => invoke<boolean>("is_autostart");
+
+/** Turn start-with-computer on or off. */
+export const setAutostart = (enabled: boolean) =>
+  invoke<void>("set_autostart", { enabled });
 
 /** Prepare: pick the output path, encode, render the preview. */
 export const planJob = (
