@@ -74,3 +74,18 @@ Unreleased.
   the problem in plain words; serialization is deterministic and its
   bytes are pinned by a golden case, mirrored field-for-field in
   TypeScript (`app/ui/src/scene/schema.ts`)
+- Phase 4 scene format (data model and expansion increment): records —
+  JSON (an array of objects; numbers and booleans coerce to text, an
+  array of objects becomes a row list for group bindings) or CSV (RFC
+  4180: header row, quoted fields, short rows pad, long rows are an
+  error) — and `expand()`: one record expands to one output, a label
+  output is exactly one page, a roll or page output is a strip cut at
+  the page height with repeating groups flowing down it (an item that
+  would cross a cut moves to the next cut, `last`-placed elements
+  reserve the bottom region of every page), and an overflow — a full
+  label, a row taller than a page — fails the job naming the record
+  and the field instead of silently dropping rows. The expanded job
+  (pages of placed elements with bindings resolved, in template order)
+  is what every delivery adapter will take; its bytes are pinned by
+  golden cases for a batch of labels, an N-page document, and a
+  variable-length receipt

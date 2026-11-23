@@ -17,6 +17,12 @@
 //! lives at `app/ui/src/scene/schema.ts` and must stay field-for-field
 //! identical; the golden round-trip test pins the wire format.
 
+mod expand;
+mod records;
+
+pub use expand::{expand, ExpandError, ExpandedJob, Output, Page, Placed, PlacedKind};
+pub use records::{Record, Records, Value};
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
