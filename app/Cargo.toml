@@ -24,6 +24,15 @@ rand = "0.8"
 sha2 = "0.10"
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
+# printninja:// deep links (plan phase 8): the plugin delivers the
+# URL; single-instance forwards it to the running app when the OS
+# hands the link to a fresh process instead (the `deep-link` feature
+# re-parses the second instance's args through the deep-link plugin
+# and emits the URL on the first instance's handle).
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+# The deep link's query strings, the same decoder the old app used.
+urlencoding = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -362,7 +362,8 @@ mod tests {
         // Nothing found: every location checked — override and
         // candidates alike — is named, so the error can show where to
         // look.
-        let (found, searched) = resolve(Some(missing.to_str().unwrap()), &[none.clone()]);
+        let (found, searched) =
+            resolve(Some(missing.to_str().unwrap()), std::slice::from_ref(&none));
         assert!(found.is_none());
         assert_eq!(
             searched,

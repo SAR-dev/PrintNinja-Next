@@ -8,6 +8,7 @@
 //! work off the UI thread.
 
 mod api;
+mod deeplink;
 mod pairing;
 mod pipeline;
 mod store;
@@ -231,6 +232,15 @@ fn revoke_device(state: State<'_, Arc<Store>>, id: String) -> Result<(), String>
     })
 }
 
+/// Turn a delivered `printninja://` URL into the print values it
+/// carries (plan phase 8, deep link). The frontend does the rest —
+/// the values prefill the print screen, and the screen's Print button
+/// is the confirmation.
+#[tauri::command]
+fn parse_deeplink(url: String) -> Result<deeplink::DeepLinkPrint, String> {
+    deeplink::parse_deep_link(&url)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -241,6 +251,22 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::default(),
             None,
         ))
+        // printninja:// deep links (plan phase 8): registered before
+        // single-instance, because that plugin's `deep-link` feature
+        // re-parses a second instance's CLI args through this plugin
+        // and emits the URL on the running app's handle — the instance
+        // that received the link from the OS exits right after
+        // forwarding. The frontend listens and, at start-up, reads
+        // the current URL to pick up a link that arrived before the
+        // webview was ready.
+        .plugin(tauri_plugin_deep_link::init())
+        // A second launch (or a deep link) focuses the running window
+        // instead of starting a second app — required once
+        // close-to-tray keeps the process alive after the window is
+        // gone.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_the_main_window(app)
+        }))
         .setup(|app| {
             let dir = profiles_dir(app.handle());
             let profiles =
@@ -329,7 +355,8 @@ pub fn run() {
             set_autostart,
             begin_pairing,
             paired_devices,
-            revoke_device
+            revoke_device,
+            parse_deeplink
         ])
         .build(tauri::generate_context!())
         .expect("error while building PrintNinja");

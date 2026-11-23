@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { blankTemplate } from "@/scene/editor-model";
+import { DeepLinkListener } from "@/deeplink";
 import { DocumentEditorScreen } from "@/screens/document-editor-screen";
 import { EditorScreen } from "@/screens/editor-screen";
 import { PrintScreen } from "@/screens/print-screen";
@@ -34,6 +35,7 @@ import { SettingsScreen } from "@/screens/settings-screen";
 import { RESULT_WORDS, toneClass } from "@/result-words";
 import {
   blankDocument,
+  mergeTemplates,
   starters,
   type AppTemplate,
   type RecentJob,
@@ -52,32 +54,6 @@ function toStoredTemplate(t: AppTemplate): StoredTemplate {
     template: JSON.stringify(t.template),
     sample: t.sample,
   };
-}
-
-function fromStoredTemplate(row: StoredTemplate): AppTemplate {
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    track: row.track as AppTemplate["track"],
-    template: JSON.parse(row.template) as AppTemplate["template"],
-    sample: row.sample,
-  };
-}
-
-/** Starters first; a saved row overrides its starter or is added. */
-function mergeTemplates(
-  base: AppTemplate[],
-  rows: StoredTemplate[],
-): AppTemplate[] {
-  const out = base.map((t) => {
-    const row = rows.find((r) => r.id === t.id);
-    return row ? fromStoredTemplate(row) : t;
-  });
-  for (const row of rows) {
-    if (!out.some((t) => t.id === row.id)) out.push(fromStoredTemplate(row));
-  }
-  return out;
 }
 
 /** The stored row for a job: template, transport and result as JSON text. */
@@ -127,9 +103,12 @@ function applyTheme(theme: string) {
   document.documentElement.dataset.theme = theme === "dark" ? "dark" : "";
 }
 
+/** What a deep link prefill on the print screen carries (plan phase 8). */
+type PrintPrefill = { printer?: string; copies?: number };
+
 type View =
   | { name: "list" }
-  | { name: "print"; template: AppTemplate }
+  | { name: "print"; template: AppTemplate; prefill?: PrintPrefill }
   | { name: "edit"; template: AppTemplate }
   | { name: "document-edit"; template: AppTemplate }
   | { name: "settings" };
@@ -270,6 +249,8 @@ function App() {
   const [storageError, setStorageError] = useState<string | null>(null);
   const [view, setView] = useState<View>({ name: "list" });
   const [newOpen, setNewOpen] = useState(false);
+  /** A deep link that could not be honoured, in plain words. */
+  const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
 
   // The local store: what the user saved comes back on start.
   useEffect(() => {
@@ -349,9 +330,36 @@ function App() {
 
   return (
     <div className="min-h-dvh-safe bg-background">
+      {/* A link can arrive on any view, so the error sits above them all. */}
+      {deepLinkError && (
+        <div className="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-4 border-b border-danger/40 bg-danger-soft px-6 py-3">
+          <p className="text-body text-danger">{deepLinkError}</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDeepLinkError(null)}
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
+      <DeepLinkListener
+        onPrint={({ template, printer, copies }) =>
+          setView({
+            name: "print",
+            template,
+            prefill: {
+              printer: printer ?? undefined,
+              copies: copies ?? undefined,
+            },
+          })
+        }
+        onError={setDeepLinkError}
+      />
       {view.name === "print" ? (
         <PrintScreen
           starter={view.template}
+          prefill={view.prefill}
           onBack={() => setView({ name: "list" })}
           onJob={recordJob}
         />

@@ -21,6 +21,11 @@
       "csp": null
     }
   },
+  "plugins": {
+    "deep-link": {
+      "deeplink": ["printninja"]
+    }
+  },
   "bundle": {
     "active": false,
     "icon": [

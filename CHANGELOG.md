@@ -337,3 +337,13 @@ Unreleased.
   whether a window is open. The paired-devices list on the same card
   names each device (name, platform, date) and can revoke it — the
   token stops working at once
+- Phase 8 local print API (deep link increment): `printninja://print?…`
+  links from a web page, a message or the shell reach the app cold or
+  warm — the template by name, an optional printer profile and copy
+  count prefill the print screen and stop there. The screen is the
+  confirmation the plan promises for untrusted sources: a link carries
+  no identity, so pressing Print is the confirmation for every source.
+  A link with no template, a template this app does not have, or a
+  link that cannot be read says so in plain words instead of doing
+  nothing; the cold-start read and the warm-start event can race the
+  same link, and it is dispatched once

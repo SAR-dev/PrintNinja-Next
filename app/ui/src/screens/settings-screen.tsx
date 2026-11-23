@@ -127,7 +127,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   };
 
   const refreshDevices = () =>
-    pairedDevices().then(setDevices).catch((e) => setError(String(e)));
+    pairedDevices()
+      .then(setDevices)
+      .catch((e) => setError(String(e)));
 
   const pair = () => {
     void beginPairing()
@@ -236,8 +238,8 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           <CardTitle>Network</CardTitle>
           <CardDescription>
             When on, other devices on the network can send jobs to this PC —
-            each one paired by a one-time code and holding its own token.
-            Off by default; the switch applies from the next start.
+            each one paired by a one-time code and holding its own token. Off by
+            default; the switch applies from the next start.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">

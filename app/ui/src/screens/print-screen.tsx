@@ -80,10 +80,14 @@ function ResultCard({ report }: { report: JobReport }) {
 
 export function PrintScreen({
   starter,
+  prefill,
   onBack,
   onJob,
 }: {
   starter: AppTemplate;
+  /** A deep link's starting values (plan phase 8): the printer and
+   * copies the link carried, if it carried them. */
+  prefill?: { printer?: string; copies?: number };
   onBack: () => void;
   /** The job, with its result — the recent-jobs list remembers it. */
   onJob: (job: RecentJob) => void;
@@ -100,7 +104,9 @@ export function PrintScreen({
   const [data, setData] = useState(starter.sample);
   const [loaded, setLoaded] = useState<string | null>(null);
   const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null);
-  const [copies, setCopies] = useState("1");
+  const [copies, setCopies] = useState(
+    prefill?.copies ? String(prefill.copies) : "1",
+  );
   const [plan, setPlan] = useState<PrepareReport | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [planning, setPlanning] = useState(false);
@@ -111,7 +117,14 @@ export function PrintScreen({
     listPrinters()
       .then((ps) => {
         setPrinters(ps);
-        setPrinter((p) => p || ps[0]?.model || "");
+        // A deep link's printer, if it named one this profile set has.
+        setPrinter(
+          (p) =>
+            p ||
+            ps.find((x) => x.model === prefill?.printer)?.model ||
+            ps[0]?.model ||
+            "",
+        );
       })
       .catch((e) => setPlanError(String(e)));
   }, []);

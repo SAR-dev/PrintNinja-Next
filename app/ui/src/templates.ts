@@ -5,7 +5,7 @@
  * (SQLite) lands in a later increment — until then the list lives in
  * memory.
  */
-import type { JobReport, Transport } from "@/api";
+import type { JobReport, StoredTemplate, Transport } from "@/api";
 import type { Template } from "@/scene/schema";
 
 export interface AppTemplate {
@@ -125,3 +125,30 @@ export const starters: AppTemplate[] = [
     sample: '[{"to":"Rafi"},{"to":"Sara"}]',
   },
 ];
+
+/** A stored row back into the app's shape: the template as JSON text. */
+export function fromStoredTemplate(row: StoredTemplate): AppTemplate {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    track: row.track as AppTemplate["track"],
+    template: JSON.parse(row.template) as AppTemplate["template"],
+    sample: row.sample,
+  };
+}
+
+/** Starters first; a saved row overrides its starter or is added. */
+export function mergeTemplates(
+  base: AppTemplate[],
+  rows: StoredTemplate[],
+): AppTemplate[] {
+  const out = base.map((t) => {
+    const row = rows.find((r) => r.id === t.id);
+    return row ? fromStoredTemplate(row) : t;
+  });
+  for (const row of rows) {
+    if (!out.some((t) => t.id === row.id)) out.push(fromStoredTemplate(row));
+  }
+  return out;
+}

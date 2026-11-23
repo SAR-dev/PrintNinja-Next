@@ -117,6 +117,21 @@ export interface StoredJob {
   at: number;
 }
 
+/**
+ * What a `printninja://print` link carries (plan phase 8, deep link):
+ * the template by name, a printer by profile name, and a copy count.
+ * `null` is "the link did not say" — the screen keeps its default.
+ */
+export interface DeepLinkPrint {
+  template: string | null;
+  printer: string | null;
+  copies: number | null;
+}
+
+/** Turn a delivered deep link into the values it carries. */
+export const parseDeeplink = (url: string) =>
+  invoke<DeepLinkPrint>("parse_deeplink", { url });
+
 export const listPrinters = () => invoke<ProfileInfo[]>("list_printers");
 
 /** The saved templates, or none on first run. */
