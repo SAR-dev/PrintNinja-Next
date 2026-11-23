@@ -400,6 +400,8 @@ Each phase ends in something testable; no phase is "done" until its exit criteri
 
 ### Phase 8 — Local print API (REST)
 
+*Done 2026-11-23 — all four increments landed on `develop`: the API itself (`562be49`), LAN exposure (`8dd6789`), the deep link (`c919805`), plus the CI parity jobs (`553c9fb`). The API serves the same job pipeline the UI drives on `127.0.0.1:17717` (health, printers, templates, print submit, job tracking/cancel/retry); a retried request with the same `Idempotency-Key` comes back the original job — 409 — and never prints twice, e2e-green against the virtual printers in the Docker suite (that suite is the "external script" of the exit criterion). LAN exposure is an opt-in setting, off by default, with per-device one-time pairing codes and SHA-256-stored device tokens. `printninja://print?…` deep links prefill the print screen (template by name, printer, copies) and stop there — the screen is the confirmation for every source, because a link carries no identity; the parse side is unit-tested and the full UI flow is wired and typechecked. Callbacks, Prometheus metrics and the OpenAPI document remain post-v1, as the plan says.*
+
 - Local HTTP API in the app crate: list printers and templates, submit a job (`template + data + printer + copies`), track job status/result and retry — the same job pipeline the UI drives, so API jobs get identical verification and result states.
 - Idempotency: a per-request `Idempotency-Key` is never printed twice, so tills and scripts can retry safely.
 - Local by default (`127.0.0.1`); optional LAN exposure with per-device pairing and a device token, so apps and sites on other devices can print.
