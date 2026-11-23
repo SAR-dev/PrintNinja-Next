@@ -7,11 +7,13 @@
 //! list printers, prepare a job, print a job — and keeps the heavy
 //! work off the UI thread.
 
+mod api;
 mod pipeline;
 mod store;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use pn_job::JobResult;
 use pn_profiles::{Profile, ProfileSet};
@@ -30,9 +32,11 @@ pub use pipeline::{
 pub use store::{Store, StoredJob, StoredTemplate};
 
 /// The printer profiles, loaded once at startup (plan phase 7: the
-/// profile set *is* the printer list).
+/// profile set *is* the printer list). An `Arc` because the local
+/// print API (plan phase 8) runs the same pipeline from its own
+/// task.
 struct AppProfiles {
-    profiles: ProfileSet,
+    profiles: Arc<ProfileSet>,
 }
 
 /// Where the profiles live: an explicit override, then the shipped set
@@ -63,7 +67,7 @@ fn profiles_dir(handle: &tauri::AppHandle) -> PathBuf {
 /// phase 7).
 fn load_inputs(
     profiles: &ProfileSet,
-    store: &Store,
+    store: &Arc<Store>,
     template_json: &str,
     profile_name: &str,
     data_json: &str,
@@ -94,7 +98,7 @@ fn list_printers(state: State<'_, AppProfiles>) -> Vec<ProfileInfo> {
 #[tauri::command]
 async fn plan_job(
     state: State<'_, AppProfiles>,
-    store: State<'_, Store>,
+    store: State<'_, Arc<Store>>,
     template: String,
     profile: String,
     data: String,
@@ -117,7 +121,7 @@ async fn plan_job(
 #[tauri::command]
 async fn print_job(
     state: State<'_, AppProfiles>,
-    store: State<'_, Store>,
+    store: State<'_, Arc<Store>>,
     template: String,
     profile: String,
     data: String,
@@ -140,37 +144,37 @@ async fn print_job(
 
 /// The templates as the user has them (plan phase 7: persistence).
 #[tauri::command]
-fn load_templates(state: State<'_, Store>) -> Result<Vec<StoredTemplate>, String> {
+fn load_templates(state: State<'_, Arc<Store>>) -> Result<Vec<StoredTemplate>, String> {
     state.load_templates()
 }
 
 /// Save or replace one template.
 #[tauri::command]
-fn save_template(state: State<'_, Store>, template: StoredTemplate) -> Result<(), String> {
+fn save_template(state: State<'_, Arc<Store>>, template: StoredTemplate) -> Result<(), String> {
     state.save_template(&template)
 }
 
 /// The recent jobs, newest first (the kept limit at most).
 #[tauri::command]
-fn load_recent_jobs(state: State<'_, Store>) -> Result<Vec<StoredJob>, String> {
+fn load_recent_jobs(state: State<'_, Arc<Store>>) -> Result<Vec<StoredJob>, String> {
     state.load_recent_jobs()
 }
 
 /// Remember a job, or refresh its result when it ran again.
 #[tauri::command]
-fn remember_job(state: State<'_, Store>, job: StoredJob) -> Result<(), String> {
+fn remember_job(state: State<'_, Arc<Store>>, job: StoredJob) -> Result<(), String> {
     state.remember_job(&job)
 }
 
 /// The saved settings, key to value.
 #[tauri::command]
-fn load_settings(state: State<'_, Store>) -> Result<BTreeMap<String, String>, String> {
+fn load_settings(state: State<'_, Arc<Store>>) -> Result<BTreeMap<String, String>, String> {
     state.load_settings()
 }
 
 /// Save or replace one setting.
 #[tauri::command]
-fn save_setting(state: State<'_, Store>, key: String, value: String) -> Result<(), String> {
+fn save_setting(state: State<'_, Arc<Store>>, key: String, value: String) -> Result<(), String> {
     state.save_setting(&key, &value)
 }
 
@@ -205,23 +209,39 @@ pub fn run() {
         ))
         .setup(|app| {
             let dir = profiles_dir(app.handle());
-            let profiles = load_profiles(&dir)
-                .unwrap_or_else(|e| panic!("the profile set at {} must load: {e}", dir.display()));
-            app.manage(AppProfiles { profiles });
+            let profiles =
+                Arc::new(load_profiles(&dir).unwrap_or_else(|e| {
+                    panic!("the profile set at {} must load: {e}", dir.display())
+                }));
+            app.manage(AppProfiles {
+                profiles: profiles.clone(),
+            });
             // The local store: one SQLite file in the app's data
             // directory. When it cannot open, the app still runs —
             // the commands say so, and the UI keeps its in-memory
-            // copies and names the failure.
+            // copies and names the failure. An `Arc` because the local
+            // print API reads and writes it from its own task.
             let db_path = app
                 .path()
                 .app_data_dir()
                 .expect("the app must have a data directory")
                 .join("printninja.db");
-            match Store::open(&db_path) {
-                Ok(store) => {
-                    app.manage(store);
+            let store = match Store::open(&db_path) {
+                Ok(store) => Some(Arc::new(store)),
+                Err(e) => {
+                    eprintln!("the local store at {} did not open: {e}", db_path.display());
+                    None
                 }
-                Err(e) => eprintln!("the local store at {} did not open: {e}", db_path.display()),
+            };
+            if let Some(store) = &store {
+                app.manage(store.clone());
+            }
+            // The local print API (plan phase 8): 127.0.0.1, the
+            // profiles and the store shared with the commands above.
+            // Without a store the templates and the print endpoint
+            // could only fail, so the API does not start at all.
+            if let Some(store) = store {
+                tauri::async_runtime::spawn(api::serve(api::ApiState { profiles, store }));
             }
             // The tray icon (plan phase 7): the app lives in the tray,
             // so the window's close button hides it instead of

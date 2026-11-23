@@ -309,3 +309,17 @@ Unreleased.
   never fail a print. The app now lives in the tray: the window's
   close button hides it, a tray icon (left-click to bring it back) and
   its menu hold the way back and the way out
+- Phase 8 local print API (local increment): the same job pipeline the
+  UI drives, over HTTP on `127.0.0.1:17717` — local by default, nothing
+  off this PC can reach it. `GET /v1/health`, `GET /v1/printers` and
+  `GET /v1/templates` read the app's own state; `POST /v1/print`
+  accepts a saved template by name, a printer, the data (JSON or CSV
+  text), the copies, and a transport (or the saved default for the
+  printer, the setting `transport.<model>`), queues the job at once and
+  answers 201 with the job's id. The job then runs the same pipeline —
+  prepare, deliver, status — and `GET /v1/jobs` and `GET /v1/jobs/{id}`
+  say where it stands and what it came out to; `DELETE /v1/jobs/{id}`
+  cancels a job that has not started, `POST /v1/jobs/{id}/retry`
+  re-runs a finished one. A retried request with the same
+  `Idempotency-Key` header comes back the same job — 409, the original
+  id, nothing new printed

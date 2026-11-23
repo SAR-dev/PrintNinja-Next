@@ -54,6 +54,35 @@ pub struct StoredJob {
     pub at: i64,
 }
 
+/// A job the local print API accepted (plan phase 8): the frozen
+/// request, where it stands, and what it came out to.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiJob {
+    pub id: String,
+    /// The key the caller may have sent; a second job with the same key
+    /// is refused, so it never prints twice.
+    pub idempotency_key: Option<String>,
+    pub template_name: String,
+    /// The template as it was when the job was accepted, as JSON text.
+    pub template: String,
+    /// "scene" or "document".
+    pub track: String,
+    pub profile: String,
+    pub data: String,
+    pub copies: u32,
+    /// The transport, as JSON text.
+    pub transport: String,
+    /// "queued", "running", "done" or "cancelled".
+    pub status: String,
+    /// The job report, as JSON text, once it is done.
+    pub result: Option<String>,
+    /// When it was accepted, as `Date.now()` milliseconds.
+    pub created_at: i64,
+    /// When it finished, as `Date.now()` milliseconds.
+    pub finished_at: Option<i64>,
+}
+
 /// The app's storage: one SQLite connection behind a mutex.
 /// `rusqlite::Connection` is not `Sync` and Tauri's managed state must
 /// be, so the lock is part of the type.
@@ -74,6 +103,19 @@ impl Store {
             .map_err(|e| format!("cannot open the store at {path:?}: {e}"))?;
         conn.pragma_update(None, "journal_mode", "WAL")
             .map_err(|e| format!("cannot set the store's journal mode: {e}"))?;
+        conn.execute_batch(SCHEMA)
+            .map_err(|e| format!("cannot create the store's schema: {e}"))?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
+    }
+
+    /// An in-memory store with the schema created — the tests in the
+    /// other modules of this crate build their state on it.
+    #[cfg(test)]
+    pub(crate) fn in_memory() -> Result<Self, String> {
+        let conn =
+            Connection::open_in_memory().map_err(|e| format!("cannot open the store: {e}"))?;
         conn.execute_batch(SCHEMA)
             .map_err(|e| format!("cannot create the store's schema: {e}"))?;
         Ok(Self {
@@ -193,6 +235,159 @@ impl Store {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    /// Accept a job the API printed a request for. When another job
+    /// already holds the same idempotency key, that job's id comes back
+    /// instead — the caller retries against the same job, so a job is
+    /// never printed twice for one key.
+    pub fn insert_api_job(&self, j: &ApiJob) -> Result<String, String> {
+        let conn = self.lock();
+        if let Some(key) = &j.idempotency_key {
+            let existing: Option<String> = conn
+                .query_row(
+                    "SELECT id FROM api_jobs WHERE idempotency_key = ?1",
+                    params![key],
+                    |r| r.get(0),
+                )
+                .ok();
+            if let Some(id) = existing {
+                return Ok(id);
+            }
+        }
+        conn.execute(
+            "INSERT INTO api_jobs (id, idempotency_key, template_name, template, track,
+                                   profile, data, copies, transport, status, result,
+                                   created_at, finished_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            params![
+                j.id,
+                j.idempotency_key,
+                j.template_name,
+                j.template,
+                j.track,
+                j.profile,
+                j.data,
+                j.copies,
+                j.transport,
+                j.status,
+                j.result,
+                j.created_at,
+                j.finished_at,
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(j.id.clone())
+    }
+
+    /// One job by id.
+    pub fn api_job(&self, id: &str) -> Result<Option<ApiJob>, String> {
+        let conn = self.lock();
+        let row: Option<ApiJob> = conn
+            .query_row(
+                "SELECT id, idempotency_key, template_name, template, track, profile,
+                        data, copies, transport, status, result, created_at, finished_at
+                 FROM api_jobs WHERE id = ?1",
+                params![id],
+                api_job_from_row,
+            )
+            .ok();
+        Ok(row)
+    }
+
+    /// The accepted jobs, newest first, the kept limit at most.
+    pub fn list_api_jobs(&self, limit: usize) -> Result<Vec<ApiJob>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, idempotency_key, template_name, template, track, profile,
+                        data, copies, transport, status, result, created_at, finished_at
+                 FROM api_jobs ORDER BY rowid DESC LIMIT ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![limit as i64], api_job_from_row)
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    /// A queued job becomes cancelled. False when it is not queued
+    /// anymore — printing, done, or already cancelled.
+    pub fn cancel_queued_job(&self, id: &str) -> Result<bool, String> {
+        let conn = self.lock();
+        let status: Option<String> = conn
+            .query_row(
+                "SELECT status FROM api_jobs WHERE id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .ok();
+        if status.as_deref() != Some("queued") {
+            return Ok(false);
+        }
+        conn.execute(
+            "UPDATE api_jobs SET status = 'cancelled' WHERE id = ?1",
+            params![id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+
+    /// A queued job becomes running. False when a cancel beat it to it.
+    pub fn start_queued_job(&self, id: &str) -> Result<bool, String> {
+        let conn = self.lock();
+        let status: Option<String> = conn
+            .query_row(
+                "SELECT status FROM api_jobs WHERE id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .ok();
+        if status.as_deref() != Some("queued") {
+            return Ok(false);
+        }
+        conn.execute(
+            "UPDATE api_jobs SET status = 'running' WHERE id = ?1",
+            params![id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+
+    /// A running job becomes done, its result and finishing time set.
+    pub fn finish_api_job(&self, id: &str, result: &str, at: i64) -> Result<(), String> {
+        self.lock()
+            .execute(
+                "UPDATE api_jobs SET status = 'done', result = ?2, finished_at = ?3
+                 WHERE id = ?1",
+                params![id, result, at],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// A done or cancelled job goes back to queued, its result cleared.
+    /// False when it is still in flight — queued or running.
+    pub fn retry_finished_job(&self, id: &str) -> Result<bool, String> {
+        let conn = self.lock();
+        let status: Option<String> = conn
+            .query_row(
+                "SELECT status FROM api_jobs WHERE id = ?1",
+                params![id],
+                |r| r.get(0),
+            )
+            .ok();
+        if matches!(status.as_deref(), Some("queued") | Some("running")) {
+            return Ok(false);
+        }
+        conn.execute(
+            "UPDATE api_jobs SET status = 'queued', result = NULL, finished_at = NULL
+             WHERE id = ?1",
+            params![id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(true)
+    }
 }
 
 const SCHEMA: &str = r#"
@@ -220,6 +415,21 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS api_jobs (
+  id TEXT PRIMARY KEY,
+  idempotency_key TEXT UNIQUE,
+  template_name TEXT NOT NULL,
+  template TEXT NOT NULL,
+  track TEXT NOT NULL,
+  profile TEXT NOT NULL,
+  data TEXT NOT NULL,
+  copies INTEGER NOT NULL,
+  transport TEXT NOT NULL,
+  status TEXT NOT NULL,
+  result TEXT,
+  created_at INTEGER NOT NULL,
+  finished_at INTEGER
+);
 "#;
 
 fn job_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<StoredJob> {
@@ -234,6 +444,24 @@ fn job_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<StoredJob> {
         transport: r.get(7)?,
         result: r.get(8)?,
         at: r.get(9)?,
+    })
+}
+
+fn api_job_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<ApiJob> {
+    Ok(ApiJob {
+        id: r.get(0)?,
+        idempotency_key: r.get(1)?,
+        template_name: r.get(2)?,
+        template: r.get(3)?,
+        track: r.get(4)?,
+        profile: r.get(5)?,
+        data: r.get(6)?,
+        copies: r.get(7)?,
+        transport: r.get(8)?,
+        status: r.get(9)?,
+        result: r.get(10)?,
+        created_at: r.get(11)?,
+        finished_at: r.get(12)?,
     })
 }
 
@@ -326,6 +554,87 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].id, "a");
         assert!(rows[0].result.contains("failed"));
+    }
+
+    fn api_job(id: &str, key: Option<&str>, status: &str) -> ApiJob {
+        ApiJob {
+            id: id.into(),
+            idempotency_key: key.map(str::to_string),
+            template_name: "Receipt".into(),
+            template: r#"{"format":"scene"}"#.into(),
+            track: "scene".into(),
+            profile: "GK420d".into(),
+            data: "[{\"name\":\"bolt\"}]".into(),
+            copies: 1,
+            transport: r#"{"kind":"tcp","host":"127.0.0.1","port":9100}"#.into(),
+            status: status.into(),
+            result: None,
+            created_at: 1,
+            finished_at: None,
+        }
+    }
+
+    #[test]
+    fn a_reused_idempotency_key_gets_the_original_job_id() {
+        let s = store();
+        assert_eq!(
+            s.insert_api_job(&api_job("a", Some("k-1"), "queued"))
+                .unwrap(),
+            "a"
+        );
+        assert_eq!(
+            s.insert_api_job(&api_job("b", Some("k-1"), "queued"))
+                .unwrap(),
+            "a",
+            "the same key maps to the first job, so it never prints twice"
+        );
+        assert_eq!(
+            s.insert_api_job(&api_job("c", None, "queued")).unwrap(),
+            "c",
+            "a keyless job is always a new job"
+        );
+        assert_eq!(s.list_api_jobs(10).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn a_job_moves_queued_running_done_and_back_again() {
+        let s = store();
+        s.insert_api_job(&api_job("a", None, "queued")).unwrap();
+        assert!(
+            !s.cancel_queued_job("nope").unwrap(),
+            "an unknown job does not cancel"
+        );
+        assert!(s.cancel_queued_job("a").unwrap(), "a queued job cancels");
+        assert!(
+            !s.cancel_queued_job("a").unwrap(),
+            "a cancelled job does not cancel again"
+        );
+
+        s.insert_api_job(&api_job("b", None, "queued")).unwrap();
+        assert!(s.start_queued_job("b").unwrap(), "a queued job starts");
+        assert!(
+            !s.start_queued_job("b").unwrap(),
+            "a running job does not start again"
+        );
+        assert!(
+            !s.retry_finished_job("b").unwrap(),
+            "a running job does not retry"
+        );
+        s.finish_api_job(
+            "b",
+            r#"{"result":"confirmed","counts":null,"reason":null}"#,
+            123,
+        )
+        .unwrap();
+        let j = s.api_job("b").unwrap().unwrap();
+        assert_eq!(j.status, "done");
+        assert_eq!(j.finished_at, Some(123));
+
+        assert!(s.retry_finished_job("b").unwrap(), "a done job retries");
+        let j = s.api_job("b").unwrap().unwrap();
+        assert_eq!(j.status, "queued");
+        assert_eq!(j.result, None, "the old result is cleared");
+        assert_eq!(j.finished_at, None);
     }
 
     #[test]
