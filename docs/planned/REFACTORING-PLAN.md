@@ -13,11 +13,11 @@
 - **Multi-page from day one.** The scene format supports multiple pages, variable-length content (receipt line items that flow and paginate) and batch printing (N labels, per-label data) from v1. Verification states include partial success.
 - **No macOS, permanently.** The rewrite targets Windows, Linux and Android only; macOS is not a future target either. The current PrintNinja remains the macOS option until it is retired.
 - **Android background service restored (decided 2026-11-23).** Android gets a background print service, just like the PC's local print API (phase 8): third-party apps submit jobs to it and print through it, not only from the app UI. This reverses its drop in the 2026-11-20 decisions above; the service is built in phase 11.
-- **Mobile prints labels only (decided 2026-11-23).** v1 Android prints thermal labels (and receipts) via the scene track only — no html document track and no headless browser on mobile. This resolves the open item "Document track on Android" (§9): the document track is a desktop-only feature in v1, and the headless browser stays a desktop, document-track-only dependency.
+- **Mobile prints labels only, permanently (decided 2026-11-23).** Android prints thermal media (labels, receipts) via the scene track only — no html document track and no headless browser on mobile, not in v1 and not later. This resolves the open item "Document track on Android" (§9): the document track is a desktop-only feature permanently, and the headless browser stays a desktop, document-track-only dependency.
 
 ## 1. Goal and priority
 
-Print labels, receipts and documents from phone and desktop, on many printer types, with similar capabilities to PrintNinja.
+Print labels and receipts from phone and desktop, and documents from desktop, on many printer types, with similar capabilities to PrintNinja. Mobile prints labels only, permanently (decided 2026-11-23).
 
 **Top priority: reliability.** A job either prints or tells the user clearly why it did not. "Sent" must never mean "the printer silently threw it away". Speed and flexibility come second.
 
@@ -421,7 +421,7 @@ Each phase ends in something testable; no phase is "done" until its exit criteri
 
 - Android transport adapters (Bluetooth, USB, network, Android print service where a driver exists) and packaging; the renderer, planner, profiles and encoders are shared unchanged.
 - **Background print service (decided 2026-11-23).** The app runs as a background service third-party apps can print through — the Android counterpart of the PC local print API (phase 8): other apps submit jobs to it and PrintNinja renders, plans and delivers them. This replaces the earlier 2026-11-20 "no background service" decision; printing is no longer limited to the app UI.
-- **Labels only on mobile (decided 2026-11-23).** v1 Android prints thermal media (labels, receipts) via the scene track only — no html document track, no headless browser on mobile (§5.3 is desktop-only; see the open item in §9).
+- **Labels only on mobile, permanently (decided 2026-11-23).** Android prints thermal media (labels, receipts) via the scene track only — no html document track, no headless browser on mobile, permanently (§5.3 is desktop-only; see the resolved item in §9).
 
 **Exit:** Android prints a batch of labels with per-label data (and a variable-length receipt), including one submitted by a third-party app through the background service.
 
@@ -437,7 +437,7 @@ Each phase ends in something testable; no phase is "done" until its exit criteri
 | Printers that never report status | Show "Sent (unconfirmed)" instead of claiming success |
 | Which existing PrintNinja features must be kept? | Fully decided 2026-11-20 — see the decisions at the top: out of scope (phone↔PC sharing, peer rendering, branding, one-way HTML→scene import, template version history, network discovery, Android background service, data from URLs); in the first release (local print API, phase 8; template publishing, phase 9; HTML/CSS document track for `page` media); reduced (minimal job history, English only, i18n/WCAG post-v1); kept (tray icon, start-with-computer) |
 | macOS is not in the platform table, but the current Tauri app runs there | Resolved 2026-11-20: macOS is out of scope permanently, not just for v1; no transport/packaging work is planned for it |
-| Document track on Android (phase 11) | Resolved 2026-11-23: v1 mobile prints labels only — the document track (and its headless browser) is desktop-only; Android ships the scene track for thermal media |
+| Document track on Android (phase 11) | Resolved 2026-11-23: mobile prints labels only, permanently — the document track (and its headless browser) is desktop-only; Android ships the scene track for thermal media and will not get the document track |
 
 ## 10. Success criteria
 
