@@ -1,91 +1,83 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-const BUTTON_VARIANTS = [
-  "default",
-  "secondary",
-  "outline",
-  "destructive",
-  "ghost",
-  "link",
-] as const;
+import { PrintScreen } from "@/screens/print-screen";
+import { starters, type StarterTemplate } from "@/templates";
 
 function isDark() {
   return document.documentElement.dataset.theme === "dark";
 }
 
+function TemplatesScreen({ onOpen }: { onOpen: (t: StarterTemplate) => void }) {
+  return (
+    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-display font-semibold tracking-tight">
+          PrintNinja
+        </h1>
+        <p className="text-body text-muted-foreground">
+          Pick a template, enter the data, print.
+        </p>
+      </header>
+
+      <div className="flex flex-col gap-4">
+        {starters.map((t) => (
+          <Card key={t.id}>
+            <CardHeader className="flex-row items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  {t.name}
+                  <Badge
+                    variant={t.track === "scene" ? "default" : "secondary"}
+                  >
+                    {t.track === "scene" ? "scene" : "document"}
+                  </Badge>
+                </CardTitle>
+                <CardDescription>{t.description}</CardDescription>
+              </div>
+              <Button onClick={() => onOpen(t)}>Print</Button>
+            </CardHeader>
+          </Card>
+        ))}
+      </div>
+
+      <p className="text-caption text-muted-foreground">
+        Templates, settings and recent jobs are saved on this machine in a later
+        increment.
+      </p>
+    </main>
+  );
+}
+
 function App() {
+  const [open, setOpen] = useState<StarterTemplate | null>(null);
   return (
     <div className="min-h-dvh-safe bg-background">
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-8">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-display font-semibold tracking-tight">
-            PrintNinja (next)
-          </h1>
-          <p className="text-body text-muted-foreground">
-            Phase 0 skeleton — design system port
-          </p>
-        </header>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Buttons</CardTitle>
-            <CardDescription>
-              One of every variant from the ported kit
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            {BUTTON_VARIANTS.map((variant) => (
-              <Button key={variant} variant={variant}>
-                {variant}
-              </Button>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Status</CardTitle>
-            <CardDescription>
-              Status vocabulary: tint + word, never colour alone
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between rounded-md bg-success-soft px-3 py-2 text-success">
-              <span className="text-body font-medium">Printer</span>
-              <Badge variant="success">Ready</Badge>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Theme</CardTitle>
-            <CardDescription>
-              Light and dark are wired via data-theme on &lt;html&gt; — the
-              token set in index.css swaps under :root[data-theme="dark"].
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+      {open ? (
+        <PrintScreen starter={open} onBack={() => setOpen(null)} />
+      ) : (
+        <>
+          <div className="flex justify-end p-4">
             <Button
-              variant="outline"
+              variant="ghost"
+              size="sm"
               onClick={() => {
                 const root = document.documentElement;
                 root.dataset.theme = isDark() ? "" : "dark";
               }}
             >
-              {isDark() ? "Switch to light" : "Switch to dark"}
+              {isDark() ? "Light" : "Dark"}
             </Button>
-          </CardContent>
-        </Card>
-      </main>
+          </div>
+          <TemplatesScreen onOpen={setOpen} />
+        </>
+      )}
     </div>
   );
 }

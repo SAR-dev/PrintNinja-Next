@@ -227,3 +227,23 @@ Unreleased.
   byte-verified; the raster e2e now plans through the same decision
   and shows the recorded fallback (a bold heading on a printer whose
   native fonts are plain falls back to raster, and the plan says why)
+- Phase 7 app↔core pipeline: `app` gains a plain-Rust print pipeline
+  (`prepare_units`, `print_units`, the transport factories for
+  TCP/IPP/spooler/Bluetooth chosen at runtime) that drives the whole
+  §5 path — plan, encode, pace, deliver — from the app side, with the
+  preview rendered by the same path as the print (plan §3.4): scene
+  jobs preview as a 1-bit bitmap at the profile's dpi, document jobs
+  as the actual PDF. Tauri commands `list_printers`, `plan_job` and
+  `print_job` expose it to the UI off the main thread; a fake TCP
+  printer answers the status dialect, so a job ends `Confirmed`, a
+  paper fault fails in the printer's own words, and a refused port
+  says connect
+- Phase 7 UI (print flow increment): the template list (starter
+  templates with their track badge — scene or document) and the print
+  screen: pick the printer from the profile set, choose where the
+  bytes go (raw port, IPP, spooler, Bluetooth), enter the records,
+  preview (output path, the recorded fallback, records/pages/units/
+  bytes, and the dots or the PDF), print, and see the result in the
+  plan's own vocabulary — confirmed, sent-not-confirmed, partially
+  printed with the counts, failed with the reason, or wrong mode
+  suspected
