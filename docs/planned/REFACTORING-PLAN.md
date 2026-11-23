@@ -372,6 +372,8 @@ Each phase ends in something testable; no phase is "done" until its exit criteri
 
 **Exit:** real hardware prints a multi-page document and a batch of labels with per-label data, on Windows and Linux; the scene track produces identical bytes on both platforms (the html document track is verified by its e2e in §7, since its PDF depends on the platform's browser).
 
+*Done 2026-11-23 — every in-repo piece built and green: the in-process renderer (`pn-render`) across page model, text with font fallback (incl. Japanese), barcode/QR, and deterministic PDF for the OS-print path; `pn-encoders` `raster()` wrappers in all four thermal languages (plus the pdf-language refusal in plain words); `pn-planner` track routing (scene→raster, scene-on-page→PDF, html→browser) with the media-fit and pdf-fallback rules; the `html` document track's schema (`html` field, `substitute()`, html-only validation) and `pn-browser` one-shot headless `--print-to-pdf` renderer (Edge/Chromium/Chrome, `PRINTNINJA_BROWSER` override, 60 s deadline, honest no-browser error). Verified by the full Docker Linux test suite, a cross-platform-identical scene raster e2e against the virtual printer (`19c4145`), and a document-track e2e (html → substitute → browser PDF → IPP, byte-verified; honest no-browser error where no browser exists — the CI container). The hardware half of the exit — real hardware printing a multi-page document and a batch of labels on Windows and Linux — lands in phase 10.*
+
 ### Phase 6 — Native command path
 
 - `native()` per encoder (§5.5): text in the printer's supported fonts, barcodes, lines, boxes; returns "unsupported" when the scene exceeds the printer's native capabilities.
