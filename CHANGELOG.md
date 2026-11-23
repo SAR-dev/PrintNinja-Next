@@ -61,3 +61,16 @@ Unreleased.
   the status reply on the same byte stream. The address parser (MAC with
   an optional RFCOMM channel 1–30, or `COM{n}`) is shared and tested on
   every platform; real-hardware verification lands in phase 10
+- Phase 4 scene format (schema increment): `pn-scene` — the single
+  template language for the `scene` track (plan §5.1). One JSON document
+  describes the media (fixed-size label, continuous roll, or page paper,
+  in millimetres) and its elements — text, image, barcode, QR, line,
+  rectangle, and repeating groups bound to a data array — with
+  `{{binding}}`s, a per-element placement (`every`, `first`, `last`,
+  `only n`, or `flow` for groups), and an optional declared field list
+  that catches a mistyped binding before a job is queued. The template's
+  `format` field picks the track: `scene` (default, every media) or
+  `html` (`page` media only — rejected on thermal). Validation reports
+  the problem in plain words; serialization is deterministic and its
+  bytes are pinned by a golden case, mirrored field-for-field in
+  TypeScript (`app/ui/src/scene/schema.ts`)

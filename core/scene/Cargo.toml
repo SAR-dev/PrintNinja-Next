@@ -5,3 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+golden-harness = { path = "../../tests/golden" }

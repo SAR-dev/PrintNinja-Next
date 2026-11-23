@@ -2477,6 +2477,11 @@ version = "0.0.0"
 [[package]]
 name = "pn-scene"
 version = "0.0.0"
+dependencies = [
+ "golden-harness",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "pn-transport"
