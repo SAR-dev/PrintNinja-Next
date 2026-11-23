@@ -3,8 +3,10 @@
 //! publishing a template and the community gallery (browse, search,
 //! fetch, unpublish). Increment C: saving published templates to a
 //! per-account list, with the full documents, so an app can keep
-//! editable local copies. Later increments add offline-first sync on
-//! the same router.
+//! editable local copies. Increment D: offline-first sync — publishing
+//! the same slug again is an update (the replay of an offline edit),
+//! and the change feed (`GET /v1/changes`) walks every publish, update
+//! and unpublish by seq, tombstones included.
 //!
 //! The router is built over [`ServerState`] and held apart from the
 //! socket, so the endpoints are tested with `oneshot` — no port is
@@ -51,6 +53,7 @@ pub fn router(state: ServerState) -> Router {
             post(save_template).delete(unsave_template),
         )
         .route("/v1/saved", get(list_saved))
+        .route("/v1/changes", get(list_changes))
         .with_state(state)
 }
 
@@ -243,7 +246,10 @@ struct PublishReq {
 }
 
 /// Publish a template to the community gallery. The document is checked
-/// against the scene schema — never rendered or printed.
+/// against the scene schema — never rendered or printed. Publishing the
+/// same slug on the same account is an update (200, `created: false`),
+/// not a conflict: that is the endpoint an app replays through to push
+/// the edits it made offline.
 async fn publish_template(
     State(state): State<ServerState>,
     user: AuthedUser,
@@ -283,19 +289,20 @@ async fn publish_template(
     };
     let now = now_unix();
     match state.store.create_template(&user.id, &new, now) {
-        Ok(()) => (
-            StatusCode::CREATED,
+        Ok((created, row_id)) => (
+            if created {
+                StatusCode::CREATED
+            } else {
+                StatusCode::OK
+            },
             Json(json!({
-                "id": new.id,
+                "id": row_id,
                 "slug": new.slug,
-                "owner": user.handle
+                "owner": user.handle,
+                "created": created
             })),
         )
             .into_response(),
-        Err(TemplateError::SlugExists) => err(
-            StatusCode::CONFLICT,
-            "that slug is already taken on this account",
-        ),
         Err(TemplateError::Other(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
 }
@@ -404,6 +411,30 @@ async fn list_saved(
     }
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ChangesQuery {
+    /// The client's cursor: the highest seq it has applied. 0 (or
+    /// absent) is a full resync.
+    since: Option<i64>,
+    limit: Option<u32>,
+}
+
+/// The change feed: every publish, update and unpublish since the
+/// client's cursor, in the order it happened, with the full documents
+/// on the live entries and `deleted: true` on the tombstones. Public —
+/// it only names published templates, the same surface the gallery
+/// shows. A client applies each entry to its local copy keyed by
+/// owner+slug and advances its cursor to the last seq it saw.
+async fn list_changes(State(state): State<ServerState>, Query(q): Query<ChangesQuery>) -> Response {
+    let since = q.since.unwrap_or(0).max(0);
+    let limit = q.limit.unwrap_or(200).clamp(1, 500) as i64;
+    match state.store.list_template_changes(since, limit) {
+        Ok(items) => Json(json!({ "items": items })).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+    }
+}
+
 /// Unpublish a template. Owner only, and an unknown slug is a 404, so
 /// the endpoint does not say which slugs other accounts have.
 async fn unpublish_template(
@@ -419,7 +450,7 @@ async fn unpublish_template(
         // the same 404, so the endpoint does not say which slugs other
         // accounts have (even when they share a slug with the caller).
         Ok(Some(t)) if handle_key(&t.owner) == handle_key(&user.handle) => {
-            match state.store.delete_template(&user.id, &slug) {
+            match state.store.delete_template(&user.id, &slug, now_unix()) {
                 Ok(_) => Json(json!({ "ok": true })).into_response(),
                 Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
             }
@@ -869,41 +900,59 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_duplicate_slug_on_the_same_account_is_a_conflict() {
+    async fn republishing_the_same_slug_updates_the_template() {
         let app = router(state());
         register(&app, "jane", "supersecret1").await;
         register(&app, "john", "supersecret1").await;
         let tj = token_for(&app, "jane", "supersecret1").await;
         let tjo = token_for(&app, "john", "supersecret1").await;
 
-        assert_eq!(
-            publish(
-                &app,
-                Some(&tj),
-                "Shipping",
-                "shipping-label",
-                label_template()
-            )
-            .await
-            .0,
-            StatusCode::CREATED
-        );
-        // Same slug, same account: 409.
-        let (s, _) = publish(&app, Some(&tj), "Other", "shipping-label", label_template()).await;
-        assert_eq!(s, StatusCode::CONFLICT);
-        // Same slug, other account: fine — slugs are per owner.
-        assert_eq!(
-            publish(
-                &app,
-                Some(&tjo),
-                "Their own",
-                "shipping-label",
-                label_template()
-            )
-            .await
-            .0,
-            StatusCode::CREATED
-        );
+        let (s, v) = publish(
+            &app,
+            Some(&tj),
+            "Shipping",
+            "shipping-label",
+            label_template(),
+        )
+        .await;
+        assert_eq!(s, StatusCode::CREATED);
+        assert_eq!(v["created"], true);
+        let first_id = v["id"].as_str().expect("the create returns the row id");
+
+        // The offline replay: same slug, same account, new name.
+        let (s, v) = publish(
+            &app,
+            Some(&tj),
+            "Shipping, v2",
+            "shipping-label",
+            label_template(),
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK, "an update is a 200, not a 201");
+        assert_eq!(v["created"], false);
+        assert_eq!(v["id"].as_str(), Some(first_id), "the row id is stable");
+        // The fetch shows the new content.
+        let (s, v) = call(
+            &app,
+            Method::GET,
+            "/v1/templates/jane/shipping-label",
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["template"]["name"], "Shipping, v2");
+
+        // Same slug, other account: a different template, created.
+        let (s, _) = publish(
+            &app,
+            Some(&tjo),
+            "Their own",
+            "shipping-label",
+            label_template(),
+        )
+        .await;
+        assert_eq!(s, StatusCode::CREATED);
     }
 
     #[tokio::test]
@@ -1315,5 +1364,86 @@ mod tests {
             .0,
             StatusCode::NOT_FOUND
         );
+    }
+
+    #[tokio::test]
+    async fn the_change_feed_serves_publishes_updates_and_deletes_to_anyone() {
+        let app = router(state());
+        register(&app, "jane", "supersecret1").await;
+        let t = token_for(&app, "jane", "supersecret1").await;
+
+        // Publish — then the feed, which needs no session.
+        assert_eq!(
+            publish(
+                &app,
+                Some(&t),
+                "Shipping",
+                "shipping-label",
+                label_template()
+            )
+            .await
+            .0,
+            StatusCode::CREATED
+        );
+        let (s, v) = call(&app, Method::GET, "/v1/changes", None, None).await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["items"].as_array().unwrap().len(), 1);
+        assert_eq!(v["items"][0]["owner"], "jane");
+        assert_eq!(v["items"][0]["slug"], "shipping-label");
+        assert_eq!(v["items"][0]["deleted"], false);
+        assert!(
+            v["items"][0]["template"].is_string(),
+            "live entries carry the full document"
+        );
+        assert!(v["items"][0]["sample"].is_string());
+        assert!(v["items"][0]["seq"].is_number());
+
+        // Republish the same slug — an update the feed also carries.
+        assert_eq!(
+            publish(
+                &app,
+                Some(&t),
+                "Shipping, v2",
+                "shipping-label",
+                label_template()
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+        // The cursor: only what happened after the first entry.
+        let (s, v) = call(&app, Method::GET, "/v1/changes?since=1", None, None).await;
+        assert_eq!(s, StatusCode::OK);
+        let items = v["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["name"], "Shipping, v2");
+        assert_eq!(items[0]["deleted"], false);
+
+        // Unpublish — the tombstone, documents gone.
+        let (s, _) = call(
+            &app,
+            Method::DELETE,
+            "/v1/templates/jane/shipping-label",
+            None,
+            Some(&t),
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK);
+        let (s, v) = call(&app, Method::GET, "/v1/changes?since=2", None, None).await;
+        assert_eq!(s, StatusCode::OK);
+        let items = v["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["deleted"], true);
+        assert_eq!(items[0]["slug"], "shipping-label");
+        assert!(
+            items[0].get("template").is_none(),
+            "a tombstone carries no document"
+        );
+
+        // Paging the backlog with a small limit; the cursor walks it.
+        let (s, v) = call(&app, Method::GET, "/v1/changes?limit=1", None, None).await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["items"].as_array().unwrap().len(), 1);
+        assert_eq!(v["items"][0]["seq"], 1);
     }
 }

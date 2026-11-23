@@ -387,3 +387,14 @@ Unreleased.
   full documents and sample, so an app can open each one as an
   editable local copy and print it offline; when the owner
   unpublishes, the saves that point at it go with the row
+- Phase 9 registry server (sync increment): offline-first sync of
+  local changes. Publishing the same slug on the same account is now
+  an update (200 with `created: false`) instead of a conflict — the
+  endpoint an app replays through to push the edits it made offline —
+  and `GET /v1/changes?since=&limit=` serves the change feed: every
+  publish, update and unpublish, each with a strictly increasing seq
+  the client uses as its cursor, in the order it happened, no
+  sign-in needed. Live entries carry the full documents; an
+  unpublish is a tombstone (`deleted: true`, documents gone, the
+  owner and slug kept) so a client drops the local copy it made from
+  it; a replayed unpublish appends no second tombstone

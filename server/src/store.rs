@@ -1,7 +1,7 @@
 //! The registry database: accounts and sessions (increment A), published
-//! templates (increment B), saved templates (increment C). Later
-//! increments add the offline-first sync state on top of the same
-//! connection.
+//! templates (increment B), saved templates (increment C), and the
+//! change feed with its tombstones that offline-first sync reads
+//! (increment D).
 //!
 //! `rusqlite::Connection` is not `Sync`, and the router's state is shared
 //! across tasks, so the lock is part of the type (the same pattern the
@@ -87,15 +87,43 @@ pub struct NewTemplate {
     pub sample: String,
 }
 
-/// Why publishing a template failed.
+/// Why publishing a template failed. Publishing no longer fails on a
+/// taken slug — the same slug on the same account is an update (the way
+/// offline changes replay), so only database trouble is left.
 #[derive(Debug, thiserror::Error)]
 pub enum TemplateError {
-    /// That slug is already published on this account.
-    #[error("that slug is already taken on this account")]
-    SlugExists,
     /// Any other database trouble, in plain words.
     #[error("{0}")]
     Other(String),
+}
+
+/// One change to a published template — a row of the change feed a
+/// sync client walks in order. A deletion is the tombstone: `deleted`
+/// is true and the documents are empty, so a client dropping its local
+/// copy knows exactly what went away.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplateChange {
+    /// Strictly increasing. The client's cursor is the last seq it
+    /// applied; it asks for `seq > cursor` again next time.
+    pub seq: i64,
+    /// The owner's handle, as typed.
+    pub owner: String,
+    pub slug: String,
+    pub name: String,
+    pub readme: String,
+    /// "scene" or "document".
+    pub track: String,
+    /// The template document as JSON text — empty on a tombstone.
+    #[serde(skip_serializing_if = "str::is_empty")]
+    pub template: String,
+    /// Starting records for the data fields, as JSON text — empty on a
+    /// tombstone.
+    #[serde(skip_serializing_if = "str::is_empty")]
+    pub sample: String,
+    pub deleted: bool,
+    /// When the change happened (Unix seconds).
+    pub changed_at: i64,
 }
 
 /// The schema so far. Tables are added idempotently as later increments
@@ -137,6 +165,24 @@ CREATE TABLE IF NOT EXISTS saved_templates (
     PRIMARY KEY (user_id, template_id)
 );
 CREATE INDEX IF NOT EXISTS saved_templates_template ON saved_templates (template_id);
+-- The change feed (increment D): one row per publish, update or
+-- unpublish, in the order it happened. seq is the rowid — strictly
+-- increasing, never reused, plain portable SQLite. A tombstone is a
+-- row with deleted = 1 and empty documents. The feed is not pruned:
+-- keeping every row is what makes the seq cursor exact for every
+-- client at any lag, and the registry is small enough for v1.
+CREATE TABLE IF NOT EXISTS template_changes (
+    seq        INTEGER PRIMARY KEY,
+    owner_id   TEXT NOT NULL,
+    slug       TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    readme     TEXT NOT NULL,
+    track      TEXT NOT NULL,
+    template   TEXT NOT NULL,
+    sample     TEXT NOT NULL,
+    deleted    INTEGER NOT NULL,
+    changed_at INTEGER NOT NULL
+);
 "#;
 
 pub struct Store {
@@ -368,59 +414,92 @@ impl Store {
             .map_err(|e| e.to_string())
     }
 
-    /// Publish a template. `SlugExists` when the account already has a
-    /// template under that slug. Like `create_user`, the taken check is
-    /// a query, not a driver-specific error code, so it runs on Turso;
-    /// the `UNIQUE (owner_id, slug)` index stays as the integrity
-    /// backstop for the (rare) concurrent-insert race.
+    /// Publish a template — or update the one already under that slug,
+    /// which is how an app replays changes it made offline: the same
+    /// call converges on the latest content either way. Returns whether
+    /// this call created the row and the row's id (an update keeps the
+    /// original id and created_at). Every call appends a row to the
+    /// change feed, so a sync client sees creates and updates alike.
+    /// All of it is queries and plain SQL — no driver-specific error
+    /// codes — so it runs on Turso; the `UNIQUE (owner_id, slug)` index
+    /// stays as the integrity backstop for the (rare) concurrent-insert
+    /// race, which the update path below resolves.
     pub fn create_template(
         &self,
         owner_id: &str,
         t: &NewTemplate,
         now: i64,
-    ) -> Result<(), TemplateError> {
-        if self
-            .slug_is_taken(owner_id, &t.slug)
-            .map_err(TemplateError::Other)?
-            .is_some()
-        {
-            return Err(TemplateError::SlugExists);
-        }
-        match self.lock().execute(
-            "INSERT INTO templates
-                 (id, owner_id, slug, name, readme, track, template, sample,
-                  created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            params![
-                t.id, owner_id, t.slug, t.name, t.readme, t.track, t.template, t.sample, now, now
-            ],
-        ) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                // If the slug is visible now, a concurrent insert won
-                // the race — report it the same way the pre-check does.
-                if self
-                    .slug_is_taken(owner_id, &t.slug)
-                    .map_err(TemplateError::Other)?
-                    .is_some()
-                {
-                    Err(TemplateError::SlugExists)
-                } else {
-                    Err(TemplateError::Other(e.to_string()))
-                }
-            }
-        }
-    }
-
-    /// Whether this account already publishes a template under `slug`.
-    fn slug_is_taken(&self, owner_id: &str, slug: &str) -> Result<Option<i64>, String> {
+    ) -> Result<(bool, String), TemplateError> {
         let conn = self.lock();
-        let mut stmt = conn
-            .prepare("SELECT 1 FROM templates WHERE owner_id = ?1 AND slug = ?2")
-            .map_err(|e| e.to_string())?;
-        stmt.query_row(params![owner_id, slug], |r| r.get::<_, i64>(0))
+        let existing_id = || {
+            conn.query_row(
+                "SELECT id FROM templates WHERE owner_id = ?1 AND slug = ?2",
+                params![owner_id, t.slug],
+                |r| r.get::<_, String>(0),
+            )
             .optional()
-            .map_err(|e| e.to_string())
+            .map_err(|e| TemplateError::Other(e.to_string()))
+        };
+        let update = |row_id: &str| -> Result<(), TemplateError> {
+            conn.execute(
+                "UPDATE templates
+                     SET name = ?1, readme = ?2, track = ?3, template = ?4,
+                         sample = ?5, updated_at = ?6
+                 WHERE id = ?7",
+                params![t.name, t.readme, t.track, t.template, t.sample, now, row_id],
+            )
+            .map_err(|e| TemplateError::Other(e.to_string()))?;
+            Ok(())
+        };
+        let row_id: String;
+        let created = match existing_id()? {
+            Some(id) => {
+                row_id = id;
+                update(&row_id)?;
+                false
+            }
+            None => match conn.execute(
+                "INSERT INTO templates
+                     (id, owner_id, slug, name, readme, track, template, sample,
+                      created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![
+                    t.id, owner_id, t.slug, t.name, t.readme, t.track, t.template, t.sample, now,
+                    now
+                ],
+            ) {
+                Ok(_) => {
+                    row_id = t.id.clone();
+                    true
+                }
+                // A concurrent publish won the insert race and the
+                // unique index stopped us — converge on the update path
+                // instead of failing the caller's replay.
+                Err(e) => {
+                    row_id = match existing_id() {
+                        Ok(Some(id)) => id,
+                        Ok(None) => {
+                            return Err(TemplateError::Other(format!(
+                                "the insert collided and the row is gone: {e}"
+                            )))
+                        }
+                        Err(e) => return Err(TemplateError::Other(e.to_string())),
+                    };
+                    update(&row_id)?;
+                    false
+                }
+            },
+        };
+        // The change feed entry. The tombstones come from
+        // `delete_template`; every entry here is a live template.
+        conn.execute(
+            "INSERT INTO template_changes
+                 (owner_id, slug, name, readme, track, template, sample, deleted, changed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8)",
+            params![owner_id, t.slug, t.name, t.readme, t.track, t.template, t.sample, now],
+        )
+        .map_err(|e| TemplateError::Other(e.to_string()))?;
+        Ok((created, row_id))
     }
 
     /// The template an owner (by match key, so the caller passes
@@ -534,9 +613,22 @@ impl Store {
     }
 
     /// Unpublish a template. Returns how many rows went; 0 when the
-    /// account has nothing under that slug.
-    pub fn delete_template(&self, owner_id: &str, slug: &str) -> Result<u64, String> {
+    /// account has nothing under that slug. A real delete appends the
+    /// tombstone to the change feed (`deleted` = 1, documents empty) so
+    /// a sync client drops its local copy; an idempotent re-delete
+    /// appends nothing.
+    pub fn delete_template(&self, owner_id: &str, slug: &str, now: i64) -> Result<u64, String> {
         let conn = self.lock();
+        // The row being deleted, for the tombstone's identity.
+        let mut stmt = conn
+            .prepare("SELECT name, readme, track FROM templates WHERE owner_id = ?1 AND slug = ?2")
+            .map_err(|e| e.to_string())?;
+        let row: Option<(String, String, String)> = stmt
+            .query_row(params![owner_id, slug], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            })
+            .optional()
+            .map_err(|e| e.to_string())?;
         // Saved copies die with the template. Done explicitly — SQLite
         // foreign-key enforcement is a per-connection pragma a remote
         // backend may not share, and the ON DELETE CASCADE clause is
@@ -547,12 +639,65 @@ impl Store {
             params![owner_id, slug],
         )
         .map_err(|e| e.to_string())?;
-        conn.execute(
-            "DELETE FROM templates WHERE owner_id = ?1 AND slug = ?2",
-            params![owner_id, slug],
-        )
-        .map(|n| n as u64)
-        .map_err(|e| e.to_string())
+        let n = conn
+            .execute(
+                "DELETE FROM templates WHERE owner_id = ?1 AND slug = ?2",
+                params![owner_id, slug],
+            )
+            .map_err(|e| e.to_string())?;
+        if let Some((name, readme, track)) = row {
+            conn.execute(
+                "INSERT INTO template_changes
+                     (owner_id, slug, name, readme, track, template, sample, deleted, changed_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, '', '', 1, ?6)",
+                params![owner_id, slug, name, readme, track, now],
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        Ok(n as u64)
+    }
+
+    /// A page of the change feed in the order the changes happened —
+    /// every entry with `seq` greater than `since`, ascending. `since`
+    /// is the client's cursor (the highest seq it applied); pass 0 for
+    /// a full resync. Entries carry the full documents, so a client can
+    /// apply the change without a second fetch; on a tombstone they are
+    /// empty and `deleted` is true.
+    pub fn list_template_changes(
+        &self,
+        since: i64,
+        limit: i64,
+    ) -> Result<Vec<TemplateChange>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT c.seq, u.handle, c.slug, c.name, c.readme, c.track,
+                        c.template, c.sample, c.deleted, c.changed_at
+                 FROM template_changes c JOIN users u ON u.id = c.owner_id
+                 WHERE c.seq > ?1
+                 ORDER BY c.seq ASC
+                 LIMIT ?2",
+            )
+            .map_err(|e| e.to_string())?;
+        let items = stmt
+            .query_map(params![since, limit], |r| {
+                Ok(TemplateChange {
+                    seq: r.get(0)?,
+                    owner: r.get(1)?,
+                    slug: r.get(2)?,
+                    name: r.get(3)?,
+                    readme: r.get(4)?,
+                    track: r.get(5)?,
+                    template: r.get(6)?,
+                    sample: r.get(7)?,
+                    deleted: r.get::<_, i64>(8)? != 0,
+                    changed_at: r.get(9)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        Ok(items)
     }
 
     /// Mark a published template as saved by an account. Idempotent:
@@ -795,25 +940,41 @@ mod tests {
     }
 
     #[test]
-    fn a_slug_is_unique_per_owner_not_global() {
+    fn a_slug_is_unique_per_owner_and_republishing_updates() {
         let s = store();
         s.create_user("u1", "jane", "jane", "h", 0).unwrap();
-        s.create_user("u2", "john", "john", "h", 0).unwrap();
-        s.create_template("u1", &new_template("t1", "shipping", "A", "", "scene"), 10)
+        let (created, id) = s
+            .create_template(
+                "u1",
+                &new_template("t1", "shipping", "A", "old readme", "scene"),
+                10,
+            )
             .unwrap();
-        // A different owner may use the same slug.
-        s.create_template("u2", &new_template("t2", "shipping", "B", "", "scene"), 11)
-            .expect("slugs are per account, not global");
-        // ...but the same account cannot.
-        let err = s
-            .create_template("u1", &new_template("t3", "shipping", "C", "", "scene"), 12)
-            .expect_err("the second publish under the slug must fail");
-        assert!(matches!(err, TemplateError::SlugExists), "got: {err:?}");
-        // The first one is untouched.
-        assert_eq!(
-            s.find_template("jane", "shipping").unwrap().unwrap().name,
-            "A"
-        );
+        assert!(created, "the first publish creates");
+        assert_eq!(id, "t1");
+        // Re-publishing the same slug is the offline replay: it updates
+        // the row instead of failing.
+        let (created, id2) = s
+            .create_template(
+                "u1",
+                &new_template("t3", "shipping", "B", "new readme", "scene"),
+                20,
+            )
+            .unwrap();
+        assert!(!created, "the second publish is an update");
+        assert_eq!(id2, "t1", "the row id is stable");
+        let t = s.find_template("jane", "shipping").unwrap().unwrap();
+        assert_eq!(t.name, "B");
+        assert_eq!(t.readme, "new readme");
+        assert_eq!(t.created_at, 10, "created_at is preserved");
+        assert_eq!(t.updated_at, 20, "updated_at advanced");
+        // Slugs are per account, not global: a different owner may use
+        // the same slug.
+        s.create_user("u2", "john", "john", "h", 0).unwrap();
+        let (created, _) = s
+            .create_template("u2", &new_template("t2", "shipping", "C", "", "scene"), 11)
+            .unwrap();
+        assert!(created);
     }
 
     #[test]
@@ -893,10 +1054,10 @@ mod tests {
         s.create_user("u1", "jane", "jane", "h", 0).unwrap();
         s.create_template("u1", &new_template("t1", "shipping", "A", "", "scene"), 10)
             .unwrap();
-        assert_eq!(s.delete_template("u1", "shipping").unwrap(), 1);
+        assert_eq!(s.delete_template("u1", "shipping", 20).unwrap(), 1);
         assert!(s.find_template("jane", "shipping").unwrap().is_none());
         // Idempotent: a second delete removes nothing.
-        assert_eq!(s.delete_template("u1", "shipping").unwrap(), 0);
+        assert_eq!(s.delete_template("u1", "shipping", 30).unwrap(), 0);
     }
 
     #[test]
@@ -972,10 +1133,75 @@ mod tests {
         assert_eq!(s.list_saved("u2", 20, 0).unwrap().0.len(), 1);
 
         // jane unpublishes; john's save must go with the row.
-        s.delete_template("u1", "shipping").unwrap();
+        s.delete_template("u1", "shipping", 30).unwrap();
         let (items, total) = s.list_saved("u2", 20, 0).unwrap();
         assert_eq!(total, 0);
         assert_eq!(items.len(), 0);
+    }
+
+    #[test]
+    fn the_change_feed_walks_creates_updates_and_deletes_in_order() {
+        let s = store();
+        s.create_user("u1", "jane", "jane", "h", 0).unwrap();
+        s.create_template("u1", &new_template("t1", "shipping", "A", "", "scene"), 10)
+            .unwrap();
+        s.create_template("u1", &new_template("x", "shipping", "B", "", "scene"), 20)
+            .unwrap();
+        s.create_template("u1", &new_template("t2", "invoice", "C", "", "scene"), 30)
+            .unwrap();
+        s.delete_template("u1", "shipping", 40).unwrap();
+
+        let feed = s.list_template_changes(0, 10).unwrap();
+        assert_eq!(feed.len(), 4);
+        assert_eq!(
+            feed.iter().map(|c| c.seq).collect::<Vec<_>>(),
+            [1, 2, 3, 4],
+            "in the order the changes happened"
+        );
+        // The create: full documents.
+        assert_eq!(feed[0].owner, "jane");
+        assert_eq!(feed[0].slug, "shipping");
+        assert_eq!(feed[0].name, "A");
+        assert!(!feed[0].deleted);
+        assert_eq!(feed[0].template, "{}");
+        assert_eq!(feed[0].sample, "[]");
+        // The update: same slug, new content.
+        assert_eq!(feed[1].slug, "shipping");
+        assert_eq!(feed[1].name, "B");
+        assert!(!feed[1].deleted);
+        // The second template.
+        assert_eq!(feed[2].slug, "invoice");
+        // The tombstone: identity kept, documents gone.
+        assert_eq!(feed[3].slug, "shipping");
+        assert_eq!(feed[3].name, "B");
+        assert!(feed[3].deleted);
+        assert_eq!(feed[3].template, "");
+        assert_eq!(feed[3].sample, "");
+
+        // The cursor: only what happened after seq 3.
+        let page = s.list_template_changes(3, 10).unwrap();
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].seq, 4);
+        // A limit smaller than the backlog pages the feed; the cursor
+        // walks it.
+        let page = s.list_template_changes(0, 2).unwrap();
+        assert_eq!(page.iter().map(|c| c.seq).collect::<Vec<_>>(), [1, 2]);
+    }
+
+    #[test]
+    fn an_idempotent_redelete_appends_no_second_tombstone() {
+        let s = store();
+        s.create_user("u1", "jane", "jane", "h", 0).unwrap();
+        s.create_template("u1", &new_template("t1", "shipping", "A", "", "scene"), 10)
+            .unwrap();
+        assert_eq!(s.delete_template("u1", "shipping", 20).unwrap(), 1);
+        // The offline queue replaying the delete changes nothing.
+        assert_eq!(s.delete_template("u1", "shipping", 30).unwrap(), 0);
+        assert_eq!(
+            s.list_template_changes(0, 10).unwrap().len(),
+            2,
+            "one create, one tombstone"
+        );
     }
 
     #[test]
