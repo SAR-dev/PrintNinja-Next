@@ -289,3 +289,12 @@ Unreleased.
   template, even if it is edited later), a failed or wrong-mode job gets
   a retry instead, and the row shows the new result and time when it
   finishes
+- Phase 7 app (persistence increment): the local store — one SQLite
+  file in the app's data directory, created and self-describing on
+  open — now keeps the templates (a saved row overrides its starter or
+  is added as a user template), the recent jobs (the same ten the list
+  shows, newest first, a reprint refreshes its result in place) and the
+  settings (key and value, ready for the settings increment). The app
+  still runs when the store cannot open: the commands say so, the list
+  keeps its in-memory copies, and the footer names the failure in plain
+  words instead of losing the edit silently

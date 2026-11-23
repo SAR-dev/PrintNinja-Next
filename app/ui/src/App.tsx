@@ -1,5 +1,14 @@
-import { useState } from "react";
-import { printJob, type JobReport } from "@/api";
+import { useEffect, useState } from "react";
+import {
+  loadRecentJobs,
+  loadTemplates,
+  printJob,
+  rememberJob,
+  saveTemplate,
+  type JobReport,
+  type StoredJob,
+  type StoredTemplate,
+} from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,8 +37,77 @@ import {
   type RecentJob,
 } from "@/templates";
 
-/** How many jobs the recent list remembers. */
+/** How many jobs the recent list remembers (the store keeps the same). */
 const RECENT_LIMIT = 10;
+
+/** The stored row for a template: the template as JSON text. */
+function toStoredTemplate(t: AppTemplate): StoredTemplate {
+  return {
+    id: t.id,
+    name: t.name,
+    description: t.description,
+    track: t.track,
+    template: JSON.stringify(t.template),
+    sample: t.sample,
+  };
+}
+
+function fromStoredTemplate(row: StoredTemplate): AppTemplate {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    track: row.track as AppTemplate["track"],
+    template: JSON.parse(row.template) as AppTemplate["template"],
+    sample: row.sample,
+  };
+}
+
+/** Starters first; a saved row overrides its starter or is added. */
+function mergeTemplates(
+  base: AppTemplate[],
+  rows: StoredTemplate[],
+): AppTemplate[] {
+  const out = base.map((t) => {
+    const row = rows.find((r) => r.id === t.id);
+    return row ? fromStoredTemplate(row) : t;
+  });
+  for (const row of rows) {
+    if (!out.some((t) => t.id === row.id)) out.push(fromStoredTemplate(row));
+  }
+  return out;
+}
+
+/** The stored row for a job: template, transport and result as JSON text. */
+function toStoredJob(j: RecentJob): StoredJob {
+  return {
+    id: j.id,
+    templateName: j.templateName,
+    template: JSON.stringify(j.template),
+    track: j.track,
+    profile: j.profile,
+    data: j.data,
+    copies: j.copies,
+    transport: JSON.stringify(j.transport),
+    result: JSON.stringify(j.result),
+    at: j.at,
+  };
+}
+
+function fromStoredJob(row: StoredJob): RecentJob {
+  return {
+    id: row.id,
+    templateName: row.templateName,
+    template: JSON.parse(row.template) as RecentJob["template"],
+    track: row.track as RecentJob["track"],
+    profile: row.profile,
+    data: row.data,
+    copies: row.copies,
+    transport: JSON.parse(row.transport) as RecentJob["transport"],
+    result: JSON.parse(row.result) as RecentJob["result"],
+    at: row.at,
+  };
+}
 
 function jobTime(at: number): string {
   const d = new Date(at);
@@ -60,6 +138,7 @@ function TemplatesScreen({
   onEdit,
   onNew,
   onReprint,
+  storageError,
 }: {
   templates: AppTemplate[];
   recent: RecentJob[];
@@ -69,6 +148,8 @@ function TemplatesScreen({
   onEdit: (t: AppTemplate) => void;
   onNew: () => void;
   onReprint: (job: RecentJob) => void;
+  /** A local-storage failure, in plain words, if there is one. */
+  storageError: string | null;
 }) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
@@ -161,10 +242,15 @@ function TemplatesScreen({
       )}
 
       <div className="flex items-center justify-between gap-4">
-        <p className="text-caption text-muted-foreground">
-          Templates and recent jobs live in memory for now; on-disk saving lands
-          in a later increment.
-        </p>
+        {storageError ? (
+          <p className="text-caption text-danger">
+            Local storage: {storageError}
+          </p>
+        ) : (
+          <p className="text-caption text-muted-foreground">
+            Templates and recent jobs are saved on this computer.
+          </p>
+        )}
         <Button variant="outline" onClick={onNew}>
           New template
         </Button>
@@ -177,11 +263,26 @@ function App() {
   const [templates, setTemplates] = useState<AppTemplate[]>(starters);
   const [recent, setRecent] = useState<RecentJob[]>([]);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
+  const [storageError, setStorageError] = useState<string | null>(null);
   const [view, setView] = useState<View>({ name: "list" });
   const [newOpen, setNewOpen] = useState(false);
 
-  const recordJob = (j: RecentJob) =>
+  // The local store: what the user saved comes back on start.
+  useEffect(() => {
+    loadTemplates()
+      .then((rows) => {
+        if (rows.length > 0) setTemplates((ts) => mergeTemplates(ts, rows));
+      })
+      .catch((e) => setStorageError(String(e)));
+    loadRecentJobs()
+      .then((rows) => setRecent(rows.map(fromStoredJob)))
+      .catch((e) => setStorageError(String(e)));
+  }, []);
+
+  const recordJob = (j: RecentJob) => {
     setRecent((rs) => [j, ...rs].slice(0, RECENT_LIMIT));
+    void rememberJob(toStoredJob(j)).catch((e) => setStorageError(String(e)));
+  };
 
   /** Print the same job again — its frozen template, data and transport. */
   const reprint = async (job: RecentJob) => {
@@ -204,12 +305,14 @@ function App() {
     setReprintingId(null);
   };
 
-  const upsert = (t: AppTemplate) =>
+  const upsert = (t: AppTemplate) => {
     setTemplates((ts) =>
       ts.some((x) => x.id === t.id)
         ? ts.map((x) => (x.id === t.id ? t : x))
         : [...ts, t],
     );
+    saveTemplate(toStoredTemplate(t)).catch((e) => setStorageError(String(e)));
+  };
 
   const newScene = () => {
     const t: AppTemplate = {
@@ -284,6 +387,7 @@ function App() {
             onEdit={editTemplate}
             onNew={() => setNewOpen(true)}
             onReprint={(j) => void reprint(j)}
+            storageError={storageError}
           />
           <Dialog open={newOpen} onOpenChange={setNewOpen}>
             <DialogContent>

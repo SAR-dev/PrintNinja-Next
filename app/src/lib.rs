@@ -8,7 +8,9 @@
 //! work off the UI thread.
 
 mod pipeline;
+mod store;
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use pn_job::JobResult;
@@ -20,6 +22,7 @@ pub use pipeline::{
     factory, load_profiles, prepare_units, print_units, profile_infos, report_of, JobReport,
     PipelineError, PrepareReport, ProfileInfo, Transport, Units,
 };
+pub use store::{Store, StoredJob, StoredTemplate};
 
 /// The printer profiles, loaded once at startup (plan phase 7: the
 /// profile set *is* the printer list).
@@ -117,6 +120,42 @@ async fn print_job(
     report.map_err(|e| e.to_string())
 }
 
+/// The templates as the user has them (plan phase 7: persistence).
+#[tauri::command]
+fn load_templates(state: State<'_, Store>) -> Result<Vec<StoredTemplate>, String> {
+    state.load_templates()
+}
+
+/// Save or replace one template.
+#[tauri::command]
+fn save_template(state: State<'_, Store>, template: StoredTemplate) -> Result<(), String> {
+    state.save_template(&template)
+}
+
+/// The recent jobs, newest first (the kept limit at most).
+#[tauri::command]
+fn load_recent_jobs(state: State<'_, Store>) -> Result<Vec<StoredJob>, String> {
+    state.load_recent_jobs()
+}
+
+/// Remember a job, or refresh its result when it ran again.
+#[tauri::command]
+fn remember_job(state: State<'_, Store>, job: StoredJob) -> Result<(), String> {
+    state.remember_job(&job)
+}
+
+/// The saved settings, key to value.
+#[tauri::command]
+fn load_settings(state: State<'_, Store>) -> Result<BTreeMap<String, String>, String> {
+    state.load_settings()
+}
+
+/// Save or replace one setting.
+#[tauri::command]
+fn save_setting(state: State<'_, Store>, key: String, value: String) -> Result<(), String> {
+    state.save_setting(&key, &value)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -125,9 +164,34 @@ pub fn run() {
             let profiles = load_profiles(&dir)
                 .unwrap_or_else(|e| panic!("the profile set at {} must load: {e}", dir.display()));
             app.manage(AppProfiles { profiles });
+            // The local store: one SQLite file in the app's data
+            // directory. When it cannot open, the app still runs —
+            // the commands say so, and the UI keeps its in-memory
+            // copies and names the failure.
+            let db_path = app
+                .path()
+                .app_data_dir()
+                .expect("the app must have a data directory")
+                .join("printninja.db");
+            match Store::open(&db_path) {
+                Ok(store) => {
+                    app.manage(store);
+                }
+                Err(e) => eprintln!("the local store at {} did not open: {e}", db_path.display()),
+            }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![list_printers, plan_job, print_job])
+        .invoke_handler(tauri::generate_handler![
+            list_printers,
+            plan_job,
+            print_job,
+            load_templates,
+            save_template,
+            load_recent_jobs,
+            remember_job,
+            load_settings,
+            save_setting
+        ])
         .run(tauri::generate_context!())
         .expect("error while running PrintNinja");
 }

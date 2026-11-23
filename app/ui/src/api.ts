@@ -66,7 +66,57 @@ export type Transport =
   | { kind: "spooler"; name: string }
   | { kind: "bluetooth"; address: string };
 
+/**
+ * A saved template row (the persistence increment). The template and
+ * the sample travel as JSON text — the Rust store keeps them as text
+ * columns.
+ */
+export interface StoredTemplate {
+  id: string;
+  name: string;
+  description: string;
+  track: string;
+  template: string;
+  sample: string;
+}
+
+/** A saved recent job: the job frozen at print time, its last result. */
+export interface StoredJob {
+  id: string;
+  templateName: string;
+  template: string;
+  track: string;
+  profile: string;
+  data: string;
+  copies: number;
+  transport: string;
+  result: string;
+  at: number;
+}
+
 export const listPrinters = () => invoke<ProfileInfo[]>("list_printers");
+
+/** The saved templates, or none on first run. */
+export const loadTemplates = () => invoke<StoredTemplate[]>("load_templates");
+
+/** Save or replace one template. */
+export const saveTemplate = (template: StoredTemplate) =>
+  invoke<void>("save_template", { template });
+
+/** The recent jobs, newest first. */
+export const loadRecentJobs = () => invoke<StoredJob[]>("load_recent_jobs");
+
+/** Remember a job, or refresh its result when it ran again. */
+export const rememberJob = (job: StoredJob) =>
+  invoke<void>("remember_job", { job });
+
+/** The saved settings, key to value. */
+export const loadSettings = () =>
+  invoke<Record<string, string>>("load_settings");
+
+/** Save or replace one setting. */
+export const saveSetting = (key: string, value: string) =>
+  invoke<void>("save_setting", { key, value });
 
 /** Prepare: pick the output path, encode, render the preview. */
 export const planJob = (
