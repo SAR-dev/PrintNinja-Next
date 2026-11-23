@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+ab_glyph = { workspace = true }
+pn-scene = { path = "../scene" }
+swash = { workspace = true }
 
 [dev-dependencies]
 golden-harness = { path = "../../tests/golden" }

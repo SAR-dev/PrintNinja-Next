@@ -13,8 +13,9 @@ use crate::geometry::signed_dots;
 /// Draws onto a fixed-size page of 1-bit dots.
 #[derive(Debug)]
 pub struct Renderer {
-    dpi: u32,
-    page: Bitmap,
+    // crate-visible: the text module stamps the page the same way.
+    pub(crate) dpi: u32,
+    pub(crate) page: Bitmap,
 }
 
 impl Renderer {

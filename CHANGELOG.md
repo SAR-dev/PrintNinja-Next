@@ -100,3 +100,14 @@ Unreleased.
   rectangle drawing (filled or framed, clipped to the page). The
   rendered bytes are pinned by a golden case; text, barcodes and PDF
   output join in later increments
+- Phase 5 raster renderer (text increment): text shaping in `pn-render`
+  — OpenType layout (swash) and outline rasterization (ab_glyph) over
+  two embedded OFL variable fonts (Noto Sans, Noto Sans JP), with
+  per-character fallback: a character the primary family does not carry
+  (`.notdef`) is re-shaped in the next embedded font, so Japanese
+  renders on the default family. Left/center/right alignment, faux bold
+  (a second strike offset by 5% of the size) and a 12° faux italic,
+  antialiased coverage thresholded at half a dot, clipped to the text's
+  box and the page. Label and Japanese-line outputs are pinned by
+  golden cases; an unknown font family falls back to the default rather
+  than failing the print
