@@ -376,6 +376,8 @@ Each phase ends in something testable; no phase is "done" until its exit criteri
 
 ### Phase 6 — Native command path
 
+*Done 2026-11-23 — `native()` per thermal language (ZPL, TSPL, CPCL, ESC/POS) with per-element support rules and plain-word fallback reasons, the planner selecting across all three paths with the refusal reason recorded, golden bytes per language, and the native e2e green against the virtual printer (in the current commit, `70356b6`). Real-hardware byte verification lands in phase 10 via the Raw Console; the ESC/POS `GS k` symbology letters and the TSPL text multiplier are the documented items to reconcile on hardware.*
+
 - `native()` per encoder (§5.5): text in the printer's supported fonts, barcodes, lines, boxes; returns "unsupported" when the scene exceeds the printer's native capabilities.
 - Planner selection across all three paths (native → raster → OS print, §5.3) with a recorded reason for each fallback; document media on driver-equipped printers defaults to the OS print path.
 - Golden-byte tests per language and profile; verify the emitted bytes on real printers via the Raw Console.
