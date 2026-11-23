@@ -89,3 +89,14 @@ Unreleased.
   is what every delivery adapter will take; its bytes are pinned by
   golden cases for a batch of labels, an N-page document, and a
   variable-length receipt
+- Phase 5 raster renderer (page model increment): `pn-render` — the
+  in-process renderer's first piece: a 1-bit page packed the way the
+  thermal raster commands expect (eight dots per byte, MSB first),
+  millimetres-to-dots geometry at the printer's dpi (both ends of a
+  shape converted before it is clipped, so a shape that runs off the
+  page keeps its scene-specified size), the physical head width as the
+  cap on the raster (replacing the old app's ESC/POS receipt-width
+  special cases with the profile's `head_width_dots`), and line and
+  rectangle drawing (filled or framed, clipped to the page). The
+  rendered bytes are pinned by a golden case; text, barcodes and PDF
+  output join in later increments

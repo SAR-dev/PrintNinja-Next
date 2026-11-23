@@ -2473,6 +2473,9 @@ dependencies = [
 [[package]]
 name = "pn-render"
 version = "0.0.0"
+dependencies = [
+ "golden-harness",
+]
 
 [[package]]
 name = "pn-scene"
