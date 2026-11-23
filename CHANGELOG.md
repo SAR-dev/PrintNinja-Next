@@ -279,3 +279,13 @@ Unreleased.
   receive — one per record on the browser path, the whole document on
   the pdf path — and the editor's one-record preview shows every page
   of that record
+- Phase 7 UI (recent jobs increment): every job the user prints —
+  success, failure or partial — is remembered with the template content
+  as it was at print time, the data, the copies and the transport, and
+  the template list gains a "recent jobs" section (newest first, the
+  last ten) that shows each job's time, copies and profile with its
+  result in the plan's own vocabulary — including the "N of M" counts
+  for a partial batch. A reprint re-runs the exact same job (the frozen
+  template, even if it is edited later), a failed or wrong-mode job gets
+  a retry instead, and the row shows the new result and time when it
+  finishes

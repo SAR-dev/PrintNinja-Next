@@ -33,32 +33,16 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { JobPreview } from "@/components/job-preview";
-import type { AppTemplate } from "@/templates";
+import { RESULT_WORDS, toneClass } from "@/result-words";
+import type { AppTemplate, RecentJob } from "@/templates";
 
 type TransportKind = "tcp" | "ipp" | "spooler" | "bluetooth";
-
-const RESULT_WORDS: Record<
-  string,
-  { word: string; tone: "success" | "warning" | "danger" }
-> = {
-  confirmed: { word: "Confirmed", tone: "success" },
-  sent_unconfirmed: { word: "Sent, not confirmed", tone: "warning" },
-  partially_printed: { word: "Partially printed", tone: "warning" },
-  failed: { word: "Failed", tone: "danger" },
-  wrong_mode_suspected: { word: "Wrong mode suspected", tone: "danger" },
-};
 
 function ResultCard({ report }: { report: JobReport }) {
   const entry = RESULT_WORDS[report.result] ?? {
     word: report.result,
     tone: "danger",
   };
-  const toneClass =
-    entry.tone === "success"
-      ? "bg-success-soft text-success"
-      : entry.tone === "warning"
-        ? "bg-warning-soft text-warning"
-        : "bg-danger-soft text-danger";
   const detail =
     report.result === "partially_printed" && report.counts
       ? `${report.counts[0]} of ${report.counts[1]} made it.`
@@ -70,7 +54,7 @@ function ResultCard({ report }: { report: JobReport }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         <div
-          className={`rounded-md px-3 py-2 text-body font-medium ${toneClass}`}
+          className={`rounded-md px-3 py-2 text-body font-medium ${toneClass(entry.tone)}`}
         >
           {entry.word}
           {detail ? ` — ${detail}` : ""}
@@ -97,9 +81,12 @@ function ResultCard({ report }: { report: JobReport }) {
 export function PrintScreen({
   starter,
   onBack,
+  onJob,
 }: {
   starter: AppTemplate;
   onBack: () => void;
+  /** The job, with its result — the recent-jobs list remembers it. */
+  onJob: (job: RecentJob) => void;
 }) {
   const [printers, setPrinters] = useState<ProfileInfo[]>([]);
   const [printer, setPrinter] = useState<string>("");
@@ -173,25 +160,33 @@ export function PrintScreen({
   const print = async () => {
     setPrinting(true);
     setJob(null);
+    const copiesN = Number(copies) || 1;
+    let report: JobReport;
     try {
-      setJob(
-        await printJob(
-          templateJson,
-          printer,
-          data,
-          Number(copies) || 1,
-          transport(),
-        ),
+      report = await printJob(
+        templateJson,
+        printer,
+        data,
+        copiesN,
+        transport(),
       );
     } catch (e) {
-      setJob({
-        result: "failed",
-        counts: null,
-        reason: String(e),
-      });
-    } finally {
-      setPrinting(false);
+      report = { result: "failed", counts: null, reason: String(e) };
     }
+    setJob(report);
+    onJob({
+      id: `job-${Date.now().toString(36)}`,
+      templateName: starter.name,
+      template: starter.template,
+      track: starter.track,
+      profile: printer,
+      data,
+      copies: copiesN,
+      transport: transport(),
+      result: report,
+      at: Date.now(),
+    });
+    setPrinting(false);
   };
 
   return (

@@ -5,6 +5,7 @@
  * (SQLite) lands in a later increment — until then the list lives in
  * memory.
  */
+import type { JobReport, Transport } from "@/api";
 import type { Template } from "@/scene/schema";
 
 export interface AppTemplate {
@@ -16,6 +17,28 @@ export interface AppTemplate {
   template: Template;
   /** The data field's starting records, as JSON text. */
   sample: string;
+}
+
+/**
+ * A job the user has printed, remembered for reprinting (plan phase 7:
+ * recent jobs with reprint/retry). The template's content is frozen as
+ * it was at print time, so a reprint prints the same job even if the
+ * template is edited later. Lives in memory for now; SQLite persistence
+ * lands in a later increment.
+ */
+export interface RecentJob {
+  id: string;
+  templateName: string;
+  /** The template as it was when the job printed. */
+  template: Template;
+  track: "scene" | "document";
+  profile: string;
+  data: string;
+  copies: number;
+  transport: Transport;
+  result: JobReport;
+  /** When it last ran, as Date.now(). */
+  at: number;
 }
 
 /** A new, empty document template to start the HTML/CSS track from. */
