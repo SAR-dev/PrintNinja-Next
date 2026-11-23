@@ -352,6 +352,8 @@ Each phase ends in something testable; no phase is "done" until its exit criteri
 
 ### Phase 4 — Scene format and data model
 
+*Done 2026-11-23 — one schema describes all four exit shapes and expansion is deterministic and golden-pinned: schema v1 (`57d91a8`) plus records (JSON/CSV) and `expand()` in the current commit (`8ad50b5`). A batch of N labels with per-label data, an N-page document (a `first` header, flow rows across a cut), and a variable-length receipt (flow rows with a `last` total on each receipt's final cut) all expand to pinned golden pages; a full label or a row taller than a page fails the job naming the record and the field.*
+
 - Scene schema v1 (§5.1): pages (fixed-size or continuous), elements, repeating groups over data arrays, `{{binding}}`s, pagination rules; deterministic serialization; Rust (serde) and TypeScript schema mirrors so preview and editor agree.
 - Template `format` field: `scene` (default, all media kinds) or `html` (`page` media only — the document track, §5.3); validation rejects `html` on thermal media.
 - Data model: records (CSV/JSON) → job expansion. One record → one label (batch = N records); one record → an N-page document; receipt line items flow and paginate.
