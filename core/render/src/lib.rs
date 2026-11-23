@@ -9,9 +9,10 @@
 //!
 //! This increment: the page model ([`Bitmap`]), the
 //! millimetres-to-dots geometry ([`dots_for_mm`], [`fit_to_head`]),
-//! line/rectangle drawing and text shaping with font fallback
-//! ([`Renderer`]).
+//! line/rectangle drawing, text shaping with font fallback and
+//! barcode/QR symbols ([`Renderer`]).
 
+mod barcode;
 mod bitmap;
 mod draw;
 pub mod fonts;
@@ -121,5 +122,34 @@ mod tests {
         r.draw_line(4.0, 5.0, 16.0, 0.25, false);
         r.draw_line(14.0, 2.5, 5.0, 0.25, true);
         golden_harness::assert_matches_golden("render/label-line-rect.bin", r.page().to_bytes());
+    }
+
+    /// A Code 128 with its human-readable line is pinned: the module
+    /// pattern, the quiet zones and the text band must be stable across
+    /// platforms.
+    #[test]
+    fn the_barcode_label_matches_the_pinned_golden_bytes() {
+        let dpi = 203u32;
+        let mut r = Renderer::new(dpi, dots_for_mm(56.0, dpi), dots_for_mm(15.0, dpi));
+        r.draw_barcode(
+            3.0,
+            3.0,
+            50.0,
+            9.0,
+            &pn_scene::BarcodeKind::Code128,
+            "SN-1042-88",
+            true,
+        );
+        golden_harness::assert_matches_golden("render/barcode-code128.bin", r.page().to_bytes());
+    }
+
+    /// A QR code is pinned on its own: the matrix plus its 4-module
+    /// quiet zone is the whole picture.
+    #[test]
+    fn the_qr_code_matches_the_pinned_golden_bytes() {
+        let dpi = 203u32;
+        let mut r = Renderer::new(dpi, dots_for_mm(30.0, dpi), dots_for_mm(30.0, dpi));
+        r.draw_qr(2.0, 2.0, 24.0, "https://example.com/o/1042");
+        golden_harness::assert_matches_golden("render/qr.bin", r.page().to_bytes());
     }
 }

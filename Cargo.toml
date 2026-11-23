@@ -36,3 +36,5 @@ thiserror = "2"
 toml = "0.8"
 swash = "0.2"
 ab_glyph = "0.2"
+barcoders = { version = "2", default-features = false }
+qrcode = { version = "0.14", default-features = false }

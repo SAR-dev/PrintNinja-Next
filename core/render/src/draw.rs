@@ -46,7 +46,7 @@ impl Renderer {
 
     /// Fill the intersection of `[x0, x1) × [y0, y1)` (dots) with the
     /// page. Ranges may extend off the page; they are clipped.
-    fn fill(&mut self, x0: i64, y0: i64, x1: i64, y1: i64) {
+    pub(crate) fn fill(&mut self, x0: i64, y0: i64, x1: i64, y1: i64) {
         if x1 <= x0 || y1 <= y0 {
             return;
         }

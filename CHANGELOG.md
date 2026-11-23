@@ -111,3 +111,16 @@ Unreleased.
   box and the page. Label and Japanese-line outputs are pinned by
   golden cases; an unknown font family falls back to the default rather
   than failing the print
+- Phase 5 raster renderer (barcode increment): barcode and QR symbols in
+  `pn-render` — the same encoders the old app's print renderer used
+  (Code 128, Code 39, Code 93, EAN-13, UPC-A, ITF, and QR at error
+  correction M), so preview and print agree on what a symbol is. The
+  module pattern is scaled to the element's box with the quiet zone
+  included (10 modules each side for linear codes, 4 for QR), and a
+  `show_text` band under the bars carries the value in centered text. A
+  value a symbology cannot carry — a wrong EAN check digit, an odd ITF
+  length, non-ASCII Code 128 — draws nothing rather than failing the
+  job. Every symbology is proven scannable: the rendered page is
+  decoded back to the value by a multi-format reader (rxing,
+  test-only), and the Code 128 label and the QR code are pinned by
+  golden cases
