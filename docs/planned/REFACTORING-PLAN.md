@@ -7,11 +7,12 @@
 - **Greenfield, new repo.** The current PrintNinja stays as-is and keeps shipping; the rewrite lives in a new repository.
 - **v1 scope: core print flow, local settings, local print API, template publishing.** No phone↔PC sharing. The local print API (phase 8) and template publishing (phase 9) ship with the first release so printing works from other apps and sites; phone↔PC sharing stays out of scope for the rewrite.
 - **Two template tracks, split by media kind (decided 2026-11-20).** A template has a `format`: `scene` (JSON, the default) or `html` (HTML/CSS). `html` is allowed **only for `page` media** (document printers), rendered to PDF through a headless browser and sent via the OS print path — this keeps the current HTML/CSS design system for rich document design. Thermal media (`label`, `continuous`) is **scene-format only**, rendered entirely in Rust (native commands or raster) with no browser. The browser is therefore kept only on the document track; the §2 reliability story for thermal printing is unchanged.
-- **Dropped features (decided 2026-11-20).** Branding/white-labeling (custom name and logo), the HTML/Handlebars template import, template version history (compare/restore) and the per-template notes tab, automatic network printer discovery, the Android background service, and data from web links (JSON over HTTP) with the private-network toggle. HTML/CSS is kept only as the **document track** (`page` media, the two-track decision above) — the HTML/Handlebars *import* (a one-way converter migrating existing HTML templates into scenes) is still out of scope; existing PrintNinja HTML templates are not migrated to scenes.
+- **Dropped features (decided 2026-11-20).** Branding/white-labeling (custom name and logo), the HTML/Handlebars template import, template version history (compare/restore) and the per-template notes tab, automatic network printer discovery, and data from web links (JSON over HTTP) with the private-network toggle. HTML/CSS is kept only as the **document track** (`page` media, the two-track decision above) — the HTML/Handlebars *import* (a one-way converter migrating existing HTML templates into scenes) is still out of scope; existing PrintNinja HTML templates are not migrated to scenes.
 - **Reduced for v1 (decided 2026-11-20).** Job history is minimal: a recent-jobs list with per-job reprint/retry; filters, batch reprint, CSV export and auto-cleanup are post-v1. v1 ships English only; i18n and the WCAG 2.1 AA target are decided post-v1. Tray icon and start-with-computer stay in scope.
 - **New UI, minimal first.** The React frontend and designer are rebuilt against the new core; a minimal working UI ships before the full designer. UI decisions (decided 2026-11-20): the existing design system is **ported** into the new repo (Slate teal token set, light/dark, density, the Radix-based ui components) and rebuilt on top of; one template list with a track badge per template — "new template" chooses the track (label/receipt → scene editor, document → HTML/CSS editor); the v1 HTML/CSS editor is **code + paper size + sample data + live browser preview**, with a richer CSS designer toolbar post-v1.
 - **Multi-page from day one.** The scene format supports multiple pages, variable-length content (receipt line items that flow and paginate) and batch printing (N labels, per-label data) from v1. Verification states include partial success.
 - **No macOS, permanently.** The rewrite targets Windows, Linux and Android only; macOS is not a future target either. The current PrintNinja remains the macOS option until it is retired.
+- **Android background service restored (decided 2026-11-23).** Android gets a background print service, just like the PC's local print API (phase 8): third-party apps submit jobs to it and print through it, not only from the app UI. This reverses its drop in the 2026-11-20 decisions above; the service is built in phase 11.
 
 ## 1. Goal and priority
 
@@ -418,9 +419,9 @@ Each phase ends in something testable; no phase is "done" until its exit criteri
 ### Phase 11 — Android
 
 - Android transport adapters (Bluetooth, USB, network, Android print service where a driver exists) and packaging; the renderer, planner, profiles and encoders are shared unchanged.
-- No Android background service (decided 2026-11-20); printing is started from the app UI.
+- **Background print service (decided 2026-11-23).** The app runs as a background service third-party apps can print through — the Android counterpart of the PC local print API (phase 8): other apps submit jobs to it and PrintNinja renders, plans and delivers them. This replaces the earlier 2026-11-20 "no background service" decision; printing is no longer limited to the app UI.
 
-**Exit:** Android prints a multi-page document and a batch of labels.
+**Exit:** Android prints a multi-page document and a batch of labels, including one submitted by a third-party app through the background service.
 
 ## 9. Risks and open questions
 
