@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { JobPreview } from "@/components/job-preview";
-import type { StarterTemplate } from "@/templates";
+import type { AppTemplate } from "@/templates";
 
 type TransportKind = "tcp" | "ipp" | "spooler" | "bluetooth";
 
@@ -98,7 +98,7 @@ export function PrintScreen({
   starter,
   onBack,
 }: {
-  starter: StarterTemplate;
+  starter: AppTemplate;
   onBack: () => void;
 }) {
   const [printers, setPrinters] = useState<ProfileInfo[]>([]);

@@ -1,12 +1,13 @@
 /**
- * The starter templates the app ships with (plan phase 7: the
- * first-run path is template → data → print, under a minute).
- * Local template storage (SQLite) lands in a later increment —
- * until then these are the list.
+ * The templates the app knows: the starters it ships with (plan phase
+ * 7: the first-run path is template → data → print, under a minute)
+ * plus the ones the user edits or creates. Local template storage
+ * (SQLite) lands in a later increment — until then the list lives in
+ * memory.
  */
 import type { Template } from "@/scene/schema";
 
-export interface StarterTemplate {
+export interface AppTemplate {
   id: string;
   name: string;
   description: string;
@@ -17,7 +18,7 @@ export interface StarterTemplate {
   sample: string;
 }
 
-export const starters: StarterTemplate[] = [
+export const starters: AppTemplate[] = [
   {
     id: "parts-label",
     name: "Parts label",

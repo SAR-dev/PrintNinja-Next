@@ -247,3 +247,16 @@ Unreleased.
   plan's own vocabulary — confirmed, sent-not-confirmed, partially
   printed with the counts, failed with the reason, or wrong mode
   suspected
+- Phase 7 UI (scene editor v1): scene templates are editable — the
+  page is drawn as a canvas where elements are clicked to select and
+  dragged to move (0.1 mm steps), with the element list to add or
+  delete text, lines, rectangles, barcodes, QR, images, and repeating
+  groups bound to a list field; the selected element's properties
+  (position, size, content with `{{bindings}}`, text size/bold/
+  italic/align, barcode kind, value, fill, page placement, group
+  column width, row gap and binding); media settings (label, roll, or
+  page dimensions in mm); and the declared data fields follow the
+  bindings the elements actually use. The editor previews one record
+  on the chosen printer with the same path as the print, "new
+  template" chooses the track (the HTML/CSS document editor is the
+  next increment), and the scene rows in the list gain an Edit button
