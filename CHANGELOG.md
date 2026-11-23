@@ -427,3 +427,25 @@ Unreleased.
   `serve` applies whatever is pending before the first request, and
   a fresh database self-initializes from the first migration, which
   is embedded at compile time
+- Phase 9 registry (deployable package increment): the registry is
+  hostable on its own, the way the old code shipped — a Docker image
+  (`server/Dockerfile`, `docker build -f server/Dockerfile .`) with
+  the binary and its migrations baked in, the database on a `/data`
+  volume, and the terminal commands reachable through
+  `docker exec`. Any shared registry URL works (the app's registry
+  setting). CI gained the old repo's server jobs: `server-check`
+  (fmt/clippy/tests for `pn-server`, now part of the rust-check
+  gate), `server-image` (the Docker image builds), `server-e2e`
+  (the image through the full HTTP lifecycle — account, login,
+  publish, gallery, fetch, save, change feed with tombstone,
+  unpublish, logout — via `server/e2e.py`, stdlib-only python3), and
+  `server-publish` (pushes the image to GHCR tagged by commit sha and
+  `latest` on every push to main)
+- User documentation: the README rewritten as a user guide (what it
+  is, how a print works, the printers and their transports, the two
+  template tracks, the registry, the local API and deep link, an
+  honest pre-release state) with the developer section kept at the
+  bottom, plus `docs/REGISTRY.md` — using the community registry from
+  the app (accounts, publishing, saving, offline sync, the shared
+  server URL) and hosting one (Docker image, terminal database
+  commands, configuration, the HTTP surface, upgrading)
