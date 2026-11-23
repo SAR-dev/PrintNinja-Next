@@ -1,8 +1,10 @@
 //! The registry's HTTP surface. Increment A: health, accounts (by
 //! handle), sessions, password change and handle change. Increment B:
 //! publishing a template and the community gallery (browse, search,
-//! fetch, unpublish). Later increments add saving and sync on the same
-//! router.
+//! fetch, unpublish). Increment C: saving published templates to a
+//! per-account list, with the full documents, so an app can keep
+//! editable local copies. Later increments add offline-first sync on
+//! the same router.
 //!
 //! The router is built over [`ServerState`] and held apart from the
 //! socket, so the endpoints are tested with `oneshot` — no port is
@@ -44,6 +46,11 @@ pub fn router(state: ServerState) -> Router {
             "/v1/templates/{owner}/{slug}",
             get(fetch_template).delete(unpublish_template),
         )
+        .route(
+            "/v1/templates/{owner}/{slug}/save",
+            post(save_template).delete(unsave_template),
+        )
+        .route("/v1/saved", get(list_saved))
         .with_state(state)
 }
 
@@ -330,6 +337,69 @@ async fn fetch_template(
     match state.store.find_template(&key, &slug) {
         Ok(Some(t)) => Json(json!({ "template": t })).into_response(),
         Ok(None) => err(StatusCode::NOT_FOUND, "no published template there"),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+    }
+}
+
+/// Add a published template to this account's saved list. Idempotent —
+/// saving twice changes nothing. The account keeps the full documents,
+/// so an app can materialize editable local copies offline.
+async fn save_template(
+    State(state): State<ServerState>,
+    user: AuthedUser,
+    Path((owner, slug)): Path<(String, String)>,
+) -> Response {
+    let key = handle_key(&owner);
+    let slug = slug.trim().to_lowercase();
+    match state.store.find_template(&key, &slug) {
+        Ok(Some(t)) => match state.store.save_template(&user.id, &t.id, now_unix()) {
+            Ok(_) => Json(json!({ "ok": true })).into_response(),
+            Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+        },
+        Ok(None) => err(StatusCode::NOT_FOUND, "no published template there"),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+    }
+}
+
+/// Take a published template off this account's saved list. Idempotent,
+/// like the save.
+async fn unsave_template(
+    State(state): State<ServerState>,
+    user: AuthedUser,
+    Path((owner, slug)): Path<(String, String)>,
+) -> Response {
+    let key = handle_key(&owner);
+    let slug = slug.trim().to_lowercase();
+    match state.store.find_template(&key, &slug) {
+        Ok(Some(t)) => match state.store.unsave_template(&user.id, &t.id) {
+            Ok(_) => Json(json!({ "ok": true })).into_response(),
+            Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+        },
+        // Not published (unpublished in the meantime): a plain 404,
+        // same as the fetch — the app treats it as "already gone".
+        Ok(None) => err(StatusCode::NOT_FOUND, "no published template there"),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SavedQuery {
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+/// This account's saved templates, newest save first, with the full
+/// documents.
+async fn list_saved(
+    State(state): State<ServerState>,
+    user: AuthedUser,
+    Query(q): Query<SavedQuery>,
+) -> Response {
+    let limit = q.limit.unwrap_or(20).clamp(1, 100) as i64;
+    let offset = q.offset.unwrap_or(0).min(10_000) as i64;
+    match state.store.list_saved(&user.id, limit, offset) {
+        Ok((items, total)) => Json(json!({ "items": items, "total": total })).into_response(),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
 }
@@ -1074,6 +1144,172 @@ mod tests {
                 "/v1/templates/jane/shipping-label",
                 None,
                 None
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    async fn save_call(
+        app: &Router,
+        token: Option<&str>,
+        owner: &str,
+        slug: &str,
+    ) -> (StatusCode, Value) {
+        call(
+            app,
+            Method::POST,
+            &format!("/v1/templates/{owner}/{slug}/save"),
+            None,
+            token,
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn saving_a_published_template_lists_it_back_with_documents() {
+        let app = router(state());
+        register(&app, "jane", "supersecret1").await;
+        register(&app, "john", "supersecret1").await;
+        let tj = token_for(&app, "jane", "supersecret1").await;
+        let tjo = token_for(&app, "john", "supersecret1").await;
+        assert_eq!(
+            publish(
+                &app,
+                Some(&tj),
+                "Shipping",
+                "shipping-label",
+                label_template()
+            )
+            .await
+            .0,
+            StatusCode::CREATED
+        );
+
+        // Saving requires a session.
+        assert_eq!(
+            save_call(&app, None, "jane", "shipping-label").await.0,
+            StatusCode::UNAUTHORIZED
+        );
+        // An unknown template is a 404.
+        assert_eq!(
+            save_call(&app, Some(&tjo), "jane", "nope").await.0,
+            StatusCode::NOT_FOUND
+        );
+
+        let (s, v) = save_call(&app, Some(&tjo), "jane", "shipping-label").await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["ok"], true);
+        // Saving twice changes nothing.
+        assert_eq!(
+            save_call(&app, Some(&tjo), "jane", "shipping-label")
+                .await
+                .0,
+            StatusCode::OK
+        );
+
+        // The saved list is the caller's, and carries the full documents
+        // — everything an app needs to open a local copy.
+        let (s, v) = call(&app, Method::GET, "/v1/saved", None, Some(&tjo)).await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["total"], 1);
+        assert_eq!(v["items"][0]["slug"], "shipping-label");
+        assert_eq!(v["items"][0]["owner"], "jane");
+        assert!(v["items"][0]["template"].is_string());
+        assert!(v["items"][0]["sample"].is_string());
+
+        // jane's own list is empty — saving is per account.
+        let (s, v) = call(&app, Method::GET, "/v1/saved", None, Some(&tj)).await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["total"], 0);
+    }
+
+    #[tokio::test]
+    async fn unsaving_is_idempotent_and_unpublishing_drops_saves() {
+        let app = router(state());
+        register(&app, "jane", "supersecret1").await;
+        register(&app, "john", "supersecret1").await;
+        let tj = token_for(&app, "jane", "supersecret1").await;
+        let tjo = token_for(&app, "john", "supersecret1").await;
+        assert_eq!(
+            publish(
+                &app,
+                Some(&tj),
+                "Shipping",
+                "shipping-label",
+                label_template()
+            )
+            .await
+            .0,
+            StatusCode::CREATED
+        );
+        assert_eq!(
+            save_call(&app, Some(&tjo), "jane", "shipping-label")
+                .await
+                .0,
+            StatusCode::OK
+        );
+
+        // Unsave twice: the second is a plain ok, like the save.
+        assert_eq!(
+            call(
+                &app,
+                Method::DELETE,
+                "/v1/templates/jane/shipping-label/save",
+                None,
+                Some(&tjo)
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+        assert_eq!(
+            call(
+                &app,
+                Method::DELETE,
+                "/v1/templates/jane/shipping-label/save",
+                None,
+                Some(&tjo)
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+        assert_eq!(
+            call(&app, Method::GET, "/v1/saved", None, Some(&tjo))
+                .await
+                .1["total"],
+            0
+        );
+
+        // Re-save, then the owner unpublishes — the save goes with it.
+        assert_eq!(
+            save_call(&app, Some(&tjo), "jane", "shipping-label")
+                .await
+                .0,
+            StatusCode::OK
+        );
+        call(
+            &app,
+            Method::DELETE,
+            "/v1/templates/jane/shipping-label",
+            None,
+            Some(&tj),
+        )
+        .await;
+        let v = call(&app, Method::GET, "/v1/saved", None, Some(&tjo))
+            .await
+            .1;
+        assert_eq!(v["total"], 0);
+        // Unsaving the now-gone template is a 404, like the fetch.
+        assert_eq!(
+            call(
+                &app,
+                Method::DELETE,
+                "/v1/templates/jane/shipping-label/save",
+                None,
+                Some(&tjo)
             )
             .await
             .0,

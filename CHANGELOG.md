@@ -379,3 +379,11 @@ Unreleased.
   unknown slug or someone else's template is the same 404, so the
   endpoint does not say which slugs other accounts have, even when
   they share a slug with the caller
+- Phase 9 registry server (saving increment): a per-account saved
+  list. `POST /v1/templates/{owner}/{slug}/save` pins a published
+  template to the caller's list (idempotent — saving twice changes
+  nothing), `DELETE` on the same path takes it off, and `GET
+  /v1/saved` lists the caller's saves, newest save first, with the
+  full documents and sample, so an app can open each one as an
+  editable local copy and print it offline; when the owner
+  unpublishes, the saves that point at it go with the row

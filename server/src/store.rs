@@ -1,6 +1,7 @@
 //! The registry database: accounts and sessions (increment A), published
-//! templates (increment B). Later increments add saved templates and the
-//! offline-first sync state on top of the same connection.
+//! templates (increment B), saved templates (increment C). Later
+//! increments add the offline-first sync state on top of the same
+//! connection.
 //!
 //! `rusqlite::Connection` is not `Sync`, and the router's state is shared
 //! across tasks, so the lock is part of the type (the same pattern the
@@ -129,6 +130,13 @@ CREATE TABLE IF NOT EXISTS templates (
 );
 CREATE INDEX IF NOT EXISTS templates_track ON templates (track);
 CREATE INDEX IF NOT EXISTS templates_owner ON templates (owner_id);
+CREATE TABLE IF NOT EXISTS saved_templates (
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    template_id TEXT NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
+    saved_at    INTEGER NOT NULL,
+    PRIMARY KEY (user_id, template_id)
+);
+CREATE INDEX IF NOT EXISTS saved_templates_template ON saved_templates (template_id);
 "#;
 
 pub struct Store {
@@ -528,13 +536,103 @@ impl Store {
     /// Unpublish a template. Returns how many rows went; 0 when the
     /// account has nothing under that slug.
     pub fn delete_template(&self, owner_id: &str, slug: &str) -> Result<u64, String> {
+        let conn = self.lock();
+        // Saved copies die with the template. Done explicitly — SQLite
+        // foreign-key enforcement is a per-connection pragma a remote
+        // backend may not share, and the ON DELETE CASCADE clause is
+        // the backstop, not the mechanism.
+        conn.execute(
+            "DELETE FROM saved_templates WHERE template_id IN (
+                 SELECT id FROM templates WHERE owner_id = ?1 AND slug = ?2)",
+            params![owner_id, slug],
+        )
+        .map_err(|e| e.to_string())?;
+        conn.execute(
+            "DELETE FROM templates WHERE owner_id = ?1 AND slug = ?2",
+            params![owner_id, slug],
+        )
+        .map(|n| n as u64)
+        .map_err(|e| e.to_string())
+    }
+
+    /// Mark a published template as saved by an account. Idempotent:
+    /// saving the same template twice changes nothing.
+    pub fn save_template(
+        &self,
+        user_id: &str,
+        template_id: &str,
+        saved_at: i64,
+    ) -> Result<u64, String> {
         self.lock()
             .execute(
-                "DELETE FROM templates WHERE owner_id = ?1 AND slug = ?2",
-                params![owner_id, slug],
+                "INSERT OR IGNORE INTO saved_templates (user_id, template_id, saved_at)
+                 VALUES (?1, ?2, ?3)",
+                params![user_id, template_id, saved_at],
             )
             .map(|n| n as u64)
             .map_err(|e| e.to_string())
+    }
+
+    /// Stop saving a published template. Idempotent: unsaving something
+    /// not saved changes nothing.
+    pub fn unsave_template(&self, user_id: &str, template_id: &str) -> Result<u64, String> {
+        self.lock()
+            .execute(
+                "DELETE FROM saved_templates WHERE user_id = ?1 AND template_id = ?2",
+                params![user_id, template_id],
+            )
+            .map(|n| n as u64)
+            .map_err(|e| e.to_string())
+    }
+
+    /// Everything an account has saved, with the full documents — the
+    /// app materializes its editable local copies from this list.
+    /// Newest save first.
+    pub fn list_saved(
+        &self,
+        user_id: &str,
+        limit: i64,
+        offset: i64,
+    ) -> Result<(Vec<Template>, i64), String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT t.id, t.slug, t.name, u.handle, t.readme, t.track,
+                        t.template, t.sample, t.created_at, t.updated_at
+                 FROM saved_templates s
+                 JOIN templates t ON t.id = s.template_id
+                 JOIN users u ON u.id = t.owner_id
+                 WHERE s.user_id = ?1
+                 ORDER BY s.saved_at DESC, t.id DESC
+                 LIMIT ?2 OFFSET ?3",
+            )
+            .map_err(|e| e.to_string())?;
+        let items = stmt
+            .query_map(params![user_id, limit, offset], |r| {
+                Ok(Template {
+                    id: r.get(0)?,
+                    slug: r.get(1)?,
+                    name: r.get(2)?,
+                    owner: r.get(3)?,
+                    readme: r.get(4)?,
+                    track: r.get(5)?,
+                    template: Some(r.get(6)?),
+                    sample: Some(r.get(7)?),
+                    created_at: r.get(8)?,
+                    updated_at: r.get(9)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        let total: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM saved_templates WHERE user_id = ?1",
+                params![user_id],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        Ok((items, total))
     }
 }
 
@@ -799,6 +897,85 @@ mod tests {
         assert!(s.find_template("jane", "shipping").unwrap().is_none());
         // Idempotent: a second delete removes nothing.
         assert_eq!(s.delete_template("u1", "shipping").unwrap(), 0);
+    }
+
+    #[test]
+    fn a_template_is_saved_found_and_unsaved() {
+        let s = store();
+        s.create_user("u1", "jane", "jane", "h", 0).unwrap();
+        s.create_user("u2", "john", "john", "h", 0).unwrap();
+        s.create_template(
+            "u1",
+            &new_template("t1", "shipping", "Shipping label", "For parcels", "scene"),
+            10,
+        )
+        .unwrap();
+
+        // john saves jane's template.
+        assert_eq!(s.save_template("u2", "t1", 20).unwrap(), 1);
+        // Saving twice changes nothing.
+        assert_eq!(s.save_template("u2", "t1", 21).unwrap(), 0);
+
+        // The saved list carries the full documents, owner included.
+        let (items, total) = s.list_saved("u2", 20, 0).unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(items[0].id, "t1");
+        assert_eq!(items[0].owner, "jane");
+        assert_eq!(items[0].template.as_deref(), Some("{}"));
+        assert_eq!(items[0].sample.as_deref(), Some("[]"));
+
+        // jane did not save it, so her list is empty.
+        assert_eq!(s.list_saved("u1", 20, 0).unwrap().0.len(), 0);
+
+        // Unsave is idempotent too.
+        assert_eq!(s.unsave_template("u2", "t1").unwrap(), 1);
+        assert_eq!(s.unsave_template("u2", "t1").unwrap(), 0);
+        assert_eq!(s.list_saved("u2", 20, 0).unwrap().0.len(), 0);
+    }
+
+    #[test]
+    fn a_saved_template_list_orders_newest_save_first() {
+        let s = store();
+        s.create_user("u1", "jane", "jane", "h", 0).unwrap();
+        s.create_user("u2", "john", "john", "h", 0).unwrap();
+        for (id, saved_at) in [("a", 10i64), ("b", 30), ("c", 20)] {
+            s.create_template("u1", &new_template(id, id, id, "", "scene"), saved_at)
+                .unwrap();
+        }
+        // Saved in a different order than they were published.
+        s.save_template("u2", "a", 100).unwrap();
+        s.save_template("u2", "c", 300).unwrap();
+        s.save_template("u2", "b", 200).unwrap();
+        let (items, total) = s.list_saved("u2", 20, 0).unwrap();
+        assert_eq!(total, 3);
+        assert_eq!(
+            items.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+            ["c", "b", "a"],
+            "newest save first"
+        );
+        // Paging.
+        let (items, _) = s.list_saved("u2", 2, 0).unwrap();
+        assert_eq!(items.len(), 2);
+        let (items, _) = s.list_saved("u2", 2, 2).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "a");
+    }
+
+    #[test]
+    fn unpublishing_drops_the_saves_that_point_at_it() {
+        let s = store();
+        s.create_user("u1", "jane", "jane", "h", 0).unwrap();
+        s.create_user("u2", "john", "john", "h", 0).unwrap();
+        s.create_template("u1", &new_template("t1", "shipping", "A", "", "scene"), 10)
+            .unwrap();
+        s.save_template("u2", "t1", 20).unwrap();
+        assert_eq!(s.list_saved("u2", 20, 0).unwrap().0.len(), 1);
+
+        // jane unpublishes; john's save must go with the row.
+        s.delete_template("u1", "shipping").unwrap();
+        let (items, total) = s.list_saved("u2", 20, 0).unwrap();
+        assert_eq!(total, 0);
+        assert_eq!(items.len(), 0);
     }
 
     #[test]
