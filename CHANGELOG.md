@@ -364,3 +364,18 @@ Unreleased.
   logins prune each account to its newest 20 sessions. The store is
   plain portable SQLite on a local file, so the production backend can
   be Turso (cloud SQLite) without the SQL changing
+- Phase 9 registry server (publishing increment): the community
+  gallery. `POST /v1/templates` publishes a template — checked with
+  the same `pn_scene` parser and validation the app runs, so the
+  registry never renders or prints and everything it accepts is
+  something the app can open — with a name, a per-account slug
+  (1–64 of a-z 0-9 -, unique per account, not globally) and an
+  optional sample of starting records; `GET /v1/templates` browses
+  the gallery with a search over name, readme and owner plus a track
+  filter and paging, newest first, no sign-in needed to look around;
+  `GET /v1/templates/{owner}/{slug}` (case-insensitive on the owner)
+  returns the full document and sample, everything an app needs to
+  save it as a local copy; `DELETE` unpublishes — owner only, and an
+  unknown slug or someone else's template is the same 404, so the
+  endpoint does not say which slugs other accounts have, even when
+  they share a slug with the caller

@@ -1,15 +1,18 @@
 //! The registry's HTTP surface. Increment A: health, accounts (by
-//! handle), sessions, password change and handle change. Later
-//! increments add publishing, the gallery and sync on the same router.
+//! handle), sessions, password change and handle change. Increment B:
+//! publishing a template and the community gallery (browse, search,
+//! fetch, unpublish). Later increments add saving and sync on the same
+//! router.
 //!
 //! The router is built over [`ServerState`] and held apart from the
 //! socket, so the endpoints are tested with `oneshot` — no port is
 //! bound.
 
-use axum::extract::{Json, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
+use axum::Json;
 use axum::Router;
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -19,7 +22,8 @@ use crate::auth::{
     self, handle_key, handle_problem, password_problem, verify_password, AuthedUser,
     MAX_SESSIONS_PER_USER, SESSION_TTL,
 };
-use crate::store::{now_unix, UserError};
+use crate::store::{now_unix, NewTemplate, TemplateError, UserError};
+use crate::template::{check_template, name_problem, readme_problem, sample_problem, slug_problem};
 use crate::ServerState;
 
 /// The router for the registry.
@@ -32,6 +36,14 @@ pub fn router(state: ServerState) -> Router {
         .route("/v1/me", get(me))
         .route("/v1/password/change", post(change_password))
         .route("/v1/handle", post(change_handle))
+        .route(
+            "/v1/templates",
+            post(publish_template).get(gallery_templates),
+        )
+        .route(
+            "/v1/templates/{owner}/{slug}",
+            get(fetch_template).delete(unpublish_template),
+        )
         .with_state(state)
 }
 
@@ -206,6 +218,144 @@ async fn change_handle(
     }
     match state.store.update_handle(&user.id, &handle, &key) {
         Ok(()) => Json(json!({ "handle": handle })).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PublishReq {
+    name: String,
+    slug: String,
+    #[serde(default)]
+    readme: String,
+    template: Value,
+    /// Starting records for the data fields; an empty list when absent.
+    #[serde(default)]
+    sample: Option<Value>,
+}
+
+/// Publish a template to the community gallery. The document is checked
+/// against the scene schema — never rendered or printed.
+async fn publish_template(
+    State(state): State<ServerState>,
+    user: AuthedUser,
+    Json(req): Json<PublishReq>,
+) -> Response {
+    let name = req.name.trim().to_string();
+    if let Some(msg) = name_problem(&name) {
+        return err(StatusCode::BAD_REQUEST, &msg);
+    }
+    let slug = req.slug.trim().to_string();
+    if let Some(msg) = slug_problem(&slug) {
+        return err(StatusCode::BAD_REQUEST, &msg);
+    }
+    if let Some(msg) = readme_problem(&req.readme) {
+        return err(StatusCode::BAD_REQUEST, &msg);
+    }
+    let (track, template_text) = match check_template(&req.template) {
+        Ok(t) => t,
+        Err(e) => return err(StatusCode::BAD_REQUEST, &e),
+    };
+    let sample = req.sample.unwrap_or(Value::Array(Vec::new()));
+    if let Some(msg) = sample_problem(&sample) {
+        return err(StatusCode::BAD_REQUEST, &msg);
+    }
+    let sample_text = match serde_json::to_string(&sample) {
+        Ok(t) => t,
+        Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    };
+    let new = NewTemplate {
+        id: Uuid::new_v4().to_string(),
+        slug,
+        name,
+        readme: req.readme,
+        track,
+        template: template_text,
+        sample: sample_text,
+    };
+    let now = now_unix();
+    match state.store.create_template(&user.id, &new, now) {
+        Ok(()) => (
+            StatusCode::CREATED,
+            Json(json!({
+                "id": new.id,
+                "slug": new.slug,
+                "owner": user.handle
+            })),
+        )
+            .into_response(),
+        Err(TemplateError::SlugExists) => err(
+            StatusCode::CONFLICT,
+            "that slug is already taken on this account",
+        ),
+        Err(TemplateError::Other(e)) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GalleryQuery {
+    q: Option<String>,
+    track: Option<String>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+/// The community gallery: browse and search published templates. No
+/// sign-in needed to look around.
+async fn gallery_templates(
+    State(state): State<ServerState>,
+    Query(q): Query<GalleryQuery>,
+) -> Response {
+    let limit = q.limit.unwrap_or(20).clamp(1, 100) as i64;
+    let offset = q.offset.unwrap_or(0).min(10_000) as i64;
+    match state
+        .store
+        .list_templates(q.q.as_deref(), q.track.as_deref(), limit, offset)
+    {
+        Ok((items, total)) => Json(json!({ "items": items, "total": total })).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+    }
+}
+
+/// One published template by the owner's handle and slug, with its full
+/// document — everything an app needs to save it as a local copy.
+async fn fetch_template(
+    State(state): State<ServerState>,
+    Path((owner, slug)): Path<(String, String)>,
+) -> Response {
+    let key = handle_key(&owner);
+    let slug = slug.trim().to_lowercase();
+    match state.store.find_template(&key, &slug) {
+        Ok(Some(t)) => Json(json!({ "template": t })).into_response(),
+        Ok(None) => err(StatusCode::NOT_FOUND, "no published template there"),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+    }
+}
+
+/// Unpublish a template. Owner only, and an unknown slug is a 404, so
+/// the endpoint does not say which slugs other accounts have.
+async fn unpublish_template(
+    State(state): State<ServerState>,
+    user: AuthedUser,
+    Path((owner, slug)): Path<(String, String)>,
+) -> Response {
+    let key = handle_key(&owner);
+    let slug = slug.trim().to_lowercase();
+    match state.store.find_template(&key, &slug) {
+        // The row the URL names must belong to the caller — handles are
+        // unique up to case, so the match keys decide. Anything else is
+        // the same 404, so the endpoint does not say which slugs other
+        // accounts have (even when they share a slug with the caller).
+        Ok(Some(t)) if handle_key(&t.owner) == handle_key(&user.handle) => {
+            match state.store.delete_template(&user.id, &slug) {
+                Ok(_) => Json(json!({ "ok": true })).into_response(),
+                Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+            }
+        }
+        // Not on this account (or gone): a plain 404, either way.
+        Ok(_) => err(StatusCode::NOT_FOUND, "no published template there"),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, &e),
     }
 }
@@ -554,5 +704,380 @@ mod tests {
         )
         .await;
         assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    /// A scene template that passes the registry's checks.
+    fn label_template() -> Value {
+        json!({
+            "media": { "kind": "label", "width_mm": 58.0, "height_mm": 40.0 },
+            "fields": [ { "name": "name" } ],
+            "elements": [
+                {
+                    "type": "text",
+                    "at": { "x_mm": 2.0, "y_mm": 2.0 },
+                    "size": { "w_mm": 50.0, "h_mm": 6.0 },
+                    "content": "Hi {{name}}",
+                    "style": { "size_mm": 5.0 }
+                }
+            ]
+        })
+    }
+
+    async fn publish(
+        app: &Router,
+        token: Option<&str>,
+        name: &str,
+        slug: &str,
+        template: Value,
+    ) -> (StatusCode, Value) {
+        call(
+            app,
+            Method::POST,
+            "/v1/templates",
+            Some(json!({
+                "name": name,
+                "slug": slug,
+                "template": template,
+                "sample": [ { "name": "Jane" } ]
+            })),
+            token,
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn publishing_a_valid_template_stores_and_returns_it() {
+        let app = router(state());
+        register(&app, "jane", "supersecret1").await;
+        let t = token_for(&app, "jane", "supersecret1").await;
+
+        let (s, v) = publish(
+            &app,
+            Some(&t),
+            "Shipping",
+            "shipping-label",
+            label_template(),
+        )
+        .await;
+        assert_eq!(s, StatusCode::CREATED);
+        assert!(v["id"].is_string());
+        assert_eq!(v["slug"], "shipping-label");
+        assert_eq!(v["owner"], "jane");
+
+        // The gallery finds it without signing in.
+        let (s, v) = call(&app, Method::GET, "/v1/templates", None, None).await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["total"], 1);
+        assert_eq!(v["items"][0]["slug"], "shipping-label");
+        assert_eq!(v["items"][0]["name"], "Shipping");
+        assert_eq!(v["items"][0]["owner"], "jane");
+        assert_eq!(v["items"][0]["track"], "scene");
+    }
+
+    #[tokio::test]
+    async fn an_invalid_template_is_rejected_with_a_plain_words_error() {
+        let app = router(state());
+        register(&app, "jane", "supersecret1").await;
+        let t = token_for(&app, "jane", "supersecret1").await;
+
+        // html on thermal media fails the schema check.
+        let doc = json!({
+            "format": "html",
+            "media": { "kind": "label", "width_mm": 58.0, "height_mm": 40.0 },
+            "html": "<p>no</p>",
+            "elements": []
+        });
+        let (s, v) = publish(&app, Some(&t), "Nope", "nope", doc).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST);
+        assert!(v["error"].is_string());
+
+        // A bad slug and an empty name are 400s too.
+        let (s, _) = publish(&app, Some(&t), "Shipping", "Upper", label_template()).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST);
+        let (s, _) = publish(&app, Some(&t), "   ", "ok", label_template()).await;
+        assert_eq!(s, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn a_duplicate_slug_on_the_same_account_is_a_conflict() {
+        let app = router(state());
+        register(&app, "jane", "supersecret1").await;
+        register(&app, "john", "supersecret1").await;
+        let tj = token_for(&app, "jane", "supersecret1").await;
+        let tjo = token_for(&app, "john", "supersecret1").await;
+
+        assert_eq!(
+            publish(
+                &app,
+                Some(&tj),
+                "Shipping",
+                "shipping-label",
+                label_template()
+            )
+            .await
+            .0,
+            StatusCode::CREATED
+        );
+        // Same slug, same account: 409.
+        let (s, _) = publish(&app, Some(&tj), "Other", "shipping-label", label_template()).await;
+        assert_eq!(s, StatusCode::CONFLICT);
+        // Same slug, other account: fine — slugs are per owner.
+        assert_eq!(
+            publish(
+                &app,
+                Some(&tjo),
+                "Their own",
+                "shipping-label",
+                label_template()
+            )
+            .await
+            .0,
+            StatusCode::CREATED
+        );
+    }
+
+    #[tokio::test]
+    async fn publishing_without_a_session_is_unauthorized() {
+        let app = router(state());
+        let (s, _) = publish(&app, None, "Shipping", "shipping-label", label_template()).await;
+        assert_eq!(s, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn the_gallery_searches_and_filters() {
+        let app = router(state());
+        register(&app, "jane", "supersecret1").await;
+        let t = token_for(&app, "jane", "supersecret1").await;
+
+        assert_eq!(
+            publish(
+                &app,
+                Some(&t),
+                "Shipping Label",
+                "shipping-label",
+                label_template()
+            )
+            .await
+            .0,
+            StatusCode::CREATED
+        );
+        // The document track: an html template on page media.
+        let doc = json!({
+            "format": "html",
+            "media": { "kind": "page", "width_mm": 210.0, "height_mm": 297.0 },
+            "html": "<p>Order page</p>",
+            "elements": []
+        });
+        assert_eq!(
+            publish(&app, Some(&t), "Order Page", "order-page", doc)
+                .await
+                .0,
+            StatusCode::CREATED
+        );
+
+        // By name.
+        let (s, v) = call(&app, Method::GET, "/v1/templates?q=shipping", None, None).await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["total"], 1);
+        assert_eq!(v["items"][0]["slug"], "shipping-label");
+        // By owner.
+        let (s, v) = call(&app, Method::GET, "/v1/templates?q=JANE", None, None).await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["total"], 2);
+        // No match.
+        let (s, v) = call(&app, Method::GET, "/v1/templates?q=zzz", None, None).await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["total"], 0);
+        // By track.
+        let (s, v) = call(
+            &app,
+            Method::GET,
+            "/v1/templates?track=document",
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["total"], 1);
+        assert_eq!(v["items"][0]["slug"], "order-page");
+        // Combined: q AND track.
+        let (s, v) = call(
+            &app,
+            Method::GET,
+            "/v1/templates?q=order&track=document",
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["total"], 1);
+        // Paging: limit 1 gives one item but still the full total.
+        let (s, v) = call(&app, Method::GET, "/v1/templates?limit=1", None, None).await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["total"], 2);
+        assert_eq!(v["items"].as_array().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn fetching_a_published_template_returns_the_full_document() {
+        let app = router(state());
+        register(&app, "jane", "supersecret1").await;
+        let t = token_for(&app, "jane", "supersecret1").await;
+        assert_eq!(
+            publish(
+                &app,
+                Some(&t),
+                "Shipping",
+                "shipping-label",
+                label_template()
+            )
+            .await
+            .0,
+            StatusCode::CREATED
+        );
+
+        // Case-insensitive on the owner, as the app will type it.
+        let (s, v) = call(
+            &app,
+            Method::GET,
+            "/v1/templates/JANE/shipping-label",
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["template"]["slug"], "shipping-label");
+        assert_eq!(v["template"]["owner"], "jane");
+        assert!(
+            v["template"]["template"].is_string(),
+            "the full document is there"
+        );
+        assert!(v["template"]["sample"].is_string());
+
+        // An unknown owner or slug is a 404.
+        assert_eq!(
+            call(
+                &app,
+                Method::GET,
+                "/v1/templates/nobody/shipping-label",
+                None,
+                None
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            call(&app, Method::GET, "/v1/templates/jane/nope", None, None)
+                .await
+                .0,
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    #[tokio::test]
+    async fn unpublishing_removes_the_template_and_only_the_owner_can() {
+        let app = router(state());
+        register(&app, "jane", "supersecret1").await;
+        register(&app, "john", "supersecret1").await;
+        let tj = token_for(&app, "jane", "supersecret1").await;
+        let tjo = token_for(&app, "john", "supersecret1").await;
+        assert_eq!(
+            publish(
+                &app,
+                Some(&tj),
+                "Shipping",
+                "shipping-label",
+                label_template()
+            )
+            .await
+            .0,
+            StatusCode::CREATED
+        );
+
+        // A non-owner gets the same 404 as an unknown slug — the
+        // endpoint does not say whose templates exist.
+        let (s, _) = call(
+            &app,
+            Method::DELETE,
+            "/v1/templates/jane/shipping-label",
+            None,
+            Some(&tjo),
+        )
+        .await;
+        assert_eq!(s, StatusCode::NOT_FOUND);
+        assert_eq!(
+            call(
+                &app,
+                Method::GET,
+                "/v1/templates/jane/shipping-label",
+                None,
+                None
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+
+        // The hard case: john publishes under the same slug, then tries
+        // to unpublish jane's. His own copy must survive.
+        assert_eq!(
+            publish(
+                &app,
+                Some(&tjo),
+                "John's copy",
+                "shipping-label",
+                label_template()
+            )
+            .await
+            .0,
+            StatusCode::CREATED
+        );
+        let (s, _) = call(
+            &app,
+            Method::DELETE,
+            "/v1/templates/jane/shipping-label",
+            None,
+            Some(&tjo),
+        )
+        .await;
+        assert_eq!(s, StatusCode::NOT_FOUND);
+        assert_eq!(
+            call(
+                &app,
+                Method::GET,
+                "/v1/templates/john/shipping-label",
+                None,
+                None
+            )
+            .await
+            .0,
+            StatusCode::OK,
+            "john's own same-slug template is untouched"
+        );
+
+        // The owner unpublishes.
+        let (s, v) = call(
+            &app,
+            Method::DELETE,
+            "/v1/templates/jane/shipping-label",
+            None,
+            Some(&tj),
+        )
+        .await;
+        assert_eq!(s, StatusCode::OK);
+        assert_eq!(v["ok"], true);
+        assert_eq!(
+            call(
+                &app,
+                Method::GET,
+                "/v1/templates/jane/shipping-label",
+                None,
+                None
+            )
+            .await
+            .0,
+            StatusCode::NOT_FOUND
+        );
     }
 }

@@ -1,6 +1,6 @@
-//! The registry database: accounts and sessions (increment A). Later
-//! increments add templates, saved templates and the offline-first sync
-//! state on top of the same connection.
+//! The registry database: accounts and sessions (increment A), published
+//! templates (increment B). Later increments add saved templates and the
+//! offline-first sync state on top of the same connection.
 //!
 //! `rusqlite::Connection` is not `Sync`, and the router's state is shared
 //! across tasks, so the lock is part of the type (the same pattern the
@@ -15,7 +15,7 @@
 use std::path::Path;
 use std::sync::Mutex;
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 
 /// One account, the public shape the API returns.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -45,6 +45,58 @@ pub enum UserError {
     Other(String),
 }
 
+/// A published template. Gallery listings carry only the card's fields;
+/// fetching one fills in `template` and `sample` — everything a saved
+/// local copy needs to open and print at once.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Template {
+    pub id: String,
+    pub slug: String,
+    pub name: String,
+    /// The owner's handle, as typed.
+    pub owner: String,
+    pub readme: String,
+    /// "scene" or "document".
+    pub track: String,
+    /// The template document, as JSON text (on the fetch only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
+    /// Starting records for the data fields, as JSON text (on the fetch
+    /// only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sample: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+/// The parts of a new template the caller supplies; the store fills in
+/// the owner, the timestamps and the row id.
+#[derive(Debug)]
+pub struct NewTemplate {
+    pub id: String,
+    pub slug: String,
+    pub name: String,
+    pub readme: String,
+    /// "scene" or "document".
+    pub track: String,
+    /// The template document, as JSON text.
+    pub template: String,
+    /// Starting records for the data fields, as JSON text.
+    pub sample: String,
+}
+
+/// Why publishing a template failed.
+#[derive(Debug, thiserror::Error)]
+pub enum TemplateError {
+    /// That slug is already published on this account.
+    #[error("that slug is already taken on this account")]
+    SlugExists,
+    /// Any other database trouble, in plain words.
+    #[error("{0}")]
+    Other(String),
+}
+
 /// The schema so far. Tables are added idempotently as later increments
 /// land; the database version tracks how far the migrations have run.
 const SCHEMA: &str = r#"
@@ -62,6 +114,21 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS sessions_user ON sessions (user_id);
+CREATE TABLE IF NOT EXISTS templates (
+    id         TEXT PRIMARY KEY,
+    owner_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    slug       TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    readme     TEXT NOT NULL,
+    track      TEXT NOT NULL,
+    template   TEXT NOT NULL,
+    sample     TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE (owner_id, slug)
+);
+CREATE INDEX IF NOT EXISTS templates_track ON templates (track);
+CREATE INDEX IF NOT EXISTS templates_owner ON templates (owner_id);
 "#;
 
 pub struct Store {
@@ -292,6 +359,183 @@ impl Store {
             .map(|n| n as u64)
             .map_err(|e| e.to_string())
     }
+
+    /// Publish a template. `SlugExists` when the account already has a
+    /// template under that slug. Like `create_user`, the taken check is
+    /// a query, not a driver-specific error code, so it runs on Turso;
+    /// the `UNIQUE (owner_id, slug)` index stays as the integrity
+    /// backstop for the (rare) concurrent-insert race.
+    pub fn create_template(
+        &self,
+        owner_id: &str,
+        t: &NewTemplate,
+        now: i64,
+    ) -> Result<(), TemplateError> {
+        if self
+            .slug_is_taken(owner_id, &t.slug)
+            .map_err(TemplateError::Other)?
+            .is_some()
+        {
+            return Err(TemplateError::SlugExists);
+        }
+        match self.lock().execute(
+            "INSERT INTO templates
+                 (id, owner_id, slug, name, readme, track, template, sample,
+                  created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                t.id, owner_id, t.slug, t.name, t.readme, t.track, t.template, t.sample, now, now
+            ],
+        ) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                // If the slug is visible now, a concurrent insert won
+                // the race — report it the same way the pre-check does.
+                if self
+                    .slug_is_taken(owner_id, &t.slug)
+                    .map_err(TemplateError::Other)?
+                    .is_some()
+                {
+                    Err(TemplateError::SlugExists)
+                } else {
+                    Err(TemplateError::Other(e.to_string()))
+                }
+            }
+        }
+    }
+
+    /// Whether this account already publishes a template under `slug`.
+    fn slug_is_taken(&self, owner_id: &str, slug: &str) -> Result<Option<i64>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare("SELECT 1 FROM templates WHERE owner_id = ?1 AND slug = ?2")
+            .map_err(|e| e.to_string())?;
+        stmt.query_row(params![owner_id, slug], |r| r.get::<_, i64>(0))
+            .optional()
+            .map_err(|e| e.to_string())
+    }
+
+    /// The template an owner (by match key, so the caller passes
+    /// `handle_key`) published under `slug`, with its full document, if
+    /// any.
+    pub fn find_template(&self, owner_key: &str, slug: &str) -> Result<Option<Template>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT t.id, t.slug, t.name, u.handle, t.readme, t.track,
+                        t.template, t.sample, t.created_at, t.updated_at
+                 FROM templates t JOIN users u ON u.id = t.owner_id
+                 WHERE u.handle_key = ?1 AND t.slug = ?2",
+            )
+            .map_err(|e| e.to_string())?;
+        stmt.query_row(params![owner_key, slug], |r| {
+            Ok(Template {
+                id: r.get(0)?,
+                slug: r.get(1)?,
+                name: r.get(2)?,
+                owner: r.get(3)?,
+                readme: r.get(4)?,
+                track: r.get(5)?,
+                template: Some(r.get(6)?),
+                sample: Some(r.get(7)?),
+                created_at: r.get(8)?,
+                updated_at: r.get(9)?,
+            })
+        })
+        .optional()
+        .map_err(|e| e.to_string())
+    }
+
+    /// A page of the community gallery, newest first. `q`, when
+    /// non-empty, is a case-insensitive substring match on the name,
+    /// the readme or the owner's handle (plain `LIKE`, the same way the
+    /// old server searched); `track` narrows to one of the two tracks.
+    /// Returns the page's cards (without the documents) and the total
+    /// count that the filters match.
+    pub fn list_templates(
+        &self,
+        q: Option<&str>,
+        track: Option<&str>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<(Vec<Template>, i64), String> {
+        let conn = self.lock();
+
+        // Build the filter with positional parameters, so the same
+        // where-clause serves the page query and the count query.
+        let mut where_sql = String::from("1 = 1");
+        let mut args: Vec<String> = Vec::new();
+        if let Some(q) = q.filter(|q| !q.is_empty()) {
+            let (n1, n2, n3) = (args.len() + 1, args.len() + 2, args.len() + 3);
+            where_sql.push_str(&format!(
+                " AND (t.name LIKE ?{n1} OR t.readme LIKE ?{n2} OR u.handle LIKE ?{n3})"
+            ));
+            let like = format!("%{q}%");
+            args.extend([like.clone(), like.clone(), like]);
+        }
+        if let Some(track) = track.filter(|t| !t.is_empty()) {
+            let n = args.len() + 1;
+            where_sql.push_str(&format!(" AND t.track = ?{n}"));
+            args.push(track.to_string());
+        }
+
+        let limit_p = args.len() + 1;
+        let offset_p = args.len() + 2;
+        let list_sql = format!(
+            "SELECT t.id, t.slug, t.name, u.handle, t.readme, t.track,
+                    t.created_at, t.updated_at
+             FROM templates t JOIN users u ON u.id = t.owner_id
+             WHERE {where_sql}
+             ORDER BY t.updated_at DESC, t.id DESC
+             LIMIT ?{limit_p} OFFSET ?{offset_p}"
+        );
+        let count_sql = format!(
+            "SELECT COUNT(*)
+             FROM templates t JOIN users u ON u.id = t.owner_id
+             WHERE {where_sql}"
+        );
+
+        let mut list_args = args.clone();
+        list_args.push(limit.to_string());
+        list_args.push(offset.to_string());
+        let mut stmt = conn.prepare(&list_sql).map_err(|e| e.to_string())?;
+        let items = stmt
+            .query_map(params_from_iter(list_args.iter()), |r| {
+                Ok(Template {
+                    id: r.get(0)?,
+                    slug: r.get(1)?,
+                    name: r.get(2)?,
+                    owner: r.get(3)?,
+                    readme: r.get(4)?,
+                    track: r.get(5)?,
+                    template: None,
+                    sample: None,
+                    created_at: r.get(6)?,
+                    updated_at: r.get(7)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+
+        let mut stmt = conn.prepare(&count_sql).map_err(|e| e.to_string())?;
+        let total = stmt
+            .query_row(params_from_iter(args.iter()), |r| r.get::<_, i64>(0))
+            .map_err(|e| e.to_string())?;
+        Ok((items, total))
+    }
+
+    /// Unpublish a template. Returns how many rows went; 0 when the
+    /// account has nothing under that slug.
+    pub fn delete_template(&self, owner_id: &str, slug: &str) -> Result<u64, String> {
+        self.lock()
+            .execute(
+                "DELETE FROM templates WHERE owner_id = ?1 AND slug = ?2",
+                params![owner_id, slug],
+            )
+            .map(|n| n as u64)
+            .map_err(|e| e.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -409,6 +653,152 @@ mod tests {
         assert_eq!(s.find_session("t1", 50).unwrap(), None);
         assert_eq!(s.find_session("t4", 50).unwrap(), Some("u1".into()));
         assert_eq!(s.find_session("t5", 50).unwrap(), Some("u1".into()));
+    }
+
+    /// A template with the documents pinned to the shortest JSON.
+    fn new_template(id: &str, slug: &str, name: &str, readme: &str, track: &str) -> NewTemplate {
+        NewTemplate {
+            id: id.into(),
+            slug: slug.into(),
+            name: name.into(),
+            readme: readme.into(),
+            track: track.into(),
+            template: "{}".into(),
+            sample: "[]".into(),
+        }
+    }
+
+    #[test]
+    fn a_template_is_published_and_found_by_owner_and_slug() {
+        let s = store();
+        s.create_user("u1", "jane", "jane", "h", 0).unwrap();
+        s.create_template(
+            "u1",
+            &new_template("t1", "shipping", "Shipping label", "A 58mm label", "scene"),
+            10,
+        )
+        .expect("the first publish is created");
+        // Found by the owner's match key, not the id.
+        let t = s
+            .find_template("jane", "shipping")
+            .unwrap()
+            .expect("the fetch resolves");
+        assert_eq!(t.id, "t1");
+        assert_eq!(t.owner, "jane");
+        assert_eq!(t.name, "Shipping label");
+        assert_eq!(t.readme, "A 58mm label");
+        assert_eq!(t.track, "scene");
+        assert_eq!(t.template.as_deref(), Some("{}"));
+        assert_eq!(t.sample.as_deref(), Some("[]"));
+        // The store matches the key exactly; case-folding is the
+        // router's job (handle_key), which the fetch test covers.
+        assert!(s.find_template("jane", "shipping").unwrap().is_some());
+        assert!(s.find_template("jane", "missing").unwrap().is_none());
+    }
+
+    #[test]
+    fn a_slug_is_unique_per_owner_not_global() {
+        let s = store();
+        s.create_user("u1", "jane", "jane", "h", 0).unwrap();
+        s.create_user("u2", "john", "john", "h", 0).unwrap();
+        s.create_template("u1", &new_template("t1", "shipping", "A", "", "scene"), 10)
+            .unwrap();
+        // A different owner may use the same slug.
+        s.create_template("u2", &new_template("t2", "shipping", "B", "", "scene"), 11)
+            .expect("slugs are per account, not global");
+        // ...but the same account cannot.
+        let err = s
+            .create_template("u1", &new_template("t3", "shipping", "C", "", "scene"), 12)
+            .expect_err("the second publish under the slug must fail");
+        assert!(matches!(err, TemplateError::SlugExists), "got: {err:?}");
+        // The first one is untouched.
+        assert_eq!(
+            s.find_template("jane", "shipping").unwrap().unwrap().name,
+            "A"
+        );
+    }
+
+    #[test]
+    fn the_gallery_finds_templates_by_name_readme_owner_and_track() {
+        let s = store();
+        s.create_user("u1", "jane", "jane", "h", 0).unwrap();
+        s.create_user("u2", "john", "john", "h", 0).unwrap();
+        s.create_template(
+            "u1",
+            &new_template("t1", "shipping", "Shipping label", "For parcels", "scene"),
+            10,
+        )
+        .unwrap();
+        s.create_template(
+            "u2",
+            &new_template(
+                "t2",
+                "page-one",
+                "Invoice",
+                "One page per order",
+                "document",
+            ),
+            11,
+        )
+        .unwrap();
+
+        // By name.
+        let (items, total) = s.list_templates(Some("shipping"), None, 20, 0).unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(items[0].id, "t1");
+        assert!(items[0].template.is_none(), "cards carry no documents");
+        // By readme (case-insensitive).
+        let (items, _) = s
+            .list_templates(Some("PAGE per order"), None, 20, 0)
+            .unwrap();
+        assert_eq!(items[0].id, "t2");
+        // By the owner's handle.
+        let (items, _) = s.list_templates(Some("jane"), None, 20, 0).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, "t1");
+        // No search matches everything.
+        let (_, total) = s.list_templates(None, None, 20, 0).unwrap();
+        assert_eq!(total, 2);
+        // The track filter narrows.
+        let (items, total) = s.list_templates(None, Some("document"), 20, 0).unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(items[0].track, "document");
+    }
+
+    #[test]
+    fn the_gallery_pages_newest_first() {
+        let s = store();
+        s.create_user("u1", "jane", "jane", "h", 0).unwrap();
+        for (i, (id, updated)) in [("a", 10i64), ("b", 30), ("c", 20)].into_iter().enumerate() {
+            s.create_template(
+                "u1",
+                &new_template(&format!("t{id}"), &format!("slug-{i}"), id, "", "scene"),
+                updated,
+            )
+            .unwrap();
+        }
+        let (items, total) = s.list_templates(None, None, 2, 0).unwrap();
+        assert_eq!(total, 3);
+        assert_eq!(
+            items.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
+            ["b", "c"],
+            "newest first"
+        );
+        let (items, _) = s.list_templates(None, None, 2, 2).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].name, "a");
+    }
+
+    #[test]
+    fn unpublishing_removes_the_template() {
+        let s = store();
+        s.create_user("u1", "jane", "jane", "h", 0).unwrap();
+        s.create_template("u1", &new_template("t1", "shipping", "A", "", "scene"), 10)
+            .unwrap();
+        assert_eq!(s.delete_template("u1", "shipping").unwrap(), 1);
+        assert!(s.find_template("jane", "shipping").unwrap().is_none());
+        // Idempotent: a second delete removes nothing.
+        assert_eq!(s.delete_template("u1", "shipping").unwrap(), 0);
     }
 
     #[test]

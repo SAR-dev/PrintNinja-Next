@@ -14,6 +14,7 @@ pub mod auth;
 pub mod config;
 pub mod router;
 pub mod store;
+pub mod template;
 
 use std::sync::Arc;
 
