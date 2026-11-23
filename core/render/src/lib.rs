@@ -17,6 +17,7 @@ mod bitmap;
 mod draw;
 pub mod fonts;
 mod geometry;
+mod paint;
 mod pdf;
 mod text;
 
@@ -24,6 +25,7 @@ pub use bitmap::Bitmap;
 pub use draw::Renderer;
 pub use fonts::FontSet;
 pub use geometry::{dots_for_mm, fit_to_head};
+pub use paint::paint_page;
 pub use pdf::{render_pdf, RasterPage};
 
 #[cfg(test)]

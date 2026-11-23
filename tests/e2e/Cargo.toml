@@ -9,6 +9,10 @@ publish = false
 # fixture (see support/virtual-printer) as a subprocess. std-only on purpose —
 # the HTTP state control is a hand-rolled GET over a TcpStream.
 [dependencies]
+pn-scene = { path = "../../core/scene" }
+pn-render = { path = "../../core/render" }
+pn-planner = { path = "../../core/planner" }
+pn-encoders = { path = "../../core/encoders" }
 pn-transport = { path = "../../core/transport" }
 pn-job = { path = "../../core/job" }
 pn-profiles = { path = "../../core/profiles" }

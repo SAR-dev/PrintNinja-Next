@@ -164,3 +164,13 @@ Unreleased.
   template's media or the plan fails in plain words; a thermal scene on
   a pdf-language printer falls back to the PDF path with the reason
   recorded, the way §5.3 asks for every fallback
+- Phase 5 end-to-end (raster track): the whole §5 pipeline against the
+  virtual printer — a scene template and its data records expand to one
+  page per label, the planner picks the raster path, each page is painted
+  onto the renderer at the profile's dpi (the raster capped to the head
+  width), the rendered dots are wrapped in the printer's language (ZPL's
+  `^GFA` graphic) and the job is delivered over raw TCP, ending
+  `Confirmed` with the saved job byte-verified against the exact units
+  the pipeline produced. The scene → render bridge (`paint_page`) is the
+  one both the production pipeline and the preview draw through, so
+  preview and print show the same dots

@@ -2612,8 +2612,12 @@ dependencies = [
 name = "pn-e2e"
 version = "0.0.0"
 dependencies = [
+ "pn-encoders",
  "pn-job",
+ "pn-planner",
  "pn-profiles",
+ "pn-render",
+ "pn-scene",
  "pn-transport",
 ]
 
@@ -2639,6 +2643,11 @@ dependencies = [
 [[package]]
 name = "pn-planner"
 version = "0.0.0"
+dependencies = [
+ "pn-profiles",
+ "pn-scene",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "pn-profiles"
