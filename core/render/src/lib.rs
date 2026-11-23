@@ -1,28 +1,30 @@
-//! Rust renderer: 1-bit bitmaps at the printer's dpi, plus — in later
-//! phase-5 increments — text shaping, barcodes/QR and PDF output
-//! (plan §5.2). One renderer drives every thermal path and the PDF
-//! path for `page` media.
+//! Rust renderer (plan §5.2): 1-bit bitmaps at the printer's dpi and
+//! PDF output for `page` media. One renderer drives every thermal
+//! path and the PDF path — the PDF is the same rendered dots in a
+//! document container ([`render_pdf`]).
 //!
 //! The renderer is deterministic: the same placed shapes at the same
 //! dpi give the same bytes on every platform, which is what makes the
 //! golden snapshot tests meaningful (plan §5.2).
 //!
-//! This increment: the page model ([`Bitmap`]), the
-//! millimetres-to-dots geometry ([`dots_for_mm`], [`fit_to_head`]),
-//! line/rectangle drawing, text shaping with font fallback and
-//! barcode/QR symbols ([`Renderer`]).
+//! The page model ([`Bitmap`]), the millimetres-to-dots geometry
+//! ([`dots_for_mm`], [`fit_to_head`]), line/rectangle drawing, text
+//! shaping with font fallback and barcode/QR symbols ([`Renderer`]),
+//! and the document wrapper ([`RasterPage`]).
 
 mod barcode;
 mod bitmap;
 mod draw;
 pub mod fonts;
 mod geometry;
+mod pdf;
 mod text;
 
 pub use bitmap::Bitmap;
 pub use draw::Renderer;
 pub use fonts::FontSet;
 pub use geometry::{dots_for_mm, fit_to_head};
+pub use pdf::{render_pdf, RasterPage};
 
 #[cfg(test)]
 mod tests {
@@ -151,5 +153,72 @@ mod tests {
         let mut r = Renderer::new(dpi, dots_for_mm(30.0, dpi), dots_for_mm(30.0, dpi));
         r.draw_qr(2.0, 2.0, 24.0, "https://example.com/o/1042");
         golden_harness::assert_matches_golden("render/qr.bin", r.page().to_bytes());
+    }
+
+    /// The same rendered page wrapped as a single-page PDF is pinned too:
+    /// the document track's bytes must be as stable as the raster's.
+    #[test]
+    fn the_barcode_label_pdf_matches_the_pinned_golden_bytes() {
+        let dpi = 300u32; // page printers rasterize at their own dpi
+        let mut r = Renderer::new(dpi, dots_for_mm(56.0, dpi), dots_for_mm(15.0, dpi));
+        r.draw_barcode(
+            3.0,
+            3.0,
+            50.0,
+            9.0,
+            &pn_scene::BarcodeKind::Code128,
+            "SN-1042-88",
+            true,
+        );
+        let page = RasterPage::new(r.into_page(), 56.0, 15.0);
+        golden_harness::assert_matches_golden("render/pdf-label.bin", &render_pdf(&[page]));
+    }
+
+    /// A two-page A4 document is pinned on its own: page order, sizes and
+    /// inks must all be stable across platforms.
+    #[test]
+    fn the_document_pdf_matches_the_pinned_golden_bytes() {
+        let dpi = 300u32;
+        let (w, h) = (dots_for_mm(210.0, dpi), dots_for_mm(297.0, dpi));
+
+        let mut first = Renderer::new(dpi, w, h);
+        first.draw_text(
+            20.0,
+            20.0,
+            170.0,
+            15.0,
+            "PRINT NINJA",
+            &TextStyle {
+                size_mm: 12.0,
+                font: None,
+                bold: true,
+                italic: false,
+                align: Align::Left,
+            },
+        );
+        first.draw_line(20.0, 38.0, 170.0, 0.5, false);
+
+        let mut second = Renderer::new(dpi, w, h);
+        second.draw_text(
+            20.0,
+            20.0,
+            170.0,
+            8.0,
+            "ページ 2 · page two",
+            &TextStyle {
+                size_mm: 6.0,
+                font: None,
+                bold: false,
+                italic: false,
+                align: Align::Left,
+            },
+        );
+        second.draw_qr(20.0, 40.0, 30.0, "https://example.com/o/1042");
+
+        let pages = vec![
+            RasterPage::new(first.into_page(), 210.0, 297.0),
+            RasterPage::new(second.into_page(), 210.0, 297.0),
+        ];
+        golden_harness::assert_matches_golden("render/pdf-document.bin", &render_pdf(&pages));
     }
 }

@@ -37,4 +37,5 @@ toml = "0.8"
 swash = "0.2"
 ab_glyph = "0.2"
 barcoders = { version = "2", default-features = false }
+flate2 = "1"
 qrcode = { version = "0.14", default-features = false }

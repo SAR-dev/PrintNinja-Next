@@ -124,3 +124,15 @@ Unreleased.
   decoded back to the value by a multi-format reader (rxing,
   test-only), and the Code 128 label and the QR code are pinned by
   golden cases
+- Phase 5 raster renderer (PDF output increment): PDF output for `page`
+  media in `pn-render` (plan §5.2) — the same rendered dots the thermal
+  path prints, wrapped in a document the OS print path can send to a
+  page printer (spooler or IPP), so one renderer drives both. The PDF
+  is a container, not a second renderer: each page is its own 1-bit
+  bitmap, Flate-compressed and stretched by its content stream to the
+  physical page size (mm → pt). Multi-page documents keep their page
+  order in the page tree. The bytes are deterministic — a fixed
+  compression level, no timestamps, stable object numbering — so the
+  Code 128 label as a one-page PDF and a two-page A4 document (bold
+  heading, a Japanese line, a QR) are pinned by golden cases, and the
+  cross-reference table is checked to point at its own objects

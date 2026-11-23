@@ -2649,6 +2649,7 @@ version = "0.0.0"
 dependencies = [
  "ab_glyph",
  "barcoders",
+ "flate2",
  "golden-harness",
  "pn-scene",
  "qrcode",

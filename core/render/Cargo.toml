@@ -7,6 +7,7 @@ rust-version.workspace = true
 [dependencies]
 ab_glyph = { workspace = true }
 barcoders = { workspace = true }
+flate2 = { workspace = true }
 pn-scene = { path = "../scene" }
 qrcode = { workspace = true }
 swash = { workspace = true }
