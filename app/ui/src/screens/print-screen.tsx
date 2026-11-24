@@ -40,7 +40,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { JobPreview } from "@/components/job-preview";
 import { PageHeader } from "@/components/page-header";
-import { icons } from "@/lib/icons";
+import { icons, type IconName } from "@/lib/icons";
 import { withTemplateStyles } from "@/lib/tailwind";
 import { resultTone, toneClass } from "@/result-words";
 import type { AppTemplate, RecentJob } from "@/templates";
@@ -61,15 +61,21 @@ function ResultCard({ report }: { report: JobReport }) {
       : null;
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{t("result.title")}</CardTitle>
-      </CardHeader>
       <CardContent className="flex flex-col gap-2">
         <div
-          className={`rounded-md px-3 py-2 text-body font-medium ${toneClass(resultTone(report.result))}`}
+          role="status"
+          className={`flex items-start gap-2 rounded-md px-3 py-2 text-body font-medium ${toneClass(resultTone(report.result))}`}
         >
-          {word}
-          {detail ? ` — ${detail}` : ""}
+          {(() => {
+            const Icon = icons[report.result as IconName] ?? icons.confirmed;
+            return (
+              <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+            );
+          })()}
+          <span className="min-w-0">
+            {word}
+            {detail ? ` — ${detail}` : ""}
+          </span>
         </div>
         {report.reason && (
           <p className="text-body-sm text-muted-foreground">{report.reason}</p>
@@ -353,7 +359,7 @@ export function PrintScreen({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 max-md:pb-24">
       <PageHeader
         title={starter.name}
         description={starter.description}
@@ -736,6 +742,27 @@ export function PrintScreen({
 
           {job && <ResultCard report={job} />}
         </div>
+      </div>
+
+      {/* Phone: the same two actions stay in reach while the form scrolls. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t bg-card px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] md:hidden">
+        <Button
+          variant="secondary"
+          className="flex-1"
+          onClick={preview}
+          disabled={planning || !printer}
+        >
+          <icons.preview aria-hidden="true" className="h-4 w-4" />
+          {t("print.preview")}
+        </Button>
+        <Button
+          className="flex-1"
+          onClick={print}
+          disabled={printing || !printer}
+        >
+          <icons.print aria-hidden="true" className="h-4 w-4" />
+          {t("app.print")}
+        </Button>
       </div>
     </div>
   );

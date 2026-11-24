@@ -608,6 +608,9 @@ Unreleased.
 
 ### Changed
 
+- App: the phone print screen keeps Preview and Print in a sticky
+  action bar at the bottom, and the result is a status banner with an
+  icon and the printer's outcome
 - App: the PC print screen has a sticky job summary with a distinct
   Preview (Eye) and primary Print (Printer) action, plus a ⋯ menu
   (M9: edit template, save as default printer, clear data)

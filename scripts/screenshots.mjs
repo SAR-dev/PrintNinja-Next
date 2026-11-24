@@ -418,11 +418,13 @@ async function navigate(page, view, l) {
         .click();
       await page.getByRole("heading", { name: "Parts label" }).waitFor();
       if (view === "print-preview") {
-        await page.getByRole("button", { name: l.preview, exact: true }).click();
+        // On the phone the sticky action bar repeats these buttons.
+        await page.getByRole("button", { name: l.preview, exact: true }).last().click();
         await page.getByText("raster", { exact: true }).waitFor();
       } else if (view === "print-done") {
         await page
           .getByRole("button", { name: l.print, exact: true })
+          .last()
           .click();
         await page.getByText(l.confirmed, { exact: true }).waitFor();
       }
