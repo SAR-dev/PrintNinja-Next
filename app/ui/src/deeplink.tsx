@@ -23,6 +23,8 @@ export interface DeepLinkPrint {
   template: AppTemplate;
   printer: string | null;
   copies: number | null;
+  /** The data URL the link carried, if it did. */
+  dataUrl: string | null;
 }
 
 const DISPATCHED_KEY = "printninja-deeplink-dispatched";
@@ -88,6 +90,7 @@ export function DeepLinkListener({
           template,
           printer: link.printer,
           copies: link.copies,
+          dataUrl: link.dataUrl,
         });
       } catch (e) {
         onError(t("deeplink.unreadable", { error: String(e) }));

@@ -119,13 +119,15 @@ export interface StoredJob {
 
 /**
  * What a `printninja://print` link carries (plan phase 8, deep link):
- * the template by name, a printer by profile name, and a copy count.
- * `null` is "the link did not say" — the screen keeps its default.
+ * the template by name, a printer by profile name, a copy count, and a
+ * data URL. `null` is "the link did not say" — the screen keeps its
+ * default.
  */
 export interface DeepLinkPrint {
   template: string | null;
   printer: string | null;
   copies: number | null;
+  dataUrl: string | null;
 }
 
 /** Turn a delivered deep link into the values it carries. */
@@ -176,6 +178,15 @@ export const pairedDevices = () => invoke<PairedDevice[]>("paired_devices");
 /** Revoke a paired device: its token stops working at once. */
 export const revokeDevice = (id: string) =>
   invoke<void>("revoke_device", { id });
+
+/**
+ * Fetch a job's data from a URL (the old app's Data URL) and hand back
+ * the body text — JSON or CSV, the pipeline's call. Guarded: only
+ * http/https, and no loopback, link-local or private address unless
+ * the setting `data.block_private_ips` allows it.
+ */
+export const fetchData = (url: string, method: string) =>
+  invoke<string>("fetch_data", { url, method });
 
 /** Prepare: pick the output path, encode, render the preview. */
 export const planJob = (

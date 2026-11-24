@@ -123,6 +123,15 @@ const en = {
     data: "Data",
     data_note:
       "JSON (one object per record) or CSV (a header row and its rows); {{field}} in the template is filled from each record's fields.",
+    data_url: "Data URL",
+    data_url_note:
+      "Optional — the data is fetched from this URL at preview and at print (JSON or CSV). Only http and https, and private addresses are blocked by default (see Settings).",
+    data_url_active:
+      "Data comes from the URL — the text box and the file are off.",
+    data_method: "Method",
+    url_preview_failed:
+      "Could not fetch the data URL ({{error}}) — previewing the typed data instead. The print re-fetches the URL.",
+    url_fetch_failed: "Fetching the data URL failed: {{error}}",
     load_from_file: "Load from file…",
     loaded: "loaded {{file}}",
     copies: "Copies",
@@ -171,6 +180,12 @@ const en = {
     pair_seconds_left: "{{seconds}} seconds left",
     pair_a_device: "Pair a device",
     revoke: "Revoke",
+    data: "Data from a URL",
+    data_note:
+      "The print screen can fetch a job's data from a URL instead of typing it. The fetch is guarded: http and https only, and private addresses are refused by default.",
+    block_private_ips: "Block private IP ranges",
+    block_private_ips_note:
+      "When on, a data URL cannot reach loopback, link-local or private addresses — the safe default. Turn it off only when a printer or server on your own network serves the data (like http://192.168.0.10/data.json).",
     registry: "Registry",
     registry_note:
       "The server the community templates live on. Leave it empty to use the server on this computer ({{default}}).",

@@ -73,6 +73,8 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [registryDefault, setRegistryDefault] = useState("");
 
   const lanOn = settings["api.lan"] === "true";
+  // Absent means on: the guarded fetcher is the default.
+  const blockPrivateOn = settings["data.block_private_ips"] !== "false";
 
   useEffect(() => {
     listPrinters()
@@ -321,6 +323,28 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               )}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("settings.data")}</CardTitle>
+          <CardDescription>{t("settings.data_note")}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-body">{t("settings.block_private_ips")}</span>
+            <Switch
+              checked={blockPrivateOn}
+              onCheckedChange={(on) =>
+                save("data.block_private_ips", on ? "true" : "false")
+              }
+              aria-label={t("settings.block_private_ips")}
+            />
+          </div>
+          <span className="text-caption text-muted-foreground">
+            {t("settings.block_private_ips_note")}
+          </span>
         </CardContent>
       </Card>
 

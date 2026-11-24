@@ -1,11 +1,13 @@
 //! Deep links (plan phase 8, deep-link increment).
 //!
-//! `printninja://print?template=&printer=&copies=` — a web page asks
-//! the app to print. The link is prefill-only: the values land on the
-//! print screen, where the person sees what will print and presses
-//! Print. That press is the confirmation for untrusted sources, and
-//! it applies to every source, because a link does not carry the
-//! caller's identity.
+//! `printninja://print?template=&printer=&copies=&dataUrl=` — a web
+//! page asks the app to print. The link is prefill-only: the values
+//! land on the print screen, where the person sees what will print and
+//! presses Print. That press is the confirmation for untrusted
+//! sources, and it applies to every source, because a link does not
+//! carry the caller's identity. `dataUrl` (the old app's `url`) names
+//! a data URL: the print screen fetches the job's data from it on
+//! preview and on print.
 //!
 //! The conventions are the old app's (its `deeplink.rs` is the
 //! behavior reference): a typed value that is garbage or absent
@@ -28,6 +30,9 @@ pub struct DeepLinkPrint {
     pub printer: Option<String>,
     /// How many copies; garbage or an absent key is `None`.
     pub copies: Option<u32>,
+    /// The data URL: the job's data is fetched from it (the old app's
+    /// `url` key is read too, so its links still work).
+    pub data_url: Option<String>,
 }
 
 /// Parse a delivered deep link URL into the print values.
@@ -54,6 +59,11 @@ pub fn parse_deep_link(url: &str) -> Result<DeepLinkPrint, String> {
         // The deep-link convention for typed values: garbage drops
         // to "unset", like an absent key.
         copies: params.get("copies").and_then(|s| s.parse().ok()),
+        data_url: params
+            .get("dataUrl")
+            .or_else(|| params.get("url"))
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
     })
 }
 
@@ -132,7 +142,8 @@ mod tests {
             DeepLinkPrint {
                 template: None,
                 printer: None,
-                copies: None
+                copies: None,
+                data_url: None
             }
         );
     }
@@ -149,6 +160,35 @@ mod tests {
     fn an_empty_value_is_absent_not_empty() {
         let p = parse_deep_link("printninja://print?template=").unwrap();
         assert_eq!(p.template, None);
+    }
+
+    #[test]
+    fn a_data_url_link_prefills_the_data_source() {
+        let p = parse_deep_link(
+            "printninja://print?template=Parts%20label&dataUrl=https%3A%2F%2Fprinter.example%2Fdata.json",
+        )
+        .unwrap();
+        assert_eq!(p.template.as_deref(), Some("Parts label"));
+        assert_eq!(
+            p.data_url.as_deref(),
+            Some("https://printer.example/data.json")
+        );
+    }
+
+    #[test]
+    fn the_old_apps_url_key_still_works() {
+        let p =
+            parse_deep_link("printninja://print?url=https://printer.example/data.json").unwrap();
+        assert_eq!(
+            p.data_url.as_deref(),
+            Some("https://printer.example/data.json")
+        );
+    }
+
+    #[test]
+    fn an_empty_data_url_is_absent() {
+        let p = parse_deep_link("printninja://print?dataUrl=").unwrap();
+        assert_eq!(p.data_url, None);
     }
 
     #[test]

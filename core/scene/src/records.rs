@@ -5,8 +5,9 @@
 //! `number`, `boolean`, `date` — all coerced to their string form here)
 //! and a list of records, which a group element repeats over.
 //!
-//! Records are read from JSON (an array of objects) or CSV (RFC 4180:
-//! a header row, quoted fields, `\r\n` line endings). CSV rows are flat
+//! Records are read from JSON (an array of objects, or one bare
+//! object) or CSV (RFC 4180: a header row, quoted fields, `\r\n` line
+//! endings). CSV rows are flat
 //! — every value is text — so a group bound to a CSV column that holds
 //! rows of objects has no source and fails expansion honestly.
 
@@ -53,24 +54,31 @@ pub struct Records(pub Vec<Record>);
 
 impl Records {
     /// Parse a JSON document: an array of objects, one object per
-    /// record. Numbers and booleans are coerced to their string form;
-    /// an array of objects becomes a row list (for group bindings).
+    /// record, or one bare object as a single record (a Data URL that
+    /// serves a single label is one page; the copies field repeats it).
+    /// Numbers and booleans are coerced to their string form; an array
+    /// of objects becomes a row list (for group bindings).
     pub fn from_json(s: &str) -> Result<Self, RecordsError> {
         let v: serde_json::Value = serde_json::from_str(s)
             .map_err(|e| RecordsError(format!("the data is not valid JSON: {e}")))?;
-        let arr = v
-            .as_array()
-            .ok_or_else(|| RecordsError("the data must be a JSON array of objects".into()))?;
-        let mut out = Vec::new();
-        for (i, row) in arr.iter().enumerate() {
-            let obj = row.as_object().ok_or_else(|| {
-                RecordsError(format!(
-                    "record {i} is not an object (a row is one object per record)"
-                ))
-            })?;
-            out.push(record_from_object(obj)?);
+        match v {
+            serde_json::Value::Object(obj) => Ok(Records(vec![record_from_object(&obj)?])),
+            serde_json::Value::Array(arr) => {
+                let mut out = Vec::new();
+                for (i, row) in arr.iter().enumerate() {
+                    let obj = row.as_object().ok_or_else(|| {
+                        RecordsError(format!(
+                            "record {i} is not an object (a row is one object per record)"
+                        ))
+                    })?;
+                    out.push(record_from_object(obj)?);
+                }
+                Ok(Records(out))
+            }
+            _ => Err(RecordsError(
+                "the data must be a JSON object or an array of objects".into(),
+            )),
         }
-        Ok(Records(out))
     }
 
     /// Parse CSV (RFC 4180): a header row of field names, then one row
@@ -156,10 +164,11 @@ impl Records {
         Ok(Records(out))
     }
 
-    /// Parse the data field as it arrives from the app or a local
-    /// file: JSON first (an array of objects), then CSV (a header row
-    /// and its rows). When both refuse it, the CSV error is the one
-    /// named — it is the more specific reading of the text.
+    /// Parse the data field as it arrives from the app, a local file
+    /// or a data URL: JSON first (an array of objects, or one bare
+    /// object), then CSV (a header row and its rows). When both refuse
+    /// it, the CSV error is the one named — it is the more specific
+    /// reading of the text.
     pub fn from_text(s: &str) -> Result<Self, RecordsError> {
         if let Ok(r) = Self::from_json(s) {
             return Ok(r);
@@ -250,11 +259,22 @@ mod tests {
     }
 
     #[test]
-    fn json_that_is_not_an_array_of_objects_is_named() {
-        assert!(Records::from_json(r#"{}"#).is_err());
+    fn json_that_is_not_an_object_or_array_of_objects_is_named() {
         assert!(Records::from_json(r#"[ "not an object" ]"#).is_err());
         assert!(Records::from_json(r#"[ { "rows": [ 1 ] } ]"#).is_err());
+        assert!(Records::from_json("42").is_err());
         assert!(Records::from_json("nope").is_err());
+    }
+
+    #[test]
+    fn a_bare_json_object_is_a_single_record() {
+        // The shape a data URL serves most often: one object, one
+        // label — the copies field repeats it.
+        let r = Records::from_json(r#"{"name": "Ada", "qty": 2}"#).unwrap();
+        assert_eq!(r.len(), 1);
+        assert_eq!(r.0[0]["name"].as_text(), "Ada");
+        assert_eq!(r.0[0]["qty"].as_text(), "2");
+        assert!(Records::from_json(r#"{}"#).unwrap().0[0].is_empty());
     }
 
     #[test]

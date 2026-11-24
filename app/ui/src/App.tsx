@@ -132,7 +132,11 @@ function applyTheme(theme: string) {
 }
 
 /** What a deep link prefill on the print screen carries (plan phase 8). */
-type PrintPrefill = { printer?: string; copies?: number };
+type PrintPrefill = {
+  printer?: string;
+  copies?: number;
+  dataUrl?: string;
+};
 
 type View =
   | { name: "list" }
@@ -610,13 +614,14 @@ function App() {
         </div>
       )}
       <DeepLinkListener
-        onPrint={({ template, printer, copies }) =>
+        onPrint={({ template, printer, copies, dataUrl }) =>
           setView({
             name: "print",
             template,
             prefill: {
               printer: printer ?? undefined,
               copies: copies ?? undefined,
+              dataUrl: dataUrl ?? undefined,
             },
           })
         }

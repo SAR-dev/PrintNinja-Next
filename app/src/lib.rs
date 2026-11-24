@@ -9,6 +9,7 @@
 
 mod api;
 mod deeplink;
+mod fetcher;
 mod pairing;
 mod pipeline;
 mod registry;
@@ -144,6 +145,31 @@ async fn print_job(
     .await
     .map_err(|e| e.to_string())?;
     report.map_err(|e| e.to_string())
+}
+
+/// Fetch a job's data from a URL and hand back the body text — the
+/// print screen passes it on as the job's data, JSON or CSV. Guarded
+/// the way a data URL deserves to be: only `http`/`https`, and no
+/// loopback, link-local or private address unless the setting
+/// `data.block_private_ips` says the LAN may serve data (absent
+/// setting: blocked).
+#[tauri::command]
+async fn fetch_data(
+    store: State<'_, Arc<Store>>,
+    url: String,
+    method: String,
+) -> Result<String, String> {
+    let settings = store.load_settings().unwrap_or_default();
+    let block_private = settings
+        .get("data.block_private_ips")
+        .map(|v| v != "false")
+        .unwrap_or(true);
+    let fetcher = if block_private {
+        fetcher::DataFetcher::new()
+    } else {
+        fetcher::DataFetcher::allowing_private()
+    };
+    fetcher.fetch(&url, &method).await
 }
 
 /// The templates as the user has them (plan phase 7: persistence).
@@ -533,6 +559,7 @@ pub fn run() {
             list_printers,
             plan_job,
             print_job,
+            fetch_data,
             load_templates,
             save_template,
             load_recent_jobs,

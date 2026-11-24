@@ -125,6 +125,15 @@ const ja: EnStrings = {
     data: "データ",
     data_note:
       "JSON（レコードごとに 1 オブジェクト）または CSV（ヘッダ行と各行）。テンプレートの {{field}} は各レコードの項目から埋められます。",
+    data_url: "データ URL",
+    data_url_note:
+      "任意 — データはこの URL から、プレビュー時と印刷時に取得されます（JSON または CSV）。http/https のみで、プライベート IP 範囲は既定ではブロックされます（設定を参照）。",
+    data_url_active:
+      "データは URL から取得されます — 下のテキストボックスとファイルは無効です。",
+    data_method: "メソッド",
+    url_preview_failed:
+      "データ URL の取得に失敗しました（{{error}}）。入力済みのデータでプレビューしています。印刷時は URL を再取得します。",
+    url_fetch_failed: "データ URL の取得に失敗しました: {{error}}",
     load_from_file: "ファイルから読み込み…",
     loaded: "{{file}} を読み込みました",
     copies: "部数",
@@ -174,6 +183,12 @@ const ja: EnStrings = {
     pair_seconds_left: "残り {{seconds}} 秒",
     pair_a_device: "デバイスをペアリング",
     revoke: "解除",
+    data: "URL からのデータ",
+    data_note:
+      "印刷画面では、データを入力する代わりに URL から取得できます。取得にはガードがあります: http/https のみで、プライベート IP 範囲は既定では拒否されます。",
+    block_private_ips: "プライベート IP 範囲をブロック",
+    block_private_ips_note:
+      "オンにすると、データ URL はループバック、リンクローカル、プライベート IP に到達できません — 安全な既定値です。自分のネットワーク内のプリンターやサーバーがデータを提供する場合（http://192.168.0.10/data.json のような）にのみオフにしてください。",
     registry: "レジストリ",
     registry_note:
       "コミュニティテンプレートを置くサーバーです。空にするとこのコンピュータ上のサーバー（{{default}}）を使います。",

@@ -130,9 +130,10 @@ a per-device token (only its SHA-256 is kept on the PC), and a token gate
 admits requests from off this PC.
 
 **Deep links** (`app/src/deeplink.rs`): `printninja://print?…` from a web
-page prefills the print screen (template by name, printer, copies) and
-stops there — the Print button on the screen is the confirmation, because
-a link carries no identity.
+page prefills the print screen (template by name, printer, copies, data
+URL — the old app's `url` key still works) and stops there — the Print
+button on the screen is the confirmation, because a link carries no
+identity.
 
 **Living in the tray**: a second launch focuses the running window
 (`tauri-plugin-single-instance`), the window's close button hides the app

@@ -98,8 +98,14 @@ print — they just can't say afterwards whether it happened.
 
 **Data** — *JSON (one object per record) or CSV (a header row and its rows);
 `{{name}}` in the template is filled from each record's fields.* Paste the
-records, or press **Load from file…** (`.json` / `.csv` / `.txt`, then
-`loaded <filename>`). **Copies** below defaults to `1`.
+records, press **Load from file…** (`.json` / `.csv` / `.txt`, then
+`loaded <filename>`), or set the **Data URL** field with a **Method**
+(GET or POST): the data is then fetched from the URL at preview and at
+print, and the text box and the file go off. A URL that cannot be reached
+shows a warning on the preview — the print re-fetches. Only `http`/`https`
+is allowed, and private addresses are blocked by default (Settings →
+**Data from a URL** → **Block private IP ranges**). **Copies** below
+defaults to `1`.
 
 **Preview** — *Every page of the prepared job — the same path as the print,
 nothing touches the wire.* **Preview** (it reads `Preparing…` while working)

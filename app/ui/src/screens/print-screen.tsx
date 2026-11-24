@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  fetchData,
   listPrinters,
   planJob,
   printJob,
@@ -88,9 +89,9 @@ export function PrintScreen({
   onJob,
 }: {
   starter: AppTemplate;
-  /** A deep link's starting values (plan phase 8): the printer and
-   * copies the link carried, if it carried them. */
-  prefill?: { printer?: string; copies?: number };
+  /** A deep link's starting values (plan phase 8): the printer,
+   * copies and data URL the link carried, if it carried them. */
+  prefill?: { printer?: string; copies?: number; dataUrl?: string };
   onBack: () => void;
   /** The job, with its result — the recent-jobs list remembers it. */
   onJob: (job: RecentJob) => void;
@@ -107,6 +108,9 @@ export function PrintScreen({
   const [btAddress, setBtAddress] = useState("");
   const [data, setData] = useState(starter.sample);
   const [loaded, setLoaded] = useState<string | null>(null);
+  const [dataUrl, setDataUrl] = useState(prefill?.dataUrl ?? "");
+  const [dataMethod, setDataMethod] = useState("GET");
+  const [fetchWarn, setFetchWarn] = useState<string | null>(null);
   const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null);
   const [copies, setCopies] = useState(
     prefill?.copies ? String(prefill.copies) : "1",
@@ -149,6 +153,12 @@ export function PrintScreen({
     }
   };
 
+  /** The data URL, if typed: the job's data comes from the fetch. */
+  const urlActive = dataUrl.trim() !== "";
+
+  /** The data URL's body text — JSON or CSV, the pipeline's call. */
+  const fetchBody = () => fetchData(dataUrl.trim(), dataMethod);
+
   /** A local data file, as its text — JSON or CSV, the parser's call. */
   const loadFile = async (f: File) => {
     try {
@@ -165,7 +175,19 @@ export function PrintScreen({
     setPlanError(null);
     setJob(null);
     try {
-      setPlan(await planJob(templateJson, printer, data, Number(copies) || 1));
+      let body = data;
+      if (urlActive) {
+        try {
+          body = await fetchBody();
+          setFetchWarn(null);
+        } catch (e) {
+          // The preview falls back to the typed data; the print
+          // re-fetches the URL, the way the old app printed from a
+          // URL its preview could not reach.
+          setFetchWarn(t("print.url_preview_failed", { error: String(e) }));
+        }
+      }
+      setPlan(await planJob(templateJson, printer, body, Number(copies) || 1));
     } catch (e) {
       setPlan(null);
       setPlanError(String(e));
@@ -178,12 +200,29 @@ export function PrintScreen({
     setPrinting(true);
     setJob(null);
     const copiesN = Number(copies) || 1;
+    // The fetch is fresh — the print always prints what the URL has
+    // now, and the recent job freezes that fetched text.
+    let body = data;
+    if (urlActive) {
+      try {
+        body = await fetchBody();
+        setFetchWarn(null);
+      } catch (e) {
+        setPrinting(false);
+        setJob({
+          result: "failed",
+          counts: null,
+          reason: t("print.url_fetch_failed", { error: String(e) }),
+        });
+        return;
+      }
+    }
     let report: JobReport;
     try {
       report = await printJob(
         templateJson,
         printer,
-        data,
+        body,
         copiesN,
         transport(),
       );
@@ -197,7 +236,7 @@ export function PrintScreen({
       template: starter.template,
       track: starter.track,
       profile: printer,
-      data,
+      data: body,
       copies: copiesN,
       transport: transport(),
       result: report,
@@ -358,9 +397,39 @@ export function PrintScreen({
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
+              <div className="grid grid-cols-[1fr_96px] gap-3">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="data-url">{t("print.data_url")}</Label>
+                  <Input
+                    id="data-url"
+                    placeholder="https://…"
+                    value={dataUrl}
+                    onChange={(e) => {
+                      setDataUrl(e.target.value);
+                      setFetchWarn(null);
+                    }}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label>{t("print.data_method")}</Label>
+                  <Select value={dataMethod} onValueChange={setDataMethod}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="GET">GET</SelectItem>
+                      <SelectItem value="POST">POST</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-caption text-muted-foreground">
+                {t("print.data_url_note")}
+              </p>
               <Textarea
                 rows={5}
                 spellCheck={false}
+                disabled={urlActive}
                 value={data}
                 onChange={(e) => {
                   setData(e.target.value);
@@ -371,6 +440,7 @@ export function PrintScreen({
                 <Button
                   variant="outline"
                   size="sm"
+                  disabled={urlActive}
                   onClick={() => fileInput?.click()}
                 >
                   {t("print.load_from_file")}
@@ -386,12 +456,23 @@ export function PrintScreen({
                     e.target.value = "";
                   }}
                 />
-                {loaded && (
+                {urlActive ? (
                   <span className="text-caption text-muted-foreground">
-                    {t("print.loaded", { file: loaded })}
+                    {t("print.data_url_active")}
                   </span>
+                ) : (
+                  loaded && (
+                    <span className="text-caption text-muted-foreground">
+                      {t("print.loaded", { file: loaded })}
+                    </span>
+                  )
                 )}
               </div>
+              {fetchWarn && (
+                <div className="rounded-md bg-warning-soft px-3 py-2 text-body-sm text-warning">
+                  {fetchWarn}
+                </div>
+              )}
               <div className="flex w-24 flex-col gap-1">
                 <Label htmlFor="copies">{t("print.copies")}</Label>
                 <Input

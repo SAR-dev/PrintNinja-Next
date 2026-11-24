@@ -494,3 +494,14 @@ Unreleased.
   pnpm 12 fails `pnpm install --frozen-lockfile` in CI whenever a
   dependency's build scripts are only ignored, which broke
   `android-check`
+- Data from a URL (the old app's Data URL): the print screen fetches a
+  job's data from a URL at preview and at print — the response is JSON
+  (an array of objects, or one bare object as a single record) or CSV,
+  one output per record, and the recent job freezes the fetched text so
+  a reprint works offline. The fetch is guarded (`http`/`https` only,
+  no loopback, link-local or private address by default — the cloud
+  metadata endpoint included — at most five redirects with each hop
+  re-checked, fifteen seconds and five megabytes), and Settings has a
+  **Block private IP ranges** switch for a printer or server on your own
+  LAN. Deep links may carry the URL (`dataUrl`, the old app's `url` key
+  still works)
