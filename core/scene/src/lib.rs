@@ -183,7 +183,9 @@ pub enum BarcodeKind {
 ///
 /// Top-level elements are placed absolutely on the page; elements inside
 /// a [`Element::Group`] are placed relative to that item's top-left, so
-/// one set of items renders once per record of the bound array.
+/// one set of items renders once per record of the bound array, and
+/// elements inside a [`Element::Frame`] are placed relative to the
+/// frame's top-left, so the bordered box and its contents move together.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum Element {
@@ -245,6 +247,19 @@ pub enum Element {
         #[serde(default)]
         page: Placement,
     },
+    Frame {
+        at: At,
+        size: Size,
+        /// The outline's thickness in mm; 0 = no border.
+        border_mm: f32,
+        /// Placed relative to the frame's top-left, like group items.
+        /// Fixed elements and other frames — not groups (v1).
+        children: Vec<Element>,
+        /// The frame's children take this page; a child's own `page`
+        /// must stay the default (the validator rejects a conflict).
+        #[serde(default)]
+        page: Placement,
+    },
     Group {
         /// Where the flow starts (top-left of the first item).
         at: At,
@@ -267,6 +282,9 @@ impl Element {
             Element::Text { content, .. } => binding_names(content),
             Element::Barcode { value, .. } | Element::Qr { value, .. } => binding_names(value),
             Element::Group { items, .. } => items.iter().flat_map(Element::bindings).collect(),
+            Element::Frame { children, .. } => {
+                children.iter().flat_map(Element::bindings).collect()
+            }
             Element::Image { .. } | Element::Line { .. } | Element::Rect { .. } => Vec::new(),
         }
     }
@@ -291,7 +309,7 @@ impl Element {
                     *thickness_mm
                 }
             }
-            Element::Rect { size, .. } => size.h_mm,
+            Element::Rect { size, .. } | Element::Frame { size, .. } => size.h_mm,
             // One repeated item is as tall as its lowest element; the
             // gap is between items, so it does not add to one item.
             Element::Group { items, .. } => items
@@ -319,7 +337,7 @@ impl Element {
                     *length_mm
                 }
             }
-            Element::Rect { size, .. } => size.w_mm,
+            Element::Rect { size, .. } | Element::Frame { size, .. } => size.w_mm,
             Element::Group { w_mm, .. } => *w_mm,
         }
     }
@@ -433,7 +451,7 @@ impl Template {
             }
         }
         for el in &self.elements {
-            Self::validate_element(el, w, h, &declared, 0)?;
+            Self::validate_element(el, w, h, &declared, 0, 0)?;
         }
         for name in self.elements.iter().flat_map(Element::bindings) {
             if !declared.is_empty() && !declared.iter().any(|f| f.name == name) {
@@ -443,14 +461,72 @@ impl Template {
         Ok(())
     }
 
+    /// How deep frames may nest before the document is "runaway".
+    const FRAME_DEPTH_LIMIT: u32 = 4;
+
     fn validate_element(
         el: &Element,
         page_w: f32,
         page_h: f32,
         declared: &[&Field],
         depth: u32,
+        frame_depth: u32,
     ) -> Result<(), TemplateError> {
         match el {
+            Element::Frame {
+                size,
+                border_mm,
+                children,
+                ..
+            } => {
+                Self::validate_fixed(el, page_w, page_h)?;
+                if frame_depth + 1 > Self::FRAME_DEPTH_LIMIT {
+                    return Err(TemplateError::FrameTooDeep);
+                }
+                if !border_mm.is_finite() || *border_mm < 0.0 {
+                    return Err(TemplateError::BadBorder(*border_mm));
+                }
+                for child in children {
+                    // A frame holds fixed elements; the repeating case
+                    // is a group, and a group cannot sit in a frame
+                    // (v1).
+                    if matches!(child, Element::Group { .. }) {
+                        return Err(TemplateError::GroupInFrame);
+                    }
+                    // The frame decides which page its children appear
+                    // on; a child that tries to choose its own is a
+                    // conflict the author almost certainly did not mean.
+                    if other_page(child) != Placement::default() {
+                        return Err(TemplateError::FrameChildPage(element_name(child)));
+                    }
+                    // A child must stay inside the frame's box — the
+                    // frame's own size, not the page's.
+                    let child_at = other_at(child);
+                    let over_x = child_at.x_mm + child.width_mm() > size.w_mm;
+                    let over_y = child_at.y_mm + child.height_mm() > size.h_mm;
+                    if over_x || over_y {
+                        let (edge, limit) = if over_x {
+                            (child_at.x_mm + child.width_mm(), size.w_mm)
+                        } else {
+                            (child_at.y_mm + child.height_mm(), size.h_mm)
+                        };
+                        return Err(TemplateError::FrameChildOutside {
+                            element: element_name(child),
+                            edge,
+                            limit,
+                        });
+                    }
+                    Self::validate_element(
+                        child,
+                        size.w_mm,
+                        size.h_mm,
+                        declared,
+                        depth,
+                        frame_depth + 1,
+                    )?;
+                }
+                Ok(())
+            }
             Element::Group {
                 at,
                 w_mm,
@@ -491,41 +567,53 @@ impl Template {
                     });
                 }
                 for item in items {
-                    Self::validate_element(item, *w_mm, f32::INFINITY, declared, depth + 1)?;
+                    Self::validate_element(
+                        item,
+                        *w_mm,
+                        f32::INFINITY,
+                        declared,
+                        depth + 1,
+                        frame_depth,
+                    )?;
                 }
                 Ok(())
             }
-            other => {
-                // Flow is for groups only; everything else sits on a
-                // page and must stay on it.
-                if other_page(other) == Placement::Flow {
-                    return Err(TemplateError::FlowOnFixedElement(element_name(other)));
-                }
-                if let Placement::Only(n) = other_page(other) {
-                    if n == 0 {
-                        return Err(TemplateError::PageNumberZero);
-                    }
-                }
-                let at = other_at(other);
-                let w = other.width_mm();
-                let h = other.height_mm();
-                if at.x_mm < 0.0 || at.y_mm < 0.0 || !w.is_finite() || !h.is_finite() {
-                    return Err(TemplateError::OffPage {
-                        element: element_name(other),
-                        edge: at.y_mm,
-                        limit: page_h,
-                    });
-                }
-                if at.x_mm + w > page_w || at.y_mm + h > page_h {
-                    return Err(TemplateError::OffPage {
-                        element: element_name(other),
-                        edge: (at.x_mm + w).max(at.y_mm + h),
-                        limit: page_w.max(page_h),
-                    });
-                }
-                Ok(())
+            other => Self::validate_fixed(other, page_w, page_h),
+        }
+    }
+
+    /// A fixed (non-group) element: it sits on a page and must stay on
+    /// it — no `flow`, a 1-based `only`, and its box inside
+    /// `page_w`×`page_h`. Frames run these checks on themselves before
+    /// checking their children.
+    fn validate_fixed(el: &Element, page_w: f32, page_h: f32) -> Result<(), TemplateError> {
+        // Flow is for groups only; everything else sits on a page.
+        if other_page(el) == Placement::Flow {
+            return Err(TemplateError::FlowOnFixedElement(element_name(el)));
+        }
+        if let Placement::Only(n) = other_page(el) {
+            if n == 0 {
+                return Err(TemplateError::PageNumberZero);
             }
         }
+        let at = other_at(el);
+        let w = el.width_mm();
+        let h = el.height_mm();
+        if at.x_mm < 0.0 || at.y_mm < 0.0 || !w.is_finite() || !h.is_finite() {
+            return Err(TemplateError::OffPage {
+                element: element_name(el),
+                edge: at.y_mm,
+                limit: page_h,
+            });
+        }
+        if at.x_mm + w > page_w || at.y_mm + h > page_h {
+            return Err(TemplateError::OffPage {
+                element: element_name(el),
+                edge: (at.x_mm + w).max(at.y_mm + h),
+                limit: page_w.max(page_h),
+            });
+        }
+        Ok(())
     }
 }
 
@@ -537,7 +625,8 @@ fn other_page(el: &Element) -> Placement {
         | Element::Barcode { page, .. }
         | Element::Qr { page, .. }
         | Element::Line { page, .. }
-        | Element::Rect { page, .. } => *page,
+        | Element::Rect { page, .. }
+        | Element::Frame { page, .. } => *page,
         Element::Group { .. } => Placement::default(),
     }
 }
@@ -550,7 +639,8 @@ fn other_at(el: &Element) -> At {
         | Element::Barcode { at, .. }
         | Element::Qr { at, .. }
         | Element::Line { at, .. }
-        | Element::Rect { at, .. } => *at,
+        | Element::Rect { at, .. }
+        | Element::Frame { at, .. } => *at,
         Element::Group { .. } => At {
             x_mm: 0.0,
             y_mm: 0.0,
@@ -567,6 +657,7 @@ fn element_name(el: &Element) -> String {
         Element::Qr { .. } => "qr".to_string(),
         Element::Line { .. } => "line".to_string(),
         Element::Rect { .. } => "rectangle".to_string(),
+        Element::Frame { .. } => "frame".to_string(),
         Element::Group { bind, .. } => format!("group \"{bind}\""),
     }
 }
@@ -646,7 +737,23 @@ impl Template {
 
     /// Parse a template from JSON.
     pub fn from_json(s: &str) -> Result<Template, TemplateError> {
-        serde_json::from_str(s).map_err(TemplateError::Json)
+        serde_json::from_str(s).map_err(TemplateError::from_json_error)
+    }
+}
+
+impl TemplateError {
+    /// A JSON error that names an element type this build does not know
+    /// (`unknown variant \`x\``) is not a broken template — it is a
+    /// template from a newer PrintNinja, and is said so.
+    fn from_json_error(e: serde_json::Error) -> TemplateError {
+        let msg = e.to_string();
+        if let Some(start) = msg.find("unknown variant `") {
+            let rest = &msg[start + "unknown variant `".len()..];
+            if let Some(end) = rest.find('`') {
+                return TemplateError::TooNew(rest[..end].to_string());
+            }
+        }
+        TemplateError::Json(e)
     }
 }
 
@@ -689,6 +796,23 @@ pub enum TemplateError {
         edge: f32,
         limit: f32,
     },
+    /// Frames nested deeper than the limit.
+    FrameTooDeep,
+    /// A frame's border that is not a non-negative number of mm.
+    BadBorder(f32),
+    /// A frame child with a `page` of its own — the frame decides.
+    FrameChildPage(String),
+    /// A group inside a frame (v1: frames hold fixed elements only).
+    GroupInFrame,
+    /// A frame child that leaves the frame's size.
+    FrameChildOutside {
+        element: String,
+        edge: f32,
+        limit: f32,
+    },
+    /// The JSON is well-formed but names a scene element this build
+    /// does not know — the template was written by a newer PrintNinja.
+    TooNew(String),
     /// Malformed JSON.
     Json(serde_json::Error),
 }
@@ -766,6 +890,41 @@ impl fmt::Display for TemplateError {
                 f,
                 "{element} runs past the page: it reaches {edge:.2} mm, but the \
                  page ends at {limit:.2} mm"
+            ),
+            TemplateError::FrameTooDeep => write!(
+                f,
+                "frames nest to a depth of {} — one frame too many; flatten the \
+                 inner frame into its parent",
+                Template::FRAME_DEPTH_LIMIT
+            ),
+            TemplateError::BadBorder(b) => write!(
+                f,
+                "a frame's border must be a non-negative number of millimetres \
+                 (got {b})"
+            ),
+            TemplateError::FrameChildPage(name) => write!(
+                f,
+                "\"{name}\" sits in a frame and cannot choose its own page — \
+                 the frame decides which page its children appear on"
+            ),
+            TemplateError::GroupInFrame => write!(
+                f,
+                "a repeating group cannot sit inside a frame (v1) — a frame \
+                 holds fixed elements; repeat the frame from the outside"
+            ),
+            TemplateError::FrameChildOutside {
+                element,
+                edge,
+                limit,
+            } => write!(
+                f,
+                "{element} runs past the frame: it reaches {edge:.2} mm, but \
+                 the frame ends at {limit:.2} mm"
+            ),
+            TemplateError::TooNew(name) => write!(
+                f,
+                "this template uses \"{name}\", which needs a newer PrintNinja \
+                 — update the app to open it"
             ),
             TemplateError::Json(e) => write!(f, "the template is not valid JSON: {e}"),
         }
@@ -1065,6 +1224,250 @@ mod tests {
         assert!(matches!(t.validate(), Err(TemplateError::PageNumberZero)));
     }
 
+    // Frames: nested boxes that flatten to a border rect and offset
+    // children at expand.
+
+    /// `depth` frames nested inside each other, each at the origin.
+    fn nested_frames(depth: u32) -> Element {
+        let mut el: Element = Element::Frame {
+            at: At {
+                x_mm: 0.0,
+                y_mm: 0.0,
+            },
+            size: Size {
+                w_mm: 2.0,
+                h_mm: 2.0,
+            },
+            border_mm: 0.0,
+            children: vec![],
+            page: Placement::default(),
+        };
+        for _ in 0..depth {
+            el = Element::Frame {
+                at: At {
+                    x_mm: 0.0,
+                    y_mm: 0.0,
+                },
+                size: Size {
+                    w_mm: 4.0,
+                    h_mm: 4.0,
+                },
+                border_mm: 0.0,
+                children: vec![el],
+                page: Placement::default(),
+            };
+        }
+        el
+    }
+
+    fn frame_t(el: Element) -> Template {
+        Template {
+            format: Format::Scene,
+            html: None,
+            media: label(),
+            fields: vec![],
+            elements: vec![el],
+            fonts: vec![],
+        }
+    }
+
+    #[test]
+    fn frames_nest_to_the_limit_but_one_beyond_is_rejected() {
+        // `nested_frames(3)` is four frames deep: the limit. One more
+        // wrapper is one too many.
+        frame_t(nested_frames(3)).validate().unwrap();
+        let err = frame_t(nested_frames(4)).validate().unwrap_err();
+        assert!(matches!(err, TemplateError::FrameTooDeep));
+        assert!(
+            err.to_string().contains("one frame too many"),
+            "{}",
+            err.to_string()
+        );
+    }
+
+    #[test]
+    fn a_frame_border_must_be_a_non_negative_number() {
+        fn bordered(border: f32) -> Template {
+            frame_t(Element::Frame {
+                at: At {
+                    x_mm: 4.0,
+                    y_mm: 4.0,
+                },
+                size: Size {
+                    w_mm: 30.0,
+                    h_mm: 20.0,
+                },
+                border_mm: border,
+                children: vec![],
+                page: Placement::default(),
+            })
+        }
+        bordered(0.5).validate().unwrap();
+        assert!(matches!(
+            bordered(-0.5).validate(),
+            Err(TemplateError::BadBorder(b)) if b < 0.0
+        ));
+        assert!(matches!(
+            bordered(f32::NAN).validate(),
+            Err(TemplateError::BadBorder(_))
+        ));
+    }
+
+    #[test]
+    fn a_group_cannot_sit_in_a_frame() {
+        let t = frame_t(Element::Frame {
+            at: At {
+                x_mm: 4.0,
+                y_mm: 4.0,
+            },
+            size: Size {
+                w_mm: 50.0,
+                h_mm: 30.0,
+            },
+            border_mm: 0.5,
+            children: vec![Element::Group {
+                at: At {
+                    x_mm: 0.0,
+                    y_mm: 0.0,
+                },
+                w_mm: 46.0,
+                item_gap_mm: 1.0,
+                bind: "lines".to_string(),
+                items: vec![text_xy(0.0, 0.0, "row", Placement::default())],
+                page: Placement::Flow,
+            }],
+            page: Placement::default(),
+        });
+        assert!(matches!(t.validate(), Err(TemplateError::GroupInFrame)));
+    }
+
+    #[test]
+    fn a_frame_child_cannot_choose_its_own_page() {
+        let t = frame_t(Element::Frame {
+            at: At {
+                x_mm: 4.0,
+                y_mm: 4.0,
+            },
+            size: Size {
+                w_mm: 50.0,
+                h_mm: 12.0,
+            },
+            border_mm: 0.5,
+            children: vec![text_xy(2.0, 2.0, "stamped", Placement::First)],
+            page: Placement::default(),
+        });
+        let err = t.validate().unwrap_err();
+        assert!(
+            matches!(
+                err,
+                TemplateError::FrameChildPage(ref name) if name.contains("stamped")
+            ),
+            "{err}"
+        );
+        assert!(
+            err.to_string().contains("sits in a frame"),
+            "{}",
+            err.to_string()
+        );
+    }
+
+    #[test]
+    fn a_child_that_runs_past_the_frame_is_named() {
+        let t = frame_t(Element::Frame {
+            at: At {
+                x_mm: 4.0,
+                y_mm: 4.0,
+            },
+            size: Size {
+                w_mm: 30.0,
+                h_mm: 20.0,
+            },
+            border_mm: 0.5,
+            // The helper text is 50 mm wide: 10 + 50 = 60, past the
+            // frame's 30 mm.
+            children: vec![text_xy(10.0, 2.0, "too wide", Placement::default())],
+            page: Placement::default(),
+        });
+        let err = t.validate().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("too wide"), "{msg}");
+        assert!(msg.contains("runs past the frame"), "{msg}");
+    }
+
+    #[test]
+    fn a_frame_template_round_trips_to_the_same_bytes() {
+        let t = frame_t(Element::Frame {
+            at: At {
+                x_mm: 4.0,
+                y_mm: 24.0,
+            },
+            size: Size {
+                w_mm: 50.0,
+                h_mm: 12.0,
+            },
+            border_mm: 0.3,
+            children: vec![Element::Frame {
+                at: At {
+                    x_mm: 2.0,
+                    y_mm: 2.0,
+                },
+                size: Size {
+                    w_mm: 24.0,
+                    h_mm: 8.0,
+                },
+                border_mm: 0.15,
+                children: vec![Element::Text {
+                    at: At {
+                        x_mm: 2.0,
+                        y_mm: 2.0,
+                    },
+                    size: Size {
+                        w_mm: 20.0,
+                        h_mm: 4.0,
+                    },
+                    content: "Ship to {{customer}}".to_string(),
+                    style: TextStyle {
+                        size_mm: 3.0,
+                        font: None,
+                        bold: false,
+                        italic: false,
+                        align: Align::Left,
+                    },
+                    page: Placement::default(),
+                }],
+                page: Placement::default(),
+            }],
+            page: Placement::default(),
+        });
+        t.validate().unwrap();
+        let once = t.to_json().unwrap();
+        let back = Template::from_json(&once).unwrap();
+        assert_eq!(back, t, "parse must invert serialize");
+        assert_eq!(
+            back.to_json().unwrap(),
+            once,
+            "serialization is deterministic"
+        );
+    }
+
+    #[test]
+    fn an_element_type_this_build_does_not_know_says_update() {
+        let json = r#"{ "media": { "kind": "label", "width_mm": 58, "height_mm": 40 },
+                     "elements": [ { "type": "sparkle",
+                                     "at": { "x_mm": 4, "y_mm": 6 },
+                                     "size": { "w_mm": 50, "h_mm": 4 } } ] }"#;
+        let err = Template::from_json(json).unwrap_err();
+        assert!(
+            matches!(err, TemplateError::TooNew(ref name) if name == "sparkle"),
+            "{err}"
+        );
+        assert!(
+            err.to_string().contains("newer PrintNinja"),
+            "{}",
+            err.to_string()
+        );
+    }
+
     /// The wire format is part of the contract with the UI (the TS
     /// mirror in `app/ui/src/scene/schema.ts`), so a representative
     /// template's bytes are pinned goldens, not re-derived.
@@ -1100,6 +1503,37 @@ mod tests {
                     page: Placement::default(),
                 },
                 text_xy(4.0, 16.0, "Total: {{amount}}", Placement::default()),
+                Element::Frame {
+                    at: At {
+                        x_mm: 4.0,
+                        y_mm: 24.0,
+                    },
+                    size: Size {
+                        w_mm: 50.0,
+                        h_mm: 12.0,
+                    },
+                    border_mm: 0.3,
+                    children: vec![Element::Text {
+                        at: At {
+                            x_mm: 2.0,
+                            y_mm: 2.0,
+                        },
+                        size: Size {
+                            w_mm: 44.0,
+                            h_mm: 4.0,
+                        },
+                        content: "Ship to {{customer}}".to_string(),
+                        style: TextStyle {
+                            size_mm: 3.0,
+                            font: None,
+                            bold: false,
+                            italic: false,
+                            align: Align::Left,
+                        },
+                        page: Placement::default(),
+                    }],
+                    page: Placement::default(),
+                },
             ],
             fonts: vec![],
         };

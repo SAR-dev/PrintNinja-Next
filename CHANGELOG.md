@@ -573,6 +573,16 @@ Unreleased.
   published one stays until unpublish — the button is held off with a
   note that the registry keeps its copy — and a deleted shipped starter
   stays deleted across restarts
+- Scene templates: the frame element — a bordered box (border in
+  millimetres) that holds other elements at coordinates relative to the
+  frame's top-left, nestable to four levels. A frame flattens at
+  expansion into its border rect and its offset children, so preview,
+  the goldens and all three native encoders pick it up unchanged. A
+  child that leaves the frame, picks its own page, or is a repeating
+  group; a negative or non-numeric border; and a fifth nesting level
+  each get their own named validation error, and a template that uses an
+  element type this build does not know fails with a plain "needs a
+  newer PrintNinja" instead of a raw parse error
 
 ### Changed
 
