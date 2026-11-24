@@ -569,6 +569,10 @@ Unreleased.
   `docs/UI_GUIDE.md` describes the five settings tabs and the
   saved-printer picker on the print screen; `docs/FEATURES.md` lists the
   saved printers and `docs/GLOSSARY.md` gains the "saved printer" term
+- Templates: a local template can now be deleted from the list. A
+  published one stays until unpublish — the button is held off with a
+  note that the registry keeps its copy — and a deleted shipped starter
+  stays deleted across restarts
 
 ### Changed
 

@@ -25,6 +25,7 @@ const en = {
     published: "published",
     publish: "Publish",
     unpublish: "Unpublish",
+    delete_blocked: "Unpublish it first — the registry keeps its copy.",
     edit: "Edit",
     print: "Print",
     new_template: "New template",

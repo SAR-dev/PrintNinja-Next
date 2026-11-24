@@ -243,6 +243,13 @@ export const loadTemplates = () => invoke<StoredTemplate[]>("load_templates");
 export const saveTemplate = (template: StoredTemplate) =>
   invoke<void>("save_template", { template });
 
+/**
+ * Delete one template by id — the local row; a published template's
+ * registry copy is unpublish's business.
+ */
+export const deleteTemplate = (id: string) =>
+  invoke<boolean>("delete_template", { id });
+
 /** The recent jobs, newest first. */
 export const loadRecentJobs = () => invoke<StoredJob[]>("load_recent_jobs");
 

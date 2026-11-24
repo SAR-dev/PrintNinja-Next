@@ -26,6 +26,8 @@ const ja: EnStrings = {
     published: "公開中",
     publish: "公開",
     unpublish: "公開解除",
+    delete_blocked:
+      "先に公開解除してください — レジストリにはコピーが残ります。",
     edit: "編集",
     print: "印刷",
     new_template: "新しいテンプレート",

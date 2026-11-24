@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   communityTemplates,
+  deleteTemplate,
   loadRecentJobs,
   loadSettings,
   loadTemplates,
@@ -17,6 +18,7 @@ import {
   printJob,
   rememberJob,
   type Publication,
+  saveSetting,
   saveTemplate,
   type RegistryStatus,
   type StoredJob,
@@ -68,6 +70,23 @@ import {
 
 /** How many jobs the recent list remembers (the store keeps the same). */
 const RECENT_LIMIT = 10;
+
+/** The setting that remembers the shipped starters the user deleted,
+ * as an id list in JSON. A deleted starter would otherwise come back
+ * on the next start, unedited, from the merged-in base list. */
+const DELETED_STARTERS_KEY = "deletedTemplates";
+
+/** The deleted starter ids out of a settings map, or none. */
+function deletedIds(s: Record<string, string>): string[] {
+  try {
+    const v: unknown = JSON.parse(s[DELETED_STARTERS_KEY] ?? "[]");
+    return Array.isArray(v)
+      ? v.filter((x): x is string => typeof x === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 /** The list view's tabs. */
 type Tab = "mine" | "community" | "saved";
@@ -174,6 +193,7 @@ function TemplatesScreen({
   onReprint,
   onPublish,
   onUnpublish,
+  onDelete,
   storageError,
 }: {
   templates: AppTemplate[];
@@ -189,6 +209,7 @@ function TemplatesScreen({
    * the account is not signed in. */
   onPublish: (t: AppTemplate) => void;
   onUnpublish: (t: AppTemplate) => void;
+  onDelete: (t: AppTemplate) => void;
   /** A local-storage failure, in plain words, if there is one. */
   storageError: string | null;
 }) {
@@ -237,6 +258,15 @@ function TemplatesScreen({
                     {t("app.edit")}
                   </Button>
                   <Button onClick={() => onPrint(tpl)}>{t("app.print")}</Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={published}
+                    title={published ? t("app.delete_blocked") : undefined}
+                    onClick={() => onDelete(tpl)}
+                  >
+                    {t("common.delete")}
+                  </Button>
                 </div>
               </CardHeader>
             </Card>
@@ -347,20 +377,20 @@ function App() {
   const [publishSlug, setPublishSlug] = useState("");
   const [publishReadme, setPublishReadme] = useState("");
 
-  // The local store: what the user saved comes back on start.
+  // The local store: what the user saved comes back on start; a
+  // shipped starter the user deleted stays deleted (the tombstone).
   useEffect(() => {
-    loadTemplates()
-      .then((rows) => {
-        if (rows.length > 0) setTemplates(mergeTemplates(starters, rows));
+    Promise.all([loadTemplates(), loadSettings()])
+      .then(([rows, s]) => {
+        const base = starters.filter((t) => !deletedIds(s).includes(t.id));
+        setTemplates(rows.length > 0 ? mergeTemplates(base, rows) : base);
+        // The appearance the settings screen saved; dark until it says so.
+        applyTheme(s.theme ?? "dark");
       })
       .catch((e) => setStorageError(String(e)));
     loadRecentJobs()
       .then((rows) => setRecent(rows.map(fromStoredJob)))
       .catch((e) => setStorageError(String(e)));
-    // The appearance the settings screen saved; dark until it says so.
-    loadSettings()
-      .then((rows) => applyTheme(rows.theme ?? "dark"))
-      .catch(() => applyTheme("dark"));
     // The registry's state at start: a probe, not a sync — the sync
     // waits for the button, so a cold start never blocks on a server.
     registryStatus()
@@ -425,9 +455,11 @@ function App() {
       ]);
       setCommunity(rows);
       setMyPublications(pubs);
-      // A save made here (or on another device) lands as a local copy.
-      const local = await loadTemplates();
-      if (local.length > 0) setTemplates(mergeTemplates(starters, local));
+      // A save made here (or on another device) lands as a local
+      // copy; deleted starters stay out, as at the start.
+      const [local, s] = await Promise.all([loadTemplates(), loadSettings()]);
+      const base = starters.filter((t) => !deletedIds(s).includes(t.id));
+      if (local.length > 0) setTemplates(mergeTemplates(base, local));
     } catch (e) {
       setRegistryError(String(e));
     }
@@ -501,6 +533,23 @@ function App() {
       await syncRegistry();
     } catch (e) {
       setRegistryError(String(e));
+    }
+  };
+
+  /** Delete a local template. A shipped starter is also tombstoned,
+   * so the next start does not merge it back in. */
+  const deleteTpl = async (tpl: AppTemplate) => {
+    try {
+      await deleteTemplate(tpl.id);
+      if (starters.some((s) => s.id === tpl.id)) {
+        const s = await loadSettings();
+        const hidden = deletedIds(s);
+        if (!hidden.includes(tpl.id)) hidden.push(tpl.id);
+        await saveSetting(DELETED_STARTERS_KEY, JSON.stringify(hidden));
+      }
+      setTemplates((ts) => ts.filter((x) => x.id !== tpl.id));
+    } catch (e) {
+      setStorageError(String(e));
     }
   };
 
@@ -701,6 +750,7 @@ function App() {
                 onReprint={(j) => void reprint(j)}
                 onPublish={openPublish}
                 onUnpublish={(tpl) => void unpublish(tpl)}
+                onDelete={(tpl) => void deleteTpl(tpl)}
                 storageError={storageError}
               />
             </TabsContent>
