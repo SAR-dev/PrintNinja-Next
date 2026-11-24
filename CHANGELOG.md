@@ -505,3 +505,11 @@ Unreleased.
   **Block private IP ranges** switch for a printer or server on your own
   LAN. Deep links may carry the URL (`dataUrl`, the old app's `url` key
   still works)
+- Print API demo page: the registry serves `/demo/print.html` — the
+  app's Print page as an ordinary web page, for trying prints from a
+  browser without the app (the app's printers and saved templates, JSON
+  or CSV data or a Data URL, copies, job polling and the result). The
+  local print API accepts a `dataUrl` on `POST /v1/print` (fetched with
+  the app's own guarded data fetching) and answers CORS for exactly one
+  origin — the configured registry's — so the demo page can call it and
+  no other web page can

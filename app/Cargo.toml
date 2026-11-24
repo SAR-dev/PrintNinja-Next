@@ -17,6 +17,10 @@ tauri-build = "2"
 # middleware layer.
 axum = "0.8"
 tower = { version = "0.5", features = ["util"] }
+# The CORS layer for the registry's demo page — the one browser
+# origin the local API lets across to it (the old app's share
+# service pattern; a wildcard would let any LAN page probe the API).
+tower-http = { version = "0.6", features = ["cors"] }
 tokio = { version = "1", features = ["net", "time", "macros", "rt"] }
 # The community registry client (plan phase 9): the sync engine's
 # HTTP calls.

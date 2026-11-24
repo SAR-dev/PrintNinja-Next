@@ -56,6 +56,31 @@ the gallery for everyone; your local copy is untouched.
 server like `https://registry.example.com`. Everyone on the team points
 at the same URL and sees the same gallery.
 
+### 🖨️ The print demo page
+
+Every registry serves **`/demo/print.html`** — the app's Print page as
+an ordinary web page, for trying prints without the app (a till, a
+browser on the shop floor, a quick test):
+
+1. Open `<registry URL>/demo/print.html` in a browser **on the PC that
+   runs PrintNinja** — the page talks to the app's local print API
+   (`http://127.0.0.1:17717` by default; the field is editable).
+2. **Load lists** — it reads the app's printers and saved templates.
+3. Pick a printer and a template, paste **JSON or CSV data** (or a
+   **Data URL** the app fetches, guarded the same way the app guards
+   its own data), set the copies, and press **Print**. The page polls
+   the job and shows the result — confirmed, unconfirmed, the reason
+   when it failed.
+
+The app lets **exactly this page's origin** across to the local API
+(CORS, one configured origin — no wildcard, so a page on any other LAN
+host cannot probe the API). For that reason the page only works when
+the app's *Server address* points at the registry it was opened from —
+the default `http://127.0.0.1:8787` covers a registry on the same
+machine. From **another device on the network**, the page works too,
+but that device's calls must carry a paired **device token**
+(Advanced → *Device token*) and the app's LAN switch must be on.
+
 ---
 
 ## 🏠 Part 2 — hosting one

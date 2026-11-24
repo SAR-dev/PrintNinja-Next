@@ -22,6 +22,15 @@
 //! carry an `Idempotency-Key` header: a retried request with the same
 //! key comes back the same job — 409, the original id, nothing new
 //! printed.
+//!
+//! Browsers: the registry serves a demo page (`/demo/print.html`) that
+//! drives this API from a web page, so the listener answers CORS
+//! preflights — but for exactly one origin: the one the registry runs
+//! on (the app's `registry.url` setting, its environment variable, or
+//! the local default). No wildcard: any origin would let a page on any
+//! LAN host probe this API. When the demo's origin is unknown the
+//! listener sends no CORS headers and cross-origin browser calls fail
+//! in the browser, as they should.
 
 use std::collections::BTreeMap;
 use std::future::Future;
@@ -43,6 +52,7 @@ use pn_scene::{Records, Template};
 use serde::{Deserialize, Serialize};
 use tower::layer::Layer;
 use tower::Service;
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
 use crate::pairing::{self, PairingWindow};
 use crate::pipeline::{
@@ -95,10 +105,9 @@ pub fn router(state: ApiState) -> Router {
 /// start. When the port is taken the app keeps running — the failure
 /// is named, nothing else changes.
 pub async fn serve(state: Arc<ApiState>) {
-    let lan_on = state
-        .store
-        .load_settings()
-        .ok()
+    let settings = state.store.load_settings().ok();
+    let lan_on = settings
+        .as_ref()
         .is_some_and(|s| s.get("api.lan").is_some_and(|v| v == "true"));
     let addr: SocketAddr = if lan_on {
         ([0, 0, 0, 0], DEFAULT_PORT).into()
@@ -114,7 +123,30 @@ pub async fn serve(state: Arc<ApiState>) {
     };
     let scope = if lan_on { "the network" } else { "127.0.0.1" };
     eprintln!("the local print API is listening on http://{addr} ({scope})");
+
+    // The one browser origin this API lets across: the origin the
+    // registry serves the demo page from — the app's configured
+    // registry address, its environment variable, or the local
+    // default. Unknown origin: no CORS headers, browser calls fail.
+    let browser_origin = settings
+        .as_ref()
+        .map(crate::registry::Registry::base_url)
+        .and_then(|base| browser_origin_of(&base));
+
+    let mut cors = CorsLayer::new().allow_methods(Any).allow_headers(Any);
+    // A registry address that is not a valid origin is not an origin:
+    // no CORS headers, nothing leaks.
+    if let Some(origin) = browser_origin.and_then(|o| o.parse::<axum::http::HeaderValue>().ok()) {
+        // The demo page may be loaded from a public registry and call
+        // this loopback listener: allow Chrome's private-network
+        // preflight for that one origin.
+        cors = cors
+            .allow_origin(AllowOrigin::list([origin]))
+            .allow_private_network(true);
+    }
+
     let app = router(state.as_ref().clone())
+        .layer(cors)
         .layer(LanGate {
             store: state.store.clone(),
         })
@@ -122,6 +154,22 @@ pub async fn serve(state: Arc<ApiState>) {
     if let Err(e) = axum::serve(listener, app).await {
         eprintln!("the local print API stopped: {e}");
     }
+}
+
+/// The origin — scheme, host, port, nothing else — of the registry's
+/// base URL: the origin a browser reports for the demo page the
+/// registry serves, and the only origin the print API lets across.
+/// An `http`/`https` URL is the only one with a usable origin.
+fn browser_origin_of(base: &str) -> Option<String> {
+    let (scheme, rest) = base.split_once("://")?;
+    if !matches!(scheme.to_ascii_lowercase().as_str(), "http" | "https") {
+        return None;
+    }
+    let authority = rest.split('/').next()?.trim();
+    if authority.is_empty() {
+        return None;
+    }
+    Some(format!("{scheme}://{authority}"))
 }
 
 /// Alive, and whether the store is with it.
@@ -173,15 +221,22 @@ async fn list_templates(
 }
 
 /// A print request: a saved template by name (or id), a printer by
-/// model (or alias), the data, and where the job goes.
+/// model (or alias), the data — pasted, or fetched from a URL — and
+/// where the job goes.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PrintRequest {
     template: String,
     printer: String,
     /// The data as JSON — a record, or a list of them — or a string
-    /// holding JSON or CSV text.
-    data: serde_json::Value,
+    /// holding JSON or CSV text. One of `data` and `dataUrl` is
+    /// required.
+    data: Option<serde_json::Value>,
+    /// The data's URL instead: fetched (guarded, the app's data
+    /// fetching) when present, and its body used as the data.
+    data_url: Option<String>,
+    /// The method for the `dataUrl` fetch; `GET` when left out.
+    data_url_method: Option<String>,
     /// One copy when left out.
     copies: Option<u32>,
     /// The printer's transport; when left out, the saved default for
@@ -230,10 +285,32 @@ async fn print(
     let transport_json = serde_json::to_string(&transport).map_err(|e| bad(&e.to_string()))?;
 
     // The data as the pipeline takes it: a string is JSON or CSV text,
-    // anything else is compact JSON.
-    let data = match &req.data {
-        serde_json::Value::String(s) => s.clone(),
-        other => other.to_string(),
+    // anything else is compact JSON. A data URL is fetched first —
+    // guarded the way the app's own data fetching is — and a failed
+    // fetch is a 400: no job is made for it.
+    let data = if let Some(url) = req.data_url.clone() {
+        let method = req.data_url_method.clone().unwrap_or_default();
+        let block_private = settings
+            .get("data.block_private_ips")
+            .map(|v| v != "false")
+            .unwrap_or(true);
+        let fetcher = if block_private {
+            crate::fetcher::DataFetcher::new()
+        } else {
+            crate::fetcher::DataFetcher::allowing_private()
+        };
+        fetcher
+            .fetch(&url, &method)
+            .await
+            .map_err(|e| bad(&format!("data URL: {e}")))?
+    } else {
+        match req
+            .data
+            .ok_or_else(|| bad("either data or dataUrl is required"))?
+        {
+            serde_json::Value::String(s) => s,
+            other => other.to_string(),
+        }
     };
 
     let job = ApiJob {
@@ -1145,6 +1222,131 @@ poll_after_ms = 200
         )
         .await;
         assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn neither_data_nor_data_url_is_a_plain_400() {
+        let st = state_with_label_template();
+        let res = post(
+            st,
+            "/v1/print",
+            &serde_json::json!({
+                "template": "Labels",
+                "printer": "Fake Label",
+                "transport": { "kind": "tcp", "host": "127.0.0.1", "port": 9100 },
+            })
+            .to_string(),
+            HeaderMap::new(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        assert!(body(res).await["error"]
+            .as_str()
+            .unwrap()
+            .contains("either data or dataUrl"));
+    }
+
+    #[tokio::test]
+    async fn a_data_url_to_a_private_address_is_blocked_by_default() {
+        let st = state_with_label_template();
+        let res = post(
+            st.clone(),
+            "/v1/print",
+            &serde_json::json!({
+                "template": "Labels",
+                "printer": "Fake Label",
+                "dataUrl": "http://127.0.0.1:1/data",
+                "transport": { "kind": "tcp", "host": "127.0.0.1", "port": 9100 },
+            })
+            .to_string(),
+            HeaderMap::new(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        assert!(body(res).await["error"]
+            .as_str()
+            .unwrap()
+            .contains("refused data URL"));
+        assert_eq!(
+            st.store.list_api_jobs(JOB_LIST_LIMIT).unwrap().len(),
+            0,
+            "no job was made for a failed fetch"
+        );
+    }
+
+    /// A one-shot HTTP server: answers its single request with the
+    /// given body, for the data-URL fetch to land on.
+    fn http_once(body: &str) -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let body = body.to_string();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = Vec::new();
+            let mut chunk = [0u8; 1024];
+            while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                let n = stream.read(&mut chunk).unwrap();
+                if n == 0 {
+                    return;
+                }
+                buf.extend_from_slice(&chunk[..n]);
+            }
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(resp.as_bytes());
+        });
+        port
+    }
+
+    #[tokio::test]
+    async fn a_data_url_fetches_when_private_addresses_are_allowed() {
+        let st = state_with_label_template();
+        st.store
+            .save_setting("data.block_private_ips", "false")
+            .unwrap();
+        let port = http_once(r#"[{"name":"BOLT M8"}]"#);
+
+        let res = post(
+            st.clone(),
+            "/v1/print",
+            &serde_json::json!({
+                "template": "Labels",
+                "printer": "Fake Label",
+                "dataUrl": format!("http://127.0.0.1:{port}/data"),
+                "transport": { "kind": "tcp", "host": "127.0.0.1", "port": 9100 },
+            })
+            .to_string(),
+            HeaderMap::new(),
+        )
+        .await;
+        assert_eq!(res.status(), StatusCode::CREATED);
+        let id = body(res).await["jobId"].as_str().unwrap().to_string();
+
+        // The fetched text is what the job freezes as its data.
+        let job = st.store.api_job(&id).unwrap().unwrap();
+        assert_eq!(job.data, r#"[{"name":"BOLT M8"}]"#);
+    }
+
+    #[test]
+    fn the_browser_origin_is_the_registry_origin() {
+        assert_eq!(
+            browser_origin_of("http://127.0.0.1:8787"),
+            Some("http://127.0.0.1:8787".into())
+        );
+        // A path belongs to the registry's routing, not its origin.
+        assert_eq!(
+            browser_origin_of("https://registry.example.com/base"),
+            Some("https://registry.example.com".into())
+        );
+        assert_eq!(
+            browser_origin_of("http://127.0.0.1:8787/"),
+            Some("http://127.0.0.1:8787".into())
+        );
+        assert_eq!(browser_origin_of("ftp://example.com"), None);
+        assert_eq!(browser_origin_of("http://"), None);
     }
 
     #[tokio::test]

@@ -127,7 +127,11 @@ back the original job (409) and never prints twice. **LAN exposure**
 (`app/src/pairing.rs`) is an opt-in setting, off by default: the PC opens
 a short-lived window with a one-time code, a device claims it and receives
 a per-device token (only its SHA-256 is kept on the PC), and a token gate
-admits requests from off this PC.
+admits requests from off this PC. The API answers CORS preflights for
+exactly one browser origin — the one the configured registry serves its
+demo page from (`/demo/print.html`, the app's Print page as a web page)
+— and refuses a wildcard: any origin would let a page on any LAN host
+probe the API (the old app's share-service pattern).
 
 **Deep links** (`app/src/deeplink.rs`): `printninja://print?…` from a web
 page prefills the print screen (template by name, printer, copies, data

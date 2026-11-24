@@ -1,4 +1,7 @@
-//! The registry's HTTP surface. Increment A: health, accounts (by
+//! The registry's HTTP surface. It also serves a demo page
+//! (`GET /demo/print.html`): a plain HTML form that drives the app's
+//! local print API from a browser — the one origin the app's CORS
+//! layer lets across to that API. Increment A: health, accounts (by
 //! handle), sessions, password change and handle change. Increment B:
 //! publishing a template and the community gallery (browse, search,
 //! fetch, unpublish). Increment C: saving published templates to a
@@ -34,6 +37,7 @@ use crate::ServerState;
 pub fn router(state: ServerState) -> Router {
     Router::new()
         .route("/v1/health", get(health))
+        .route("/demo/print.html", get(demo_page))
         .route("/v1/account", post(create_account))
         .route("/v1/login", post(login))
         .route("/v1/logout", post(logout))
@@ -60,6 +64,22 @@ pub fn router(state: ServerState) -> Router {
 /// Liveness.
 async fn health() -> Json<Value> {
     Json(json!({ "status": "ok" }))
+}
+
+/// The print API demo page: a plain HTML form that drives the app's
+/// local print API (127.0.0.1:17717), so a browser on that PC can try
+/// a print without the app. It is the one origin the app's CORS layer
+/// lets across. The file lives in the repo beside the server source
+/// and is compiled in — no path to get wrong in a container.
+async fn demo_page() -> Response {
+    (
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/html; charset=utf-8".to_string(),
+        )],
+        include_str!("../public/demo/print.html"),
+    )
+        .into_response()
 }
 
 /// A JSON error body, the same shape for every failure the client can
@@ -548,6 +568,31 @@ mod tests {
         let (s, v) = call(&app, Method::GET, "/v1/health", None, None).await;
         assert_eq!(s, StatusCode::OK);
         assert_eq!(v["status"], "ok");
+    }
+
+    #[tokio::test]
+    async fn the_demo_page_is_served_as_html() {
+        let app = router(state());
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/demo/print.html")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("the request completes");
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(
+            res.headers().get(axum::http::header::CONTENT_TYPE).unwrap(),
+            "text/html; charset=utf-8"
+        );
+        let bytes = res.into_body().collect().await.unwrap().to_bytes();
+        let html = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(html.contains("Print API demo"), "the page is the real demo");
+        assert!(html.contains("/v1/print"), "it speaks the print API");
     }
 
     #[tokio::test]
