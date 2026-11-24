@@ -10,10 +10,11 @@
 import { useRef } from "react";
 import type { ReactNode } from "react";
 import {
-  elementsOf,
+  getAt,
   pageDims,
   rowHeightMm,
-  type Container,
+  samePath,
+  type Path,
   type Selection,
 } from "./editor-model";
 import type { Element, Template } from "./schema";
@@ -26,17 +27,11 @@ interface CanvasProps {
   template: Template;
   selection: Selection | null;
   onSelect: (s: Selection | null) => void;
-  onMove: (
-    container: Container,
-    index: number,
-    x_mm: number,
-    y_mm: number,
-  ) => void;
+  onMove: (path: Path, x_mm: number, y_mm: number) => void;
 }
 
 interface Drag {
-  container: Container;
-  index: number;
+  path: Path;
   startX: number;
   startY: number;
   origX: number;
@@ -57,32 +52,29 @@ export function SceneCanvas({
   const height = hMm * scale;
   const drag = useRef<Drag | null>(null);
 
-  const isSelected = (container: Container, index: number) =>
-    selection?.container === container && selection.index === index;
+  const isSelected = (path: Path) =>
+    selection ? samePath(selection.path, path) : false;
 
-  const beginDrag =
-    (container: Container, index: number) => (e: React.PointerEvent) => {
-      e.stopPropagation();
-      const el = elementsOf(template, container)[index];
-      if (!el) return;
-      onSelect({ container, index });
-      drag.current = {
-        container,
-        index,
-        startX: e.clientX,
-        startY: e.clientY,
-        origX: el.at.x_mm,
-        origY: el.at.y_mm,
-      };
-      (e.target as SVGElement).setPointerCapture(e.pointerId);
+  const beginDrag = (path: Path) => (e: React.PointerEvent) => {
+    e.stopPropagation();
+    const el = getAt(template, path);
+    if (!el) return;
+    onSelect({ path });
+    drag.current = {
+      path,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: el.at.x_mm,
+      origY: el.at.y_mm,
     };
+    (e.target as SVGElement).setPointerCapture(e.pointerId);
+  };
 
   const moveDrag = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d) return;
     onMove(
-      d.container,
-      d.index,
+      d.path,
       round1(d.origX + (e.clientX - d.startX) / scale),
       round1(d.origY + (e.clientY - d.startY) / scale),
     );
@@ -113,17 +105,19 @@ export function SceneCanvas({
           fill="#ffffff"
           stroke="#a1a1aa"
         />
-        {template.elements.map((el, i) => (
-          <ElementNode
-            key={i}
-            el={el}
-            container="root"
-            index={i}
-            scale={scale}
-            selected={isSelected("root", i)}
-            beginDrag={beginDrag}
-          />
-        ))}
+        {template.elements.map((el, i) => {
+          const path: Path = [i];
+          return (
+            <ElementNode
+              key={i}
+              el={el}
+              path={path}
+              scale={scale}
+              selected={isSelected(path)}
+              beginDrag={beginDrag}
+            />
+          );
+        })}
       </svg>
       <div className="mt-2 text-center text-caption text-muted-foreground">
         {wMm} × {hMm} mm — drag an element to move it
@@ -135,22 +129,20 @@ export function SceneCanvas({
 /** One selectable element (or group), with its selection ring. */
 function ElementNode({
   el,
-  container,
-  index,
+  path,
   scale,
   selected,
   beginDrag,
 }: {
   el: Element;
-  container: Container;
-  index: number;
+  path: Path;
   scale: number;
   selected: boolean;
-  beginDrag: (c: Container, i: number) => (e: React.PointerEvent) => void;
+  beginDrag: (path: Path) => (e: React.PointerEvent) => void;
 }) {
   const [bx, by, bw, bh] = boundsMm(el);
   return (
-    <g className="cursor-move" onPointerDown={beginDrag(container, index)}>
+    <g className="cursor-move" onPointerDown={beginDrag(path)}>
       {el.type === "group" ? (
         <GroupGlyph el={el} scale={scale} />
       ) : (

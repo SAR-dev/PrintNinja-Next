@@ -520,3 +520,10 @@ Unreleased.
   a sticky page header on every view with its actions (New template on
   the list, back/save/preview on the editors); and tone-and-icon
   status and job-result badges in the top bar and the recent-jobs list
+
+### Changed
+
+- Scene editor: the element list is now a tree — a repeating group's
+  items sit indented under it (previously in a panel inside the group's
+  properties) — and the selection is tracked by element path instead
+  of container+index, the groundwork for nested designs

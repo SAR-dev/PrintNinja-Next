@@ -14,12 +14,16 @@ import {
   type Template,
 } from "./schema";
 
-/** Where an element lives: at the page root, or inside group number n. */
-export type Container = "root" | number;
+/**
+ * Where an element lives: the path of indices from the root.
+ * `[2]` is the third root element; `[2, 0]` the first item of the
+ * group at `[2]`. A container is a path to the element holding the
+ * children (`[]` = root, `[2]` = the group at index 2).
+ */
+export type Path = number[];
 
 export interface Selection {
-  container: Container;
-  index: number;
+  path: Path;
 }
 
 /** What the user can add, in the order the list offers them. */
@@ -172,14 +176,83 @@ export function pageDims(media: Media): { w: number; h: number } {
   };
 }
 
-/** The elements living in a container (root, or group number). */
-export function elementsOf(
-  template: Template,
-  container: Container,
-): Element[] {
-  if (container === "root") return template.elements;
-  const el = template.elements[container];
+/** Whether two paths point at the same place. */
+export function samePath(a: Path, b: Path): boolean {
+  return a.length === b.length && a.every((n, i) => n === b[i]);
+}
+
+/** The element at a path, if the template has one there. */
+export function getAt(template: Template, path: Path): Element | undefined {
+  let els: Element[] = template.elements;
+  let node: Element | undefined;
+  for (const i of path) {
+    node = els[i];
+    if (!node) return undefined;
+    els = node.type === "group" ? node.items : [];
+  }
+  return node;
+}
+
+/** The elements living in a container (root, or the group at a path). */
+export function elementsOf(template: Template, container: Path): Element[] {
+  if (container.length === 0) return template.elements;
+  const el = getAt(template, container);
   return el && el.type === "group" ? el.items : [];
+}
+
+/** Run `fn` on the children of the container at a path ([] = root). */
+function withChildren(
+  template: Template,
+  container: Path,
+  fn: (els: Element[]) => Element[],
+): Template {
+  const rewrite = (els: Element[], rest: Path): Element[] => {
+    if (rest.length === 0) return fn(els);
+    const [i, ...deeper] = rest;
+    return els.map((el, j) =>
+      j === i && el.type === "group"
+        ? { ...el, items: rewrite(el.items, deeper) }
+        : el,
+    );
+  };
+  return { ...template, elements: rewrite(template.elements, container) };
+}
+
+/** Rewrite the element at a path, leaving everything else as is. */
+export function updateAt(
+  template: Template,
+  path: Path,
+  fn: (el: Element) => Element,
+): Template {
+  const container = path.slice(0, -1);
+  const index = path[path.length - 1];
+  return withChildren(template, container, (els) =>
+    els.map((el, i) => (i === index ? fn(el) : el)),
+  );
+}
+
+/** Insert an element; the path is the spot it takes after the insert. */
+export function insertAt(
+  template: Template,
+  path: Path,
+  el: Element,
+): Template {
+  const container = path.slice(0, -1);
+  const index = path[path.length - 1];
+  return withChildren(template, container, (els) => {
+    const next = els.slice();
+    next.splice(index, 0, el);
+    return next;
+  });
+}
+
+/** Remove the element at a path. */
+export function removeAt(template: Template, path: Path): Template {
+  const container = path.slice(0, -1);
+  const index = path[path.length - 1];
+  return withChildren(template, container, (els) =>
+    els.filter((_, i) => i !== index),
+  );
 }
 
 /** A placement rendered in words. */

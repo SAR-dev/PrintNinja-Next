@@ -40,8 +40,13 @@ import {
   ELEMENT_TYPES,
   elementLabel,
   elementsOf,
+  getAt,
+  insertAt,
+  removeAt,
+  samePath,
+  updateAt,
   withSyncedFields,
-  type Container,
+  type Path,
   type Selection,
 } from "@/scene/editor-model";
 import { SceneCanvas } from "@/scene/scene-canvas";
@@ -54,27 +59,6 @@ import type {
   Template,
 } from "@/scene/schema";
 import type { AppTemplate } from "@/templates";
-
-/** Rewrite one element in a container, leaving everything else as is. */
-function updateAt(
-  template: Template,
-  container: Container,
-  index: number,
-  fn: (el: Element) => Element,
-): Template {
-  const map = (els: Element[]) =>
-    els.map((el, i) => (i === index ? fn(el) : el));
-  if (container === "root")
-    return { ...template, elements: map(template.elements) };
-  return {
-    ...template,
-    elements: template.elements.map((el, i) =>
-      i === container && el.type === "group"
-        ? { ...el, items: map(el.items) }
-        : el,
-    ),
-  };
-}
 
 export function EditorScreen({
   initial,
@@ -107,60 +91,26 @@ export function EditorScreen({
   }, []);
 
   const bindings = useMemo(() => allBindings(template), [template]);
-  const selected = selection
-    ? elementsOf(template, selection.container)[selection.index]
-    : null;
-  /** The group's own index at the root, when the selection is a group. */
-  const groupIndex = selected ? template.elements.indexOf(selected) : -1;
+  const selected = selection ? (getAt(template, selection.path) ?? null) : null;
 
   const setMedia = (media: Media) => setTemplate((t) => ({ ...t, media }));
-  const moveElement = (
-    container: Container,
-    index: number,
-    x_mm: number,
-    y_mm: number,
-  ) =>
+  const moveElement = (path: Path, x_mm: number, y_mm: number) =>
     setTemplate((t) =>
-      updateAt(t, container, index, (el) => ({
-        ...el,
-        at: { ...el.at, x_mm, y_mm },
-      })),
+      updateAt(t, path, (el) => ({ ...el, at: { ...el.at, x_mm, y_mm } })),
     );
   const updateSelected = (fn: (el: Element) => Element) => {
     if (!selection) return;
-    const { container, index } = selection;
-    setTemplate((t) => updateAt(t, container, index, fn));
+    const path = selection.path;
+    setTemplate((t) => updateAt(t, path, fn));
   };
-  const addElement = (container: Container, type: string) => {
-    const index = elementsOf(template, container).length;
+  const addElement = (container: Path, type: string) => {
+    const path = [...container, elementsOf(template, container).length];
     const newEl = defaultElement(type);
-    setTemplate((t) =>
-      container === "root"
-        ? { ...t, elements: [...t.elements, newEl] }
-        : {
-            ...t,
-            elements: t.elements.map((el, i) =>
-              i === container && el.type === "group"
-                ? { ...el, items: [...el.items, newEl] }
-                : el,
-            ),
-          },
-    );
-    setSelection({ container, index });
+    setTemplate((t) => insertAt(t, path, newEl));
+    setSelection({ path });
   };
-  const deleteElement = (container: Container, index: number) => {
-    setTemplate((t) =>
-      container === "root"
-        ? { ...t, elements: t.elements.filter((_, i) => i !== index) }
-        : {
-            ...t,
-            elements: t.elements.map((el, i) =>
-              i === container && el.type === "group"
-                ? { ...el, items: el.items.filter((_, j) => j !== index) }
-                : el,
-            ),
-          },
-    );
+  const deleteElement = (path: Path) => {
+    setTemplate((t) => removeAt(t, path));
     setSelection(null);
   };
 
@@ -309,11 +259,12 @@ export function EditorScreen({
             <CardContent className="flex flex-col gap-3">
               <ElementList
                 elements={template.elements}
+                basePath={[]}
                 selection={selection}
                 onSelect={setSelection}
                 onDelete={deleteElement}
               />
-              <AddElement onAdd={(type) => addElement("root", type)} />
+              <AddElement onAdd={(type) => addElement([], type)} />
             </CardContent>
           </Card>
 
@@ -698,7 +649,7 @@ export function EditorScreen({
                   </div>
                 )}
 
-                {selected.type === "group" && (
+                {selected.type === "group" && selection && (
                   <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-2 gap-3">
                       <NumField
@@ -741,22 +692,10 @@ export function EditorScreen({
                         {t("editor.rows_from_note")}
                       </span>
                     </div>
-                    <div className="flex flex-col gap-2">
-                      <span className="text-body-sm font-medium">
-                        {t("editor.rows")}
-                      </span>
-                      <ElementList
-                        elements={selected.items}
-                        selection={selection}
-                        onSelect={setSelection}
-                        onDelete={deleteElement}
-                        container={groupIndex}
-                      />
-                      <AddElement
-                        onAdd={(type) => addElement(groupIndex, type)}
-                        group
-                      />
-                    </div>
+                    <AddElement
+                      onAdd={(type) => addElement(selection.path, type)}
+                      group
+                    />
                   </div>
                 )}
               </CardContent>
@@ -833,35 +772,44 @@ export function EditorScreen({
   );
 }
 
-/** The element list: select and delete. The draw order is the list
- *  deleting and re-adding — the draw order is the list order. */
+/** The element tree: select and delete. A group's items sit indented
+ *  under it; the draw order is the list order. */
 function ElementList({
   elements,
+  basePath,
   selection,
   onSelect,
   onDelete,
-  container = "root",
 }: {
   elements: Element[];
+  basePath: Path;
   selection: Selection | null;
   onSelect: (s: Selection | null) => void;
-  onDelete: (container: Container, index: number) => void;
-  container?: Container;
+  onDelete: (path: Path) => void;
 }) {
   const { t } = useTranslation();
+  const rows: { el: Element; path: Path; depth: number }[] = [];
+  const collect = (els: Element[], base: Path, depth: number) => {
+    els.forEach((el, i) => {
+      const path = [...base, i];
+      rows.push({ el, path, depth });
+      if (el.type === "group") collect(el.items, path, depth + 1);
+    });
+  };
+  collect(elements, basePath, basePath.length);
   return (
     <div className="flex flex-col gap-1">
-      {elements.length === 0 && (
+      {rows.length === 0 && (
         <span className="text-body-sm text-muted-foreground">
           {t("editor.element_empty")}
         </span>
       )}
-      {elements.map((el, i) => {
-        const isSel =
-          selection?.container === container && selection.index === i;
+      {rows.map(({ el, path, depth }) => {
+        const isSel = selection ? samePath(selection.path, path) : false;
         return (
           <div
-            key={i}
+            key={path.join("/")}
+            style={{ marginLeft: (depth - 1) * 16 }}
             className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${
               isSel ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
             }`}
@@ -869,7 +817,7 @@ function ElementList({
             <button
               type="button"
               className="min-w-0 flex-1 truncate text-left text-body-sm"
-              onClick={() => onSelect(isSel ? null : { container, index: i })}
+              onClick={() => onSelect(isSel ? null : { path })}
             >
               {elementLabel(el)}
             </button>
@@ -877,7 +825,7 @@ function ElementList({
               variant="ghost"
               size="sm"
               className="shrink-0 px-2 text-muted-foreground"
-              onClick={() => onDelete(container, i)}
+              onClick={() => onDelete(path)}
             >
               {t("common.delete")}
             </Button>
