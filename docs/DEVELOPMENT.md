@@ -1,7 +1,7 @@
 # Development
 
 > **Who this is for:** people who want to build, run, or change
-> PrintNinja (next) itself.
+> PrintNinja itself.
 > **What you will know after reading:** how to set up the environment, what
 > lives where, the dev loop, the checks and test gate you must pass, how to
 > run the registry server locally, and how releases ship.

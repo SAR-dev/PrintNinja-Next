@@ -1,4 +1,4 @@
-# 💙 Contributing to PrintNinja (next)
+# 💙 Contributing to PrintNinja
 
 Thank you for wanting to help! 🎉 PrintNinja gets better because people use it, break it, question it and improve it.
 

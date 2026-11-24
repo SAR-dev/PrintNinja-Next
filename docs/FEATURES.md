@@ -1,6 +1,6 @@
 # ✨ Features
 
-> **Who this is for:** anyone who wants to know everything PrintNinja (next) can do.
+> **Who this is for:** anyone who wants to know everything PrintNinja can do.
 > **What you will know after reading:** what each part of the app offers, how a print actually travels to the paper, and what is still on its way.
 
 **Jump to:** [🎨 Templates & designer](#-templates--designer) · [🖨️ Printer profiles](#️-printer-profiles) · [🚚 Print pipeline & transports](#-print-pipeline--transports) · [🕘 History & reprint](#-history--reprint) · [🔌 Print from elsewhere](#-print-from-elsewhere) · [🌍 Community registry](#-community-registry) · [⚙️ The app itself](#️-the-app-itself) · [📦 Release tooling](#-release-tooling) · [🚧 Still on the way](#-still-on-the-way)

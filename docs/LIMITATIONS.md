@@ -1,7 +1,7 @@
 # 🚧 Known limitations
 
 > **Who this is for:** anyone who tried something that did not work, and wants to know whether it is a bug or simply not built yet.
-> **What you will know after reading:** what PrintNinja (next) cannot do today, what you will see when you try, and what to do instead.
+> **What you will know after reading:** what PrintNinja cannot do today, what you will see when you try, and what to do instead.
 
 These are not bugs. They are things the roadmap looks at and says "not yet" (or, in one case, "not ever"). The phase numbers refer to [`docs/ROADMAP.md`](ROADMAP.md).
 
@@ -11,7 +11,7 @@ These are not bugs. They are things the roadmap looks at and says "not yet" (or,
 
 ## 💻 Platforms
 
-**🍎 There is no macOS app — permanently.** The rewrite targets **Windows and Linux only** on desktop; macOS was decided out of scope in 2026-11-20 and is not a deferred feature. The current PrintNinja remains the macOS option until it is retired.
+**🍎 There is no macOS app — permanently.** PrintNinja targets **Windows and Linux only** on desktop; macOS was decided out of scope in 2026-11-20 and is not a deferred feature.
 
 **📱 Android is not built yet (phase 11).** The renderer, planner, profiles and encoders are platform-independent, but the Android transport adapters, packaging and the background print service are not in this repo. When it lands, Android prints **labels only** (the scene track) — the document track and its headless browser stay desktop-only, permanently.
 
@@ -21,11 +21,11 @@ These are not bugs. They are things the roadmap looks at and says "not yet" (or,
 
 ## 🖨️ Printers
 
-**🧪 Every shipped profile is `untested` — until it is, it is.** The eleven bundled profiles were mined from the current app's code, not measured on a head. Hardware verification is per-profile: each profile runs its own checklist (minimal text, a label, a barcode, a long job, two jobs back to back) on the real printer and is only marked `verified` when it passes — that is phase 10. Treat a first print on a model you have not run the checklist for as a test print, and the "unconfirmed" results below are the honest price of that.
+**🧪 Every shipped profile is `untested` — until it is, it is.** The eleven bundled profiles were mined from the previous app's code, not measured on a head. Hardware verification is per-profile: each profile runs its own checklist (minimal text, a label, a barcode, a long job, two jobs back to back) on the real printer and is only marked `verified` when it passes — that is phase 10. Treat a first print on a model you have not run the checklist for as a test print, and the "unconfirmed" results below are the honest price of that.
 
 **🔓 Nothing is encrypted in transit.** Raw TCP (JetDirect), IPP over `http://`, Bluetooth and the registry server all talk in the clear — there is no TLS and no signing on any transport or on the registry yet. `ipps://`/`https://` endpoints are a documented follow-up. Use these only on a network you trust.
 
-**🖨️ Spooled jobs never end up "Confirmed".** Jobs that go through the Windows spooler or CUPS end in spooler-level states: accepted → **Sent, not confirmed**, rejected → **Failed (with reason)**. The spooler — not the app — talks to the printer, so the app cannot claim more than the spooler tells it. This matches how the current app behaves for document printing.
+**🖨️ Spooled jobs never end up "Confirmed".** Jobs that go through the Windows spooler or CUPS end in spooler-level states: accepted → **Sent, not confirmed**, rejected → **Failed (with reason)**. The spooler — not the app — talks to the printer, so the app cannot claim more than the spooler tells it. This matches how the previous app behaved for document printing.
 
 **🔌 USB printers need a queue, not a cable.** There is no USB transport of its own: a USB printer is a CUPS raw queue on Linux (`lpadmin -p MyPrinter -m raw -v usb://…`) and an installed spooler queue on Windows (Printers & scanners → Add device). Then print to it over IPP or the spooler. Bluetooth is the one path that talks to the device directly.
 

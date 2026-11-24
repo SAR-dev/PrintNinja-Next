@@ -8,7 +8,7 @@
 
 A local-first desktop app that turns templates into printer jobs for thermal, receipt, label and page printers — with a community registry for sharing templates.
 
-![Status: pre-release](https://img.shields.io/badge/status-pre--release-orange)
+![Status: stable](https://img.shields.io/badge/status-stable-green)
 ![Platforms: Windows | Linux](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-blue)
 ![Android: planned](https://img.shields.io/badge/Android-planned-lightgrey)
 ![Built with Rust + Tauri](https://img.shields.io/badge/built%20with-Rust%20%2B%20Tauri-informational)
@@ -23,7 +23,7 @@ A local-first desktop app that turns templates into printer jobs for thermal, re
 
 ---
 
-> 🚧 **Pre-release.** This is the greenfield rewrite of [PrintNinja](https://github.com/SAR-dev/PrintNinja). Windows and Linux work today; Android is next. The remaining work is tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md), and known gaps are listed honestly in [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+> 🖨️ Windows and Linux work today; Android is coming in phase 11. The remaining work is tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md), and known gaps are listed honestly in [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
 ## 🥷 What is PrintNinja?
 

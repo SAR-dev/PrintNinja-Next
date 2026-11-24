@@ -7,10 +7,10 @@
 > pipeline, what the community registry stores, and how the tests keep it
 > all honest.
 
-PrintNinja (next) is a local-first app that turns **templates** into
+PrintNinja is a local-first app that turns **templates** into
 **printer jobs** for thermal, receipt, label and page printers — plus a
-small **community registry server** for sharing templates. 🖨️ It is the
-greenfield rewrite of PrintNinja; the remaining work is tracked in
+small **community registry server** for sharing templates. 🖨️ The
+remaining work is tracked in
 [`ROADMAP.md`](ROADMAP.md). The top
 priority is reliability: a job either prints, or the user gets a specific
 reason why it did not. "Sent" must never mean "the printer silently threw

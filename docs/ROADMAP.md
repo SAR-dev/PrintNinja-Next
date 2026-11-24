@@ -1,6 +1,6 @@
 # Roadmap
 
-The remaining work of the rewrite, as a checklist. Phases 0–9 are done —
+The remaining work, as a checklist. Phases 0–9 are done —
 the core pipeline, the app, the local print API and the community registry
 are built and green (their state is documented across the other docs here).
 What is left:
