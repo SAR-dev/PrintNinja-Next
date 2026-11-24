@@ -133,7 +133,7 @@ fn run_privileged(program: &str, args: &[&str]) -> String {
 /// Restart the OS print service, and optionally stop whatever holds
 /// port 17717. Both need elevation — the OS may ask the user for it.
 pub fn repair(stop_port_owner: bool) -> RepairReport {
-    let mut steps = Vec::new();
+    let mut steps: Vec<String> = Vec::new();
     #[cfg(windows)]
     {
         steps.push(format!(

@@ -907,23 +907,27 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building PrintNinja");
-    app.run(|app_handle, event| match event {
-        // The window's close button hides the app to the tray;
-        // quitting is the tray menu's "Quit PrintNinja". Desktop
-        // only — on Android there is no tray, so closing ends the
-        // app like any other activity.
-        #[cfg(not(target_os = "android"))]
-        tauri::RunEvent::WindowEvent {
-            label,
-            event: tauri::WindowEvent::CloseRequested { api, .. },
-            ..
-        } if label == "main" => {
-            if let Some(window) = app_handle.get_webview_window(&label) {
-                let _ = window.hide();
+    app.run(|app_handle, event| {
+        #[cfg(target_os = "android")]
+        let _ = app_handle;
+        match event {
+            // The window's close button hides the app to the tray;
+            // quitting is the tray menu's "Quit PrintNinja". Desktop
+            // only — on Android there is no tray, so closing ends the
+            // app like any other activity.
+            #[cfg(not(target_os = "android"))]
+            tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::CloseRequested { api, .. },
+                ..
+            } if label == "main" => {
+                if let Some(window) = app_handle.get_webview_window(&label) {
+                    let _ = window.hide();
+                }
+                api.prevent_close();
             }
-            api.prevent_close();
+            _ => {}
         }
-        _ => {}
     });
 }
 

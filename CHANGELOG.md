@@ -717,6 +717,8 @@ Unreleased.
 
 ### Fixed
 
+- App: the Android build no longer fails to compile the Diagnostics
+  repair code (string type inference) or warns about an unused handle
 - App: the PC Settings screen shows only the selected tab again; the
   phone still shows all groups in one list
 - Sub-screens have a real back affordance: an arrow button before the page
