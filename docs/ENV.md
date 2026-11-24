@@ -84,7 +84,7 @@ auto-updater, only the release-page badge (see `docs/RELEASE.md` and
 `docs/SIGNING.md`).
 
 One exception, and it is **work in progress — uncommitted on this
-branch** as the Android phase is wired up:
+branch** as the Android app work is wired up:
 
 | Variable | Where read | What it does | Default |
 |---|---|---|---|
@@ -92,5 +92,5 @@ branch** as the Android phase is wired up:
 | `ANDROID_KEYSTORE_PASSWORD` | `scripts/patch-android-signing.mjs` | The keystore password (CI secret). | none — required |
 | `ANDROID_KEYSTORE_ALIAS` | `scripts/patch-android-signing.mjs` | The key alias inside the keystore. | `printninja` |
 
-Until the Android phase lands, none of these is used by any committed
+Until the Android app lands, none of these is used by any committed
 CI job.

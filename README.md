@@ -23,7 +23,7 @@ A local-first desktop app that turns templates into printer jobs for thermal, re
 
 ---
 
-> 🖨️ Windows and Linux work today; Android is coming in phase 11. The remaining work is tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md), and known gaps are listed honestly in [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
+> 🖨️ Windows and Linux work today; Android is on the roadmap. The remaining work is tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md), and known gaps are listed honestly in [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
 
 ## 🥷 What is PrintNinja?
 
@@ -68,7 +68,7 @@ A curated few, committed under [`assets/`](assets/). The full matrix — every s
 |---|---|---|
 | 🪟 Windows | `.msi` | Supported |
 | 🐧 Linux | `.deb` or AppImage | Supported |
-| 🤖 Android | APK / AAB | Planned (phase 11) — labels only |
+| 🤖 Android | APK / AAB | Planned — labels only |
 | 🍎 macOS | — | Out of scope, permanently |
 
 Installers are attached to each [GitHub release](https://github.com/SAR-dev/PrintNinja-Next/releases). Unsigned installers trigger OS warnings; see [`docs/SIGNING.md`](docs/SIGNING.md).
@@ -164,7 +164,7 @@ No printer handy? The repo ships a virtual-printer fixture you can use as a test
 | [Environment](docs/ENV.md) | Every environment variable, explained |
 | [CI](docs/CI.md) | What the pipelines run and why |
 | [Releasing](docs/RELEASE.md) | Versioning, tags and installers |
-| [Roadmap](docs/ROADMAP.md) | The phases and what is left |
+| [Roadmap](docs/ROADMAP.md) | The remaining work, in priority order |
 | [Changelog](CHANGELOG.md) | What changed, release by release |
 
 ## 🌍 Self-hosting the registry

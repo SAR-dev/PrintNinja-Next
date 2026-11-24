@@ -3,7 +3,7 @@
 > **Who this is for:** anyone who tried something that did not work, and wants to know whether it is a bug or simply not built yet.
 > **What you will know after reading:** what PrintNinja cannot do today, what you will see when you try, and what to do instead.
 
-These are not bugs. They are things the roadmap looks at and says "not yet" (or, in one case, "not ever"). The phase numbers refer to [`docs/ROADMAP.md`](ROADMAP.md).
+These are not bugs. They are things the roadmap looks at and says "not yet" (or, in one case, "not ever"); the remaining work is tracked in [`docs/ROADMAP.md`](ROADMAP.md).
 
 **Jump to:** [💻 Platforms](#-platforms) · [🖨️ Printers](#️-printers) · [🌍 Registry and accounts](#-registry-and-accounts) · [📱 The app itself](#-the-app-itself)
 
@@ -13,15 +13,15 @@ These are not bugs. They are things the roadmap looks at and says "not yet" (or,
 
 **🍎 There is no macOS app — permanently.** PrintNinja targets **Windows and Linux only** on desktop; macOS was decided out of scope in 2026-11-20 and is not a deferred feature.
 
-**📱 Android is not built yet (phase 11).** The renderer, planner, profiles and encoders are platform-independent, but the Android transport adapters, packaging and the background print service are not in this repo. When it lands, Android prints **labels only** (the scene track) — the document track and its headless browser stay desktop-only, permanently.
+**📱 Android is not built yet.** The renderer, planner, profiles and encoders are platform-independent, but the Android transport adapters, packaging and the background print service are not in this repo. When it lands, Android prints **labels only** (the scene track) — the document track and its headless browser stay desktop-only, permanently.
 
-**📦 There is no installer yet (phase 10).** The repo is pre-release: the release tooling (date versions, the local release script, the CI installer builds and the GHCR server image) is in place, but the first release candidates are cut in phase 10, together with the hardware checks. Until then you build from source (the developer section of the README shows how).
+**📦 There is no installer yet.** The repo is pre-release: the release tooling (date versions, the local release script, the CI installer builds and the GHCR server image) is in place, but the first release candidates are cut together with the hardware checks, at the top of the roadmap. Until then you build from source (the developer section of the README shows how).
 
 <a id="printers"></a>
 
 ## 🖨️ Printers
 
-**🧪 Every shipped profile is `untested` — until it is, it is.** The eleven bundled profiles were mined from the previous app's code, not measured on a head. Hardware verification is per-profile: each profile runs its own checklist (minimal text, a label, a barcode, a long job, two jobs back to back) on the real printer and is only marked `verified` when it passes — that is phase 10. Treat a first print on a model you have not run the checklist for as a test print, and the "unconfirmed" results below are the honest price of that.
+**🧪 Every shipped profile is `untested` — until it is, it is.** The eleven bundled profiles were mined from the previous app's code, not measured on a head. Hardware verification is per-profile: each profile runs its own checklist (minimal text, a label, a barcode, a long job, two jobs back to back) on the real printer and is only marked `verified` when it passes — that is on the roadmap. Treat a first print on a model you have not run the checklist for as a test print, and the "unconfirmed" results below are the honest price of that.
 
 **🔓 Nothing is encrypted in transit.** Raw TCP (JetDirect), IPP over `http://`, Bluetooth and the registry server all talk in the clear — there is no TLS and no signing on any transport or on the registry yet. `ipps://`/`https://` endpoints are a documented follow-up. Use these only on a network you trust.
 
@@ -45,7 +45,7 @@ These are not bugs. They are things the roadmap looks at and says "not yet" (or,
 
 **🆕 There is no auto-update.** The app checks for a newer release on boot and shows an "Update to vX.Y.Z" badge in the top bar, but clicking it opens the **release page** — you download and install the new version by hand. That is deliberate: there is no update channel to maintain, sign, or be fooled by.
 
-**🧪 There is no app-level (UI) e2e yet.** The e2e suite in the repo is Rust-driven against the **virtual printer** — it proves the pipeline's bytes, states and failure handling end to end, but it does not click through the UI. A Playwright e2e for the app itself is a phase 10 decision, if wanted; UI regressions are caught by the frontend build, type checks and the shared-pipeline tests instead.
+**🧪 There is no app-level (UI) e2e yet.** The e2e suite in the repo is Rust-driven against the **virtual printer** — it proves the pipeline's bytes, states and failure handling end to end, but it does not click through the UI. A Playwright e2e for the app itself is a post-release decision, if wanted; UI regressions are caught by the frontend build, type checks and the shared-pipeline tests instead.
 
 **🗣️ The interface is in English and Japanese only.** The UI ships in those two languages, switchable in **Settings → Language**, and no others are available today — adding a language is a translation file under `app/ui/src/lib/i18n/locales/`, no code changes. (Your *prints* are not limited: the renderer carries a Japanese font fallback, so Japanese text in a template renders on the default family, in either interface language.)
 

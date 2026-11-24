@@ -33,7 +33,7 @@ Printer facts live in data, not code: **one TOML file per model**, shipped in `c
 - Each profile names the printer's **language** (ZPL, TSPL, CPCL, ESC/POS, or PDF for a document printer), media, dpi and head width, fonts and code pages, native barcode types, delivery pacing (chunk size, pause, close delay) and its **status dialect** — plus any quirks, each with a link to the evidence that proved it.
 - The profile loader cross-checks fields (for example `head_width_dots` against dpi × printable width), so a typo is caught, not printed.
 - **User overrides:** pacing fields you leave in Settings (chunk size, pause, close delay) are stored in the local settings store and merged field-by-field over the profile per job — the shipped profiles are never touched, and a broken saved row can never fail a print.
-- All eleven ship as `untested` until they pass the per-profile hardware checklist on real printers (that is phase 10) — see [Known limitations](./LIMITATIONS.md).
+- All eleven ship as `untested` until they pass the per-profile hardware checklist on real printers (on the roadmap) — see [Known limitations](./LIMITATIONS.md).
 
 ## 🚚 Print pipeline & transports
 
@@ -75,7 +75,7 @@ One pipeline, decided per job, with the reasoning you can read:
 
 ## 🌍 Community registry
 
-The community registry (phase 9) — publish your templates, discover others, print offline:
+The community registry — publish your templates, discover others, print offline:
 
 - **👤 Accounts are handle + password, no email** (1–32 characters of A-Z a-z 0-9 `_` `-`). A new handle + password at sign-in simply creates the account. Passwords are argon2id; only the SHA-256 of a session token is stored.
 - **📤 Publish** a template with a name, a per-account slug and an optional sample of starting records — checked with the same parser and validation the app runs, so the registry never renders or prints, and everything it accepts is something the app can open.
@@ -104,8 +104,8 @@ The community registry (phase 9) — publish your templates, discover others, pr
 
 Not shipped yet — listed here so nobody thinks they are:
 
-- **📱 Android (phase 11):** the app for phones — thermal media (labels, receipts) via the scene track only, plus a background print service third-party apps can print through. The **build** side is already done: CI compiles the Android bundle on pull requests (`android-check`, debug APK) and ships a signed APK + AAB on release tags (`android-build`) — what remains is the app-level work (transport adapters, the print service).
-- **🧪 App-level (UI) e2e:** not in the repo yet. The e2e suite today is Rust-driven, against the virtual printer — a Playwright e2e is a phase 10 decision, if wanted.
-- **🖨️ Hardware verification (phase 10):** the per-profile checklists run on real printers, the failure drills, and the first release candidates.
+- **📱 Android:** the app for phones — thermal media (labels, receipts) via the scene track only, plus a background print service third-party apps can print through. The **build** side is already done: CI compiles the Android bundle on pull requests (`android-check`, debug APK) and ships a signed APK + AAB on release tags (`android-build`) — what remains is the app-level work (transport adapters, the print service).
+- **🧪 App-level (UI) e2e:** not in the repo yet. The e2e suite today is Rust-driven, against the virtual printer — a Playwright e2e is a post-release decision, if wanted.
+- **🖨️ Hardware verification:** the per-profile checklists run on real printers, the failure drills, and the first release candidates.
 
 [⬅️ Back to the README](../README.md)

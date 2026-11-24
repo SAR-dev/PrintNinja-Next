@@ -162,6 +162,6 @@ A template plus some data becomes bytes for one printer. In order:
 - **versionCode** — Android's build number, which must always go up:
   `YYMMDD*100+N` (for example `26112403`), written to
   `bundle.android.versionCode` in advance by the same scripts.
-- **Release candidate (RC)** — the first cut of a release, made in
-  phase 10 together with the hardware verification, before the release
-  is published.
+- **Release candidate (RC)** — the first cut of a release, made
+  together with the hardware verification, before the release is
+  published.

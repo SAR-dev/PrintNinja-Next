@@ -97,7 +97,8 @@ any byte was flushed, so a retry can never print a job twice.
 ## The app
 
 `app/` is the `printninja` crate — a Tauri 2 shell (Windows and Linux;
-Android is a later phase). `app/src/lib.rs` is deliberately thin: it
+Android is on the roadmap, `docs/ROADMAP.md`). `app/src/lib.rs` is
+deliberately thin: it
 holds the loaded printer profiles, exposes the pipeline through a small
 set of Tauri commands (`list_printers`, `plan_job`, `print_job`, printer
 discovery and saved printers, template and settings persistence,
@@ -199,7 +200,7 @@ restarts.
 
 ## The community registry
 
-`server/` is `pn-server` — the community registry (plan phase 9). It
+`server/` is `pn-server` — the community registry. It
 stores **published templates** (the template document plus a name, slug
 and readme), **accounts**, **per-account saves** and a **change feed**
 (with tombstones) that the app syncs against. It validates every template
@@ -273,7 +274,7 @@ renders or prints: it stores, validates and serves.
 | --- | --- |
 | 🪟 Windows | Shipped — MSI bundle, code-signed on release (`docs/RELEASE.md`). |
 | 🐧 Linux | Shipped — deb and AppImage bundles. |
-| 📱 Android | The next phase (phase 11): shared renderer, planner, profiles and encoders, Android transport adapters and a background print service. Not built yet. |
+| 📱 Android | On the roadmap: shared renderer, planner, profiles and encoders, Android transport adapters and a background print service. Not built yet. |
 | 🍎 macOS | **Never** — a permanent decision, not a deferred one. |
 
 The renderer, planner, profiles and encoders are identical on every

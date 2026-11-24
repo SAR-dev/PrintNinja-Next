@@ -576,6 +576,11 @@ Unreleased.
 
 ### Changed
 
+- Docs: `docs/ROADMAP.md` is now a priority-ordered checklist without
+  phase numbers — a point is deleted once it is implemented (the
+  header says so), points that wait on a decision sit in a "Needs
+  confirmation" section, and the phase numbers are stripped from the
+  other docs and the README as well
 - Docs: `docs/CI.md`, the CI workflow comments and `docs/ROADMAP.md`
   match the `screenshot-matrix` job as it is today — blocking, all shots
   green (the old note said it was still non-blocking) — and
