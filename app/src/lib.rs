@@ -22,11 +22,15 @@ use std::sync::Arc;
 use pn_job::JobResult;
 use pn_profiles::{Profile, ProfileSet};
 use pn_scene::{Records, Template};
+// The tray and menu types only exist on desktop targets; the tray
+// setup below is cfg-gated to match.
+#[cfg(not(target_os = "android"))]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Manager, State,
 };
+use tauri::{AppHandle, Manager, State};
+#[cfg(not(target_os = "android"))]
 use tauri_plugin_autostart::ManagerExt;
 
 pub use pipeline::{
@@ -210,12 +214,22 @@ fn save_setting(state: State<'_, Arc<Store>>, key: String, value: String) -> Res
 
 /// Whether PrintNinja starts with the computer (plan phase 7:
 /// start-with-computer).
+#[cfg(not(target_os = "android"))]
 #[tauri::command]
 fn is_autostart(app: AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
+/// The Android stub of the same command: there is no
+/// start-with-computer on a phone, so the settings row reads off.
+#[cfg(target_os = "android")]
+#[tauri::command]
+fn is_autostart() -> Result<bool, String> {
+    Ok(false)
+}
+
 /// Turn start-with-computer on or off; the choice outlives the app.
+#[cfg(not(target_os = "android"))]
 #[tauri::command]
 fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
     let launcher = app.autolaunch();
@@ -225,6 +239,14 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
         launcher.disable()
     };
     result.map_err(|e| e.to_string())
+}
+
+/// The Android stub of the same command: the settings row's error
+/// surface shows why the switch does nothing.
+#[cfg(target_os = "android")]
+#[tauri::command]
+fn set_autostart(_enabled: bool) -> Result<(), String> {
+    Err("start with computer is not available on Android".to_string())
 }
 
 /// Open the pairing window (plan phase 8, LAN): mint the one-time
@@ -453,34 +475,40 @@ fn publications(state: State<'_, Arc<Store>>) -> Result<Vec<Publication>, String
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
-        // Start-with-computer (plan phase 7): the plugin writes where
-        // the OS looks — a Run key on Windows, an autostart entry on
-        // Linux — and keeps the choice across runs.
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::default(),
-            None,
-        ))
-        // printninja:// deep links (plan phase 8): registered before
-        // single-instance, because that plugin's `deep-link` feature
-        // re-parses a second instance's CLI args through this plugin
-        // and emits the URL on the running app's handle — the instance
-        // that received the link from the OS exits right after
-        // forwarding. The frontend listens and, at start-up, reads
-        // the current URL to pick up a link that arrived before the
-        // webview was ready.
+    let builder = tauri::Builder::default();
+    // Start-with-computer (plan phase 7): the plugin writes where
+    // the OS looks — a Run key on Windows, an autostart entry on
+    // Linux — and keeps the choice across runs. Desktop only; the
+    // Android build stubs the commands instead.
+    #[cfg(not(target_os = "android"))]
+    let builder = builder.plugin(tauri_plugin_autostart::init(
+        tauri_plugin_autostart::MacosLauncher::default(),
+        None,
+    ));
+    // printninja:// deep links (plan phase 8): registered before
+    // single-instance, because that plugin's `deep-link` feature
+    // re-parses a second instance's CLI args through this plugin
+    // and emits the URL on the running app's handle — the instance
+    // that received the link from the OS exits right after
+    // forwarding. The frontend listens and, at start-up, reads
+    // the current URL to pick up a link that arrived before the
+    // webview was ready.
+    // External links (the update badge's release page): the webview
+    // cannot open them itself, so the opener plugin hands them to
+    // the OS.
+    let builder = builder
         .plugin(tauri_plugin_deep_link::init())
-        // External links (the update badge's release page): the webview
-        // cannot open them itself, so the opener plugin hands them to
-        // the OS.
-        .plugin(tauri_plugin_opener::init())
-        // A second launch (or a deep link) focuses the running window
-        // instead of starting a second app — required once
-        // close-to-tray keeps the process alive after the window is
-        // gone.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            show_the_main_window(app)
-        }))
+        .plugin(tauri_plugin_opener::init());
+    // A second launch (or a deep link) focuses the running window
+    // instead of starting a second app — required once
+    // close-to-tray keeps the process alive after the window is
+    // gone. Desktop only: there is no tray on Android, and a
+    // relaunched app simply starts a fresh process.
+    #[cfg(not(target_os = "android"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(
+        |app, _args, _cwd| show_the_main_window(app),
+    ));
+    let app = builder
         .setup(|app| {
             let dir = profiles_dir(app.handle());
             let profiles =
@@ -528,31 +556,38 @@ pub fn run() {
             // The tray icon (plan phase 7): the app lives in the tray,
             // so the window's close button hides it instead of
             // quitting; the menu holds the way back and the way out.
-            let show = MenuItem::with_id(app, "tray-show", "Show PrintNinja", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "tray-quit", "Quit PrintNinja", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quit])?;
-            let _tray = TrayIconBuilder::new()
-                .icon(
-                    app.default_window_icon()
-                        .cloned()
-                        .expect("the app must carry its own icon"),
-                )
-                .tooltip("PrintNinja")
-                .menu(&menu)
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id().as_ref() {
-                    "tray-show" => show_the_main_window(app),
-                    "tray-quit" => app.exit(0),
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let tauri::tray::TrayIconEvent::Click { button, .. } = event {
-                        if button == tauri::tray::MouseButton::Left {
-                            show_the_main_window(tray.app_handle());
+            // Desktop only — Android has no tray, so the window's
+            // close button simply finishes the app.
+            #[cfg(not(target_os = "android"))]
+            {
+                let show =
+                    MenuItem::with_id(app, "tray-show", "Show PrintNinja", true, None::<&str>)?;
+                let quit =
+                    MenuItem::with_id(app, "tray-quit", "Quit PrintNinja", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show, &quit])?;
+                let _tray = TrayIconBuilder::new()
+                    .icon(
+                        app.default_window_icon()
+                            .cloned()
+                            .expect("the app must carry its own icon"),
+                    )
+                    .tooltip("PrintNinja")
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id().as_ref() {
+                        "tray-show" => show_the_main_window(app),
+                        "tray-quit" => app.exit(0),
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let tauri::tray::TrayIconEvent::Click { button, .. } = event {
+                            if button == tauri::tray::MouseButton::Left {
+                                show_the_main_window(tray.app_handle());
+                            }
                         }
-                    }
-                })
-                .build(app)?;
+                    })
+                    .build(app)?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -588,7 +623,10 @@ pub fn run() {
         .expect("error while building PrintNinja");
     app.run(|app_handle, event| match event {
         // The window's close button hides the app to the tray;
-        // quitting is the tray menu's "Quit PrintNinja".
+        // quitting is the tray menu's "Quit PrintNinja". Desktop
+        // only — on Android there is no tray, so closing ends the
+        // app like any other activity.
+        #[cfg(not(target_os = "android"))]
         tauri::RunEvent::WindowEvent {
             label,
             event: tauri::WindowEvent::CloseRequested { api, .. },
@@ -604,6 +642,9 @@ pub fn run() {
 }
 
 /// Bring the main window back: shown, focused, unminimised.
+/// Desktop only — its callers (the single-instance plugin and the
+/// tray) do not exist on Android.
+#[cfg(not(target_os = "android"))]
 fn show_the_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();

@@ -15,8 +15,14 @@
 //! send deadline that a wedged link cannot outlive, a status reply read on
 //! the same connection (silence is not an error), and a close delay.
 
+// The transport itself exists only where a Bluetooth byte stream can
+// be opened — Linux dials an RFCOMM socket, Windows a COM port. The
+// address parsing above stays on every platform, so the imports
+// follow the platform paths.
+#[cfg(any(target_os = "linux", windows))]
 use std::time::{Duration, Instant};
 
+#[cfg(any(target_os = "linux", windows))]
 use crate::{SendError, SendPlan, Transport, UnitReport};
 
 // ─────────────────────────────────────────────────────────────────────
