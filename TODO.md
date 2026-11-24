@@ -58,28 +58,28 @@ spec for the items below.
 
 ## Remaining findings, in order
 
-## Final polish commit (plan phase 7)
+## Final polish and docs — done (commit 6556719)
 
-- [ ] motion 120–200 ms on the standard interactions, loading skeletons,
+- [x] motion 120–200 ms on the standard interactions, loading skeletons,
       toasts where errors are surfaced inline, keyboard paths
-- [ ] 360 px wide + Japanese overflow checks
-- [ ] refresh `docs/UI_GUIDE.md`
-- [ ] full `pnpm shots` matrix review; `pnpm shots:assets` for the README
+- [x] 360 px wide + Japanese overflow checks
+- [x] refresh `docs/UI_GUIDE.md`
+- [x] full `pnpm shots` matrix review; `pnpm shots:assets` for the README
 
-## Docs (user-added)
+## Docs — done (commit 6556719)
 
-- [ ] Check `docs/ROADMAP.md` and `docs/LIMITATIONS.md` against what now
+- [x] Check `docs/ROADMAP.md` and `docs/LIMITATIONS.md` against what now
       exists and update both
-- [ ] Rewrite `docs/ROADMAP.md`: remove the implemented points, group
+- [x] Rewrite `docs/ROADMAP.md`: remove the implemented points, group
       the rest by priority (the header's rule: a point is deleted once
       implemented, undecided ones stay in "Needs confirmation")
 
-## Final step
+## Final step (push held back on user instruction)
 
-- [ ] Update README.md screenshots (fresh `pnpm shots`, then
+- [x] Update README.md screenshots (fresh `pnpm shots`, then
       `pnpm shots:assets`) **before the final push**
-- [ ] Push the last commits to `ui-improvement-plan`
-- [ ] Delete the `docs/planned/` directory (with
+- [x] Push the last commits to `ui-improvement-plan`
+- [x] Delete the `docs/planned/` directory (with
       `UI_IMPROVEMENT_PLAN.md`) and this `TODO.md`, commit the deletion
       and push
 
