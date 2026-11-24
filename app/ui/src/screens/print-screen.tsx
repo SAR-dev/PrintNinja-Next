@@ -8,11 +8,13 @@ import { useTranslation } from "react-i18next";
 import {
   fetchData,
   listPrinters,
+  listSavedPrinters,
   planJob,
   printJob,
   type JobReport,
   type PrepareReport,
   type ProfileInfo,
+  type SavedPrinter,
   type Transport,
 } from "@/api";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +103,8 @@ export function PrintScreen({
   const { t } = useTranslation();
   const [printers, setPrinters] = useState<ProfileInfo[]>([]);
   const [printer, setPrinter] = useState<string>("");
+  const [saved, setSaved] = useState<SavedPrinter[]>([]);
+  const [savedName, setSavedName] = useState("");
   const [kind, setKind] = useState<TransportKind>("tcp");
   const [host, setHost] = useState("127.0.0.1");
   const [port, setPort] = useState("9100");
@@ -138,6 +142,55 @@ export function PrintScreen({
       })
       .catch((e) => setPlanError(String(e)));
   }, []);
+
+  // The printers the user saved: picking one fills the profile and the
+  // transport below with the row the settings screen stored. A failure
+  // only costs the shortcut — printing by hand still works.
+  useEffect(() => {
+    listSavedPrinters()
+      .then(setSaved)
+      .catch(() => undefined);
+  }, []);
+
+  const pickSaved = (name: string) => {
+    setSavedName(name);
+    const sp = saved.find((s) => s.name === name);
+    if (!sp) return;
+    setPrinter(sp.model);
+    let tr: {
+      kind: TransportKind;
+      host?: string;
+      port?: number;
+      address?: string;
+      user?: string | null;
+      name?: string;
+    };
+    try {
+      tr = JSON.parse(sp.transport);
+    } catch {
+      return;
+    }
+    switch (tr.kind) {
+      case "tcp":
+        setKind("tcp");
+        if (tr.host) setHost(tr.host);
+        if (tr.port) setPort(String(tr.port));
+        break;
+      case "ipp":
+        setKind("ipp");
+        if (tr.address) setIppAddress(tr.address);
+        setIppUser(tr.user ?? "");
+        break;
+      case "spooler":
+        setKind("spooler");
+        if (tr.name) setSpoolerName(tr.name);
+        break;
+      case "bluetooth":
+        setKind("bluetooth");
+        if (tr.address) setBtAddress(tr.address);
+        break;
+    }
+  };
 
   /**
    * The template JSON the pipeline gets. A document template carries its
@@ -291,6 +344,23 @@ export function PrintScreen({
               <CardDescription>{t("print.printer_note")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
+              {saved.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  <Label>{t("print.saved_printers")}</Label>
+                  <Select value={savedName} onValueChange={pickSaved}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("print.pick_saved")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {saved.map((s) => (
+                        <SelectItem key={s.name} value={s.name}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <Select value={printer} onValueChange={setPrinter}>
                 <SelectTrigger>
                   <SelectValue placeholder={t("print.pick_printer")} />

@@ -555,9 +555,19 @@ Unreleased.
   `scan_network_printers` (a bounded wait, clamped 2–30 s),
   `list_saved_printers`, `save_printer` (the profile must exist) and
   `remove_printer`
+- The printer management UI: a "Saved printers" card on the settings
+  screen — the saved list, a system scan (the OS queues, with each one's
+  fault), a network scan (the mDNS results), and a by-hand form (name,
+  profile, transport kind and its fields) — each found printer is a one
+  click away from being saved, and the per-printer pacing settings moved
+  here with it. The print screen gains a saved-printer picker that fills
+  in the profile and the transport the row stores
 
 ### Changed
 
+- The settings screen is now five tabs (General, Printers, Network,
+  Data, Registry) instead of one long page; the General tab is the
+  default
 - CI: `screenshot-matrix` installs the `app/ui` pnpm project (its own
   lockfile) before the run — the script boots `app/ui`'s vite straight
   from its `node_modules`, which the root-only install never created,

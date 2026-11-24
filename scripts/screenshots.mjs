@@ -59,6 +59,7 @@ const VIEWS = [
   "edit",
   "document-edit",
   "settings",
+  "settings-printers",
   "new-template",
   "publish-dialog",
   "signin-dialog",
@@ -83,6 +84,8 @@ const L = {
     signOut: "Sign out",
     tabCommunity: "Community",
     tabSaved: "Saved",
+    tabPrinters: "Printers",
+    savedPrinters: "Saved printers",
     preview: "Preview",
     confirmed: "Confirmed",
     editorTitle: "Edit template",
@@ -98,6 +101,8 @@ const L = {
     signOut: "サインアウト",
     tabCommunity: "コミュニティ",
     tabSaved: "保存済み",
+    tabPrinters: "プリンター",
+    savedPrinters: "保存済みプリンター",
     preview: "プレビュー",
     confirmed: "確認済み",
     editorTitle: "テンプレートを編集",
@@ -398,6 +403,16 @@ async function navigate(page, view, l) {
         .getByRole("button", { name: l.settings, exact: true })
         .click();
       await page.getByRole("heading", { name: l.settings, level: 1 }).waitFor();
+      break;
+    case "settings-printers":
+      await page
+        .getByRole("button", { name: l.settings, exact: true })
+        .click();
+      await page.getByRole("heading", { name: l.settings, level: 1 }).waitFor();
+      await page.getByRole("tab", { name: l.tabPrinters, exact: true }).click();
+      await page
+        .getByRole("heading", { name: l.savedPrinters, level: 2 })
+        .waitFor();
       break;
     case "new-template":
       await page.getByRole("button", { name: l.newTemplate }).click();

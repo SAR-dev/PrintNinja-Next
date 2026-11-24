@@ -1,9 +1,12 @@
 /**
  * Settings (plan phase 7): appearance (light/dark), start-with-
  * computer, the LAN switch with device pairing (plan phase 8, LAN
- * increment), and the per-printer delivery overrides — pacing (chunk
- * size and the pause between chunks) and the close delay. A field left
- * empty uses the profile's own value, shown as the placeholder.
+ * increment), the printers the user has saved and their per-printer
+ * delivery overrides, and the community registry's address. The
+ * screen is split into pages — General, Printers, Network, Data and
+ * Registry — so each concern has its own room instead of one long
+ * scroll. A delivery field left empty uses the profile's own value,
+ * shown as the placeholder.
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -21,6 +24,7 @@ import {
   type ProfileInfo,
 } from "@/api";
 import { PageHeader } from "@/components/page-header";
+import { PrintersCard } from "@/components/printers-card";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -32,29 +36,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { setLanguage } from "@/lib/i18n";
-
-/** The user's delivery override for one printer, as it is saved. */
-interface DeliveryOverride {
-  chunkBytes?: number;
-  pauseMs?: number;
-  closeDelayMs?: number;
-}
-
-const deliveryKey = (model: string) => `delivery.${model}`;
-
-function readOverride(
-  settings: Record<string, string>,
-  model: string,
-): DeliveryOverride {
-  const raw = settings[deliveryKey(model)];
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw) as DeliveryOverride;
-  } catch {
-    return {};
-  }
-}
 
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const { t, i18n } = useTranslation();
@@ -161,29 +144,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       .catch((e) => setError(String(e)));
   };
 
-  const overrideFor = (p: ProfileInfo) => readOverride(settings, p.model);
-
-  const saveField = (
-    p: ProfileInfo,
-    field: keyof DeliveryOverride,
-    text: string,
-    fallback: number,
-  ) => {
-    const o = overrideFor(p);
-    if (text.trim() === "" || Number(text) === fallback) {
-      const { [field]: _removed, ...rest } = o;
-      save(deliveryKey(p.model), JSON.stringify(rest));
-    } else {
-      save(
-        deliveryKey(p.model),
-        JSON.stringify({ ...o, [field]: Number(text) }),
-      );
-    }
-  };
-
-  const resetPrinter = (p: ProfileInfo) =>
-    save(deliveryKey(p.model), JSON.stringify({}));
-
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <PageHeader
@@ -201,276 +161,209 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         </p>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.appearance")}</CardTitle>
-          <CardDescription>{t("settings.appearance_note")}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex gap-2">
-          <Button
-            variant={theme === "light" ? "default" : "outline"}
-            onClick={() => pickTheme("light")}
-          >
-            {t("settings.light")}
-          </Button>
-          <Button
-            variant={theme === "dark" ? "default" : "outline"}
-            onClick={() => pickTheme("dark")}
-          >
-            {t("settings.dark")}
-          </Button>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="general">
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="general">{t("settings.tab_general")}</TabsTrigger>
+          <TabsTrigger value="printers">
+            {t("settings.tab_printers")}
+          </TabsTrigger>
+          <TabsTrigger value="network">{t("settings.tab_network")}</TabsTrigger>
+          <TabsTrigger value="data">{t("settings.tab_data")}</TabsTrigger>
+          <TabsTrigger value="registry">
+            {t("settings.tab_registry")}
+          </TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.language")}</CardTitle>
-          <CardDescription>{t("settings.language_note")}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex gap-2">
-          <Button
-            variant={i18n.language === "en" ? "default" : "outline"}
-            onClick={() => setLanguage("en")}
-          >
-            {t("settings.language_english")}
-          </Button>
-          <Button
-            variant={i18n.language === "ja" ? "default" : "outline"}
-            onClick={() => setLanguage("ja")}
-          >
-            {t("settings.language_japanese")}
-          </Button>
-        </CardContent>
-      </Card>
+        <TabsContent value="general" className="flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("settings.appearance")}</CardTitle>
+              <CardDescription>{t("settings.appearance_note")}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex gap-2">
+              <Button
+                variant={theme === "light" ? "default" : "outline"}
+                onClick={() => pickTheme("light")}
+              >
+                {t("settings.light")}
+              </Button>
+              <Button
+                variant={theme === "dark" ? "default" : "outline"}
+                onClick={() => pickTheme("dark")}
+              >
+                {t("settings.dark")}
+              </Button>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.autostart")}</CardTitle>
-          <CardDescription>{t("settings.autostart_note")}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex items-center justify-between gap-4">
-          <span className="text-body">{t("settings.autostart_switch")}</span>
-          <Switch
-            checked={autostart}
-            onCheckedChange={toggleAutostart}
-            aria-label={t("settings.autostart_switch")}
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("settings.language")}</CardTitle>
+              <CardDescription>{t("settings.language_note")}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex gap-2">
+              <Button
+                variant={i18n.language === "en" ? "default" : "outline"}
+                onClick={() => setLanguage("en")}
+              >
+                {t("settings.language_english")}
+              </Button>
+              <Button
+                variant={i18n.language === "ja" ? "default" : "outline"}
+                onClick={() => setLanguage("ja")}
+              >
+                {t("settings.language_japanese")}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("settings.autostart")}</CardTitle>
+              <CardDescription>{t("settings.autostart_note")}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center justify-between gap-4">
+              <span className="text-body">
+                {t("settings.autostart_switch")}
+              </span>
+              <Switch
+                checked={autostart}
+                onCheckedChange={toggleAutostart}
+                aria-label={t("settings.autostart_switch")}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="printers" className="flex flex-col gap-6">
+          <PrintersCard
+            printers={printers}
+            settings={settings}
+            save={save}
+            setError={setError}
           />
-        </CardContent>
-      </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.network")}</CardTitle>
-          <CardDescription>{t("settings.network_note")}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-body">{t("settings.lan_switch")}</span>
-            <Switch
-              checked={lanOn}
-              onCheckedChange={(on) => save("api.lan", on ? "true" : "false")}
-              aria-label={t("settings.lan_switch")}
-            />
-          </div>
-          {lanOn && (
-            <div className="flex flex-col gap-3">
-              {pairCode !== null ? (
-                <div className="flex flex-col gap-1 rounded-lg border p-3">
-                  <span className="text-body">
-                    {t("settings.pair_code_note")}
-                  </span>
-                  <span className="font-mono text-title tracking-[0.3em]">
-                    {pairCode.replace(/(.{4})/g, "$1 ").trim()}
-                  </span>
-                  <span className="text-caption text-muted-foreground">
-                    {t("settings.pair_seconds_left", { seconds: pairLeft })}
-                  </span>
-                </div>
-              ) : (
-                <Button variant="outline" size="sm" onClick={pair}>
-                  {t("settings.pair_a_device")}
-                </Button>
-              )}
-              {devices.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  {devices.map((d) => (
-                    <div
-                      key={d.id}
-                      className="flex items-center justify-between gap-4"
-                    >
+        <TabsContent value="network" className="flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("settings.network")}</CardTitle>
+              <CardDescription>{t("settings.network_note")}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-body">{t("settings.lan_switch")}</span>
+                <Switch
+                  checked={lanOn}
+                  onCheckedChange={(on) =>
+                    save("api.lan", on ? "true" : "false")
+                  }
+                  aria-label={t("settings.lan_switch")}
+                />
+              </div>
+              {lanOn && (
+                <div className="flex flex-col gap-3">
+                  {pairCode !== null ? (
+                    <div className="flex flex-col gap-1 rounded-lg border p-3">
                       <span className="text-body">
-                        {d.name}
-                        <span className="text-caption text-muted-foreground">
-                          {" "}
-                          · {d.platform} ·{" "}
-                          {new Date(d.pairedAt).toLocaleDateString()}
-                        </span>
+                        {t("settings.pair_code_note")}
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => revoke(d.id)}
-                      >
-                        {t("settings.revoke")}
-                      </Button>
+                      <span className="font-mono text-title tracking-[0.3em]">
+                        {pairCode.replace(/(.{4})/g, "$1 ").trim()}
+                      </span>
+                      <span className="text-caption text-muted-foreground">
+                        {t("settings.pair_seconds_left", { seconds: pairLeft })}
+                      </span>
                     </div>
-                  ))}
+                  ) : (
+                    <Button variant="outline" size="sm" onClick={pair}>
+                      {t("settings.pair_a_device")}
+                    </Button>
+                  )}
+                  {devices.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      {devices.map((d) => (
+                        <div
+                          key={d.id}
+                          className="flex items-center justify-between gap-4"
+                        >
+                          <span className="text-body">
+                            {d.name}
+                            <span className="text-caption text-muted-foreground">
+                              {" "}
+                              · {d.platform} ·{" "}
+                              {new Date(d.pairedAt).toLocaleDateString()}
+                            </span>
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => revoke(d.id)}
+                          >
+                            {t("settings.revoke")}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.data")}</CardTitle>
-          <CardDescription>{t("settings.data_note")}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-body">{t("settings.block_private_ips")}</span>
-            <Switch
-              checked={blockPrivateOn}
-              onCheckedChange={(on) =>
-                save("data.block_private_ips", on ? "true" : "false")
-              }
-              aria-label={t("settings.block_private_ips")}
-            />
-          </div>
-          <span className="text-caption text-muted-foreground">
-            {t("settings.block_private_ips_note")}
-          </span>
-        </CardContent>
-      </Card>
+        <TabsContent value="data" className="flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("settings.data")}</CardTitle>
+              <CardDescription>{t("settings.data_note")}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-body">
+                  {t("settings.block_private_ips")}
+                </span>
+                <Switch
+                  checked={blockPrivateOn}
+                  onCheckedChange={(on) =>
+                    save("data.block_private_ips", on ? "true" : "false")
+                  }
+                  aria-label={t("settings.block_private_ips")}
+                />
+              </div>
+              <span className="text-caption text-muted-foreground">
+                {t("settings.block_private_ips_note")}
+              </span>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.registry")}</CardTitle>
-          <CardDescription>
-            {t("settings.registry_note", {
-              default: registryDefault || "http://127.0.0.1:8787",
-            })}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          <Label htmlFor="registry-url">{t("settings.registry_url")}</Label>
-          <Input
-            id="registry-url"
-            value={registryUrlText}
-            onChange={(e) => setRegistryUrlText(e.target.value)}
-            onBlur={() => save("registry.url", registryUrlText.trim())}
-            placeholder={registryDefault}
-          />
-          <span className="text-caption text-muted-foreground">
-            {t("settings.registry_url_note")}
-          </span>
-        </CardContent>
-      </Card>
-
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-title font-semibold">{t("settings.printers")}</h2>
-          <p className="text-body text-muted-foreground">
-            {t("settings.printers_note")}
-          </p>
-        </div>
-        {printers.map((p) => {
-          const o = overrideFor(p);
-          const hasOverride = Object.keys(o).length > 0;
-          return (
-            <Card key={p.model}>
-              <CardHeader>
-                <CardTitle>{p.model}</CardTitle>
-                <CardDescription>
-                  {p.language} · {p.media.join(", ")}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor={`chunk-${p.model}`}>
-                      {t("settings.chunk_size")}
-                    </Label>
-                    <Input
-                      id={`chunk-${p.model}`}
-                      inputMode="numeric"
-                      placeholder={String(p.delivery.chunk_bytes)}
-                      defaultValue={o.chunkBytes ?? ""}
-                      onBlur={(e) =>
-                        saveField(
-                          p,
-                          "chunkBytes",
-                          e.target.value,
-                          p.delivery.chunk_bytes,
-                        )
-                      }
-                    />
-                    <span className="text-caption text-muted-foreground">
-                      {t("settings.chunk_size_note")}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor={`pause-${p.model}`}>
-                      {t("settings.pause")}
-                    </Label>
-                    <Input
-                      id={`pause-${p.model}`}
-                      inputMode="numeric"
-                      placeholder={String(p.delivery.pause_ms)}
-                      defaultValue={o.pauseMs ?? ""}
-                      onBlur={(e) =>
-                        saveField(
-                          p,
-                          "pauseMs",
-                          e.target.value,
-                          p.delivery.pause_ms,
-                        )
-                      }
-                    />
-                    <span className="text-caption text-muted-foreground">
-                      {t("settings.pause_note")}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor={`close-${p.model}`}>
-                      {t("settings.close_delay")}
-                    </Label>
-                    <Input
-                      id={`close-${p.model}`}
-                      inputMode="numeric"
-                      placeholder={String(p.delivery.close_delay_ms)}
-                      defaultValue={o.closeDelayMs ?? ""}
-                      onBlur={(e) =>
-                        saveField(
-                          p,
-                          "closeDelayMs",
-                          e.target.value,
-                          p.delivery.close_delay_ms,
-                        )
-                      }
-                    />
-                    <span className="text-caption text-muted-foreground">
-                      {t("settings.close_delay_note")}
-                    </span>
-                  </div>
-                </div>
-                {hasOverride && (
-                  <div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => resetPrinter(p)}
-                    >
-                      {t("settings.reset_profile_values")}
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </section>
+        <TabsContent value="registry" className="flex flex-col gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("settings.registry")}</CardTitle>
+              <CardDescription>
+                {t("settings.registry_note", {
+                  default: registryDefault || "http://127.0.0.1:8787",
+                })}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <Label htmlFor="registry-url">{t("settings.registry_url")}</Label>
+              <Input
+                id="registry-url"
+                value={registryUrlText}
+                onChange={(e) => setRegistryUrlText(e.target.value)}
+                onBlur={() => save("registry.url", registryUrlText.trim())}
+                placeholder={registryDefault}
+              />
+              <span className="text-caption text-muted-foreground">
+                {t("settings.registry_url_note")}
+              </span>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </main>
   );
 }

@@ -27,6 +27,12 @@ interface Printer {
   delivery: Delivery;
 }
 
+interface SavedPrinterRow {
+  name: string;
+  model: string;
+  transport: string;
+}
+
 interface TemplateRow {
   id: string;
   name: string;
@@ -82,6 +88,7 @@ interface Publication {
 /** The seed the screenshot script plants before the page loads. */
 interface Seed {
   printers?: Printer[];
+  savedPrinters?: SavedPrinterRow[];
   templates?: TemplateRow[];
   jobs?: JobRow[];
   settings?: Record<string, string>;
@@ -112,8 +119,28 @@ function readSeed(): Seed {
 
 const seed = readSeed();
 
+const printers = seed.printers ?? [];
+// One saved printer by default, so the print screen's picker and the
+// settings' saved list have something to show without a seed.
+const savedPrinters: SavedPrinterRow[] =
+  seed.savedPrinters ??
+  (printers.length > 0
+    ? [
+        {
+          name: `${printers[0].model} (saved)`,
+          model: printers[0].model,
+          transport: JSON.stringify({
+            kind: "tcp",
+            host: "127.0.0.1",
+            port: 9100,
+          }),
+        },
+      ]
+    : []);
+
 const state = {
-  printers: seed.printers ?? [],
+  printers,
+  savedPrinters: [...savedPrinters],
   templates: [...(seed.templates ?? [])],
   jobs: [...(seed.jobs ?? [])],
   settings: { ...(seed.settings ?? {}) },
@@ -293,6 +320,25 @@ async function invoke(
       return { template: null, printer: null, copies: null };
     case "list_printers":
       return state.printers;
+    case "scan_system_printers":
+      return [];
+    case "scan_network_printers":
+      return [];
+    case "list_saved_printers":
+      return state.savedPrinters;
+    case "save_printer": {
+      const row = a.printer as SavedPrinterRow;
+      const i = state.savedPrinters.findIndex((p) => p.name === row.name);
+      if (i >= 0) state.savedPrinters[i] = row;
+      else state.savedPrinters.push(row);
+      return undefined;
+    }
+    case "remove_printer": {
+      const name = String(a.name);
+      const i = state.savedPrinters.findIndex((p) => p.name === name);
+      if (i >= 0) state.savedPrinters.splice(i, 1);
+      return i >= 0;
+    }
     case "encode_symbol":
       return symbolEncoding(String(a.kind), String(a.value));
     case "load_templates":

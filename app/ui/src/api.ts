@@ -175,6 +175,65 @@ export function encodeSymbol(kind: string, value: string) {
   );
 }
 
+/**
+ * Printer discovery (the previous app's "scan & add"). The shapes
+ * mirror `app/src/discovery.rs` field for field.
+ */
+
+/** A queue the OS's spooler already knows, from the system scan. */
+export interface SystemPrinter {
+  name: string;
+  /** The port or backend the queue sends to (`USB001`, …). */
+  port: string;
+  /** The queue's fault, in the spooler's own words; absent when ready. */
+  status?: string;
+}
+
+/** A printer the LAN announced over mDNS, from the network scan. */
+export interface DiscoveredPrinter {
+  name: string;
+  /** A private IP when the advertisement carried one, else the hostname. */
+  host: string;
+  port: number;
+  /** The transport the found service is: "ipp" or "raw_tcp". */
+  kind: string;
+  /** An IPP resource path, when the advertisement carried one. */
+  resourcePath?: string;
+}
+
+/**
+ * A printer the user saved: a name they chose, the profile it speaks,
+ * and the transport that reaches it. The profile stays the shipped
+ * set — the row only says which profile, and how, to use.
+ */
+export interface SavedPrinter {
+  name: string;
+  /** The profile's model. */
+  model: string;
+  /** The transport, as JSON text. */
+  transport: string;
+}
+
+/** The queues this machine's spooler already knows. */
+export const scanSystemPrinters = () =>
+  invoke<SystemPrinter[]>("scan_system_printers");
+
+/** The printers the LAN announced, waiting `timeoutSecs` (2–30). */
+export const scanNetworkPrinters = (timeoutSecs?: number) =>
+  invoke<DiscoveredPrinter[]>("scan_network_printers", { timeoutSecs });
+
+/** The printers the user has saved, by name. */
+export const listSavedPrinters = () =>
+  invoke<SavedPrinter[]>("list_saved_printers");
+
+/** Save or replace a saved printer; its profile must exist. */
+export const savePrinter = (printer: SavedPrinter) =>
+  invoke<void>("save_printer", { printer });
+
+/** Remove a saved printer. Resolves to whether it was there. */
+export const removePrinter = (name: string) =>
+  invoke<boolean>("remove_printer", { name });
+
 /** The saved templates, or none on first run. */
 export const loadTemplates = () => invoke<StoredTemplate[]>("load_templates");
 
