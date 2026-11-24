@@ -14,6 +14,8 @@ import {
   browserDownload,
   browserInfo,
   browserSelect,
+  diagnosticsBundle,
+  diagnosticsRepair,
   localApiStatus,
   type LocalApiStatus,
   type BrowserInfo,
@@ -30,6 +32,14 @@ import {
 } from "@/api";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
@@ -65,6 +75,10 @@ export function SettingsScreen() {
   const [browserBusy, setBrowserBusy] = useState(false);
   const [browserError, setBrowserError] = useState<string | null>(null);
   const [apiStatus, setApiStatus] = useState<LocalApiStatus | null>(null);
+  const [repairOpen, setRepairOpen] = useState(false);
+  const [repairPort, setRepairPort] = useState(false);
+  const [repairing, setRepairing] = useState(false);
+  const [repairSteps, setRepairSteps] = useState<string[]>([]);
 
   const lanOn = settings["api.lan"] === "true";
   // Absent means on: the guarded fetcher is the default.
@@ -148,6 +162,33 @@ export function SettingsScreen() {
       .then(refreshBrowser)
       .catch((e) => setBrowserError(String(e)))
       .finally(() => setBrowserBusy(false));
+  };
+
+  const downloadBundle = () => {
+    void diagnosticsBundle()
+      .then((text) => {
+        const url = URL.createObjectURL(
+          new Blob([text], { type: "application/json;charset=utf-8" }),
+        );
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "printninja-diagnostics.json";
+        link.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch((e) => setBrowserError(String(e)));
+  };
+
+  const runRepair = () => {
+    setRepairing(true);
+    void diagnosticsRepair(repairPort)
+      .then((report) => {
+        setRepairSteps(report.steps);
+        setRepairOpen(false);
+        refreshApiStatus();
+      })
+      .catch((e) => setBrowserError(String(e)))
+      .finally(() => setRepairing(false));
   };
 
   const downloadLogs = () => {
@@ -467,13 +508,54 @@ export function SettingsScreen() {
                       })
                     : ""}
               </p>
-              <div>
+              <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={refreshApiStatus}>
                   {t("settings.logs_refresh")}
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRepairOpen(true)}
+                >
+                  {t("settings.repair")}
+                </Button>
               </div>
+              {repairSteps.length > 0 && (
+                <pre className="max-h-40 overflow-auto rounded-md bg-muted p-2 text-caption whitespace-pre-wrap">
+                  {repairSteps.join("\n")}
+                </pre>
+              )}
             </CardContent>
           </Card>
+
+          <Dialog open={repairOpen} onOpenChange={setRepairOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>{t("settings.repair")}</DialogTitle>
+                <DialogDescription>
+                  {t("settings.repair_note")}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={repairPort}
+                  onCheckedChange={setRepairPort}
+                  aria-label={t("settings.repair_port")}
+                />
+                <Label>{t("settings.repair_port")}</Label>
+              </div>
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setRepairOpen(false)}>
+                  {t("common.cancel")}
+                </Button>
+                <Button onClick={runRepair} disabled={repairing}>
+                  {repairing
+                    ? t("settings.repair_running")
+                    : t("settings.repair")}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Card>
             <CardHeader>
@@ -548,6 +630,9 @@ export function SettingsScreen() {
                   onClick={clearLogs}
                 >
                   {t("settings.logs_clear")}
+                </Button>
+                <Button variant="outline" size="sm" onClick={downloadBundle}>
+                  {t("settings.bundle_download")}
                 </Button>
               </div>
               {logError && (

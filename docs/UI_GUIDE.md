@@ -192,7 +192,12 @@ is plain.
   17717 is up (or the bind error in plain words). **Browser for documents**: choose the PC's own browser
   or download a private Chromium build and use that; the detected and
   downloaded paths are shown. **Application log**: recent app events,
-  newest first, with **Refresh**, **Download** (a text file) and **Clear**.
+  newest first, with **Refresh**, **Download** (a text file), **Download
+  diagnostics bundle** (a redacted JSON file with the app state and log)
+  and **Clear**. **Fix PC printing** restarts the OS print service with
+  administrator rights (Spooler on Windows, CUPS on Linux) and can also
+  stop whatever holds port 17717; the steps and any error are shown in
+  plain words.
 
 ## 🌍 Signing in, syncing and publishing
 

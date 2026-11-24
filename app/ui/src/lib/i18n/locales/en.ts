@@ -208,6 +208,12 @@ const en = {
     tab_data: "Data",
     tab_registry: "Registry",
     tab_diagnostics: "Diagnostics",
+    repair: "Fix PC printing",
+    repair_note:
+      "Restarts the OS print service (Spooler on Windows, CUPS on Linux) with administrator rights — the system may ask you to approve it.",
+    repair_port: "Also stop the process using port 17717",
+    repair_running: "Repairing…",
+    bundle_download: "Download diagnostics bundle",
     local_api_title: "Local print API",
     local_api_note:
       "Other apps and printninja:// links use this listener. If port 17717 is busy, printing from elsewhere is off.",

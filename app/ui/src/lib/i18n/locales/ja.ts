@@ -211,6 +211,12 @@ const ja: EnStrings = {
     tab_data: "データ",
     tab_registry: "レジストリ",
     tab_diagnostics: "診断",
+    repair: "PC の印刷を修復",
+    repair_note:
+      "OS の印刷サービス（Windows は Spooler、Linux は CUPS）を管理者権限で再起動します。承認を求められることがあります。",
+    repair_port: "ポート 17717 を使っているプロセスも停止する",
+    repair_running: "修復中…",
+    bundle_download: "診断バンドルをダウンロード",
     local_api_title: "ローカル印刷 API",
     local_api_note:
       "他のアプリや printninja:// リンクはこのリスナーを使います。ポート 17717 が使用中だと、他のアプリからの印刷はできません。",

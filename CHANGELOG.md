@@ -10,6 +10,9 @@ Unreleased.
 
 ### Added
 
+- App: Diagnostics can now run a real OS-level print repair (restart
+  Spooler/CUPS with elevation, optionally free port 17717) and export a
+  redacted JSON diagnostics bundle with the app state and recent log
 - App: Diagnostics shows the local print API's listener address or its
   bind error, instead of leaving a busy port 17717 invisible
 - App: the scene editor has a Sample data card; edits feed the live
