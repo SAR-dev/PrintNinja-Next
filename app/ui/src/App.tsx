@@ -33,6 +33,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CommunityList } from "@/components/community";
+import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/page-header";
+import { JobResultBadge, StatusBadge } from "@/components/status-badge";
 import {
   Dialog,
   DialogContent,
@@ -55,7 +58,6 @@ import { DocumentEditorScreen } from "@/screens/document-editor-screen";
 import { EditorScreen } from "@/screens/editor-screen";
 import { PrintScreen } from "@/screens/print-screen";
 import { SettingsScreen } from "@/screens/settings-screen";
-import { resultTone, toneClass } from "@/result-words";
 import {
   blankDocument,
   mergeTemplates,
@@ -145,20 +147,15 @@ type View =
   | { name: "document-edit"; template: AppTemplate }
   | { name: "settings" };
 
-/** The registry's state in one line: online, who is signed in, and
- * how many operations are waiting for the connection. */
+/** The registry's state in the top bar: its reach, who is signed
+ * in, and how many operations are waiting for the connection. */
 function RegistryChip({ status }: { status: RegistryStatus }) {
   const { t } = useTranslation();
   return (
-    <span className="flex min-w-0 items-center gap-2 text-caption">
-      <span
-        className={`h-2 w-2 shrink-0 rounded-full ${
-          status.online ? "bg-success" : "bg-muted-foreground/40"
-        }`}
-      />
-      {status.online ? t("registry.online") : t("registry.offline")}
-      <span className="truncate text-muted-foreground">
-        · {status.handle ?? t("registry.not_signed_in")}
+    <span className="flex min-w-0 items-center gap-2">
+      <StatusBadge status={status.online ? "online" : "offline"} compact />
+      <span className="hidden min-w-0 truncate text-caption text-muted-foreground lg:inline">
+        {status.handle ?? t("registry.not_signed_in")}
         {status.pending > 0
           ? ` · ${t("registry.waiting", { count: status.pending })}`
           : ""}
@@ -174,7 +171,6 @@ function TemplatesScreen({
   publications,
   onPrint,
   onEdit,
-  onNew,
   onReprint,
   onPublish,
   onUnpublish,
@@ -188,7 +184,6 @@ function TemplatesScreen({
   publications: Publication[];
   onPrint: (t: AppTemplate) => void;
   onEdit: (t: AppTemplate) => void;
-  onNew: () => void;
   onReprint: (job: RecentJob) => void;
   /** Publish a local template; the App opens the sign-in dialog when
    * the account is not signed in. */
@@ -197,16 +192,9 @@ function TemplatesScreen({
   /** A local-storage failure, in plain words, if there is one. */
   storageError: string | null;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-display font-semibold tracking-tight">
-          {t("app.title")}
-        </h1>
-        <p className="text-body text-muted-foreground">{t("app.tagline")}</p>
-      </header>
-
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
         {templates.map((tpl) => {
           const published = publications.some(
@@ -261,9 +249,6 @@ function TemplatesScreen({
           <h2 className="text-title font-semibold">{t("recent.title")}</h2>
           <div className="flex flex-col gap-2">
             {recent.map((j) => {
-              const word = i18n.exists(`result.${j.result.result}`)
-                ? t(`result.${j.result.result}`)
-                : j.result.result;
               const busy = reprintingId === j.id;
               const failed =
                 j.result.result === "failed" ||
@@ -282,19 +267,17 @@ function TemplatesScreen({
                       {t("recent.copies", { count: j.copies })} · {j.profile}
                     </span>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span
-                      className={`rounded-md px-2 py-1 text-caption font-medium ${toneClass(resultTone(j.result.result))}`}
-                    >
-                      {word}
-                      {j.result.result === "partially_printed" &&
-                      j.result.counts
-                        ? ` — ${t("recent.partial", {
+                  <div className="flex shrink-0 items-center gap-2">
+                    <JobResultBadge result={j.result.result} />
+                    {j.result.result === "partially_printed" &&
+                      j.result.counts && (
+                        <span className="text-caption text-muted-foreground">
+                          {t("recent.partial", {
                             printed: j.result.counts[0],
                             total: j.result.counts[1],
-                          })}`
-                        : ""}
-                    </span>
+                          })}
+                        </span>
+                      )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -315,7 +298,7 @@ function TemplatesScreen({
         </section>
       )}
 
-      <div className="flex items-center justify-between gap-4">
+      <div>
         {storageError ? (
           <p className="text-caption text-danger">
             {t("app.local_storage_error", { error: storageError })}
@@ -325,11 +308,8 @@ function TemplatesScreen({
             {t("app.local_storage_note")}
           </p>
         )}
-        <Button variant="outline" onClick={onNew}>
-          {t("app.new_template")}
-        </Button>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -599,11 +579,43 @@ function App() {
     );
 
   return (
-    <div className="min-h-dvh-safe bg-background">
+    <Layout
+      active={view.name === "settings" ? "settings" : "templates"}
+      onNavigate={(key) =>
+        setView(key === "settings" ? { name: "settings" } : { name: "list" })
+      }
+      topbar={
+        <>
+          <RegistryChip status={registry} />
+          <UpdateBadge />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={registryBusy}
+            onClick={() => void syncRegistry()}
+          >
+            {registryBusy ? t("registry.syncing") : t("registry.sync")}
+          </Button>
+          {registry.handle ? (
+            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+              {t("registry.sign_out")}
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSigninOpen(true)}
+            >
+              {t("registry.sign_in")}
+            </Button>
+          )}
+        </>
+      }
+    >
       {/* A link can arrive on any view, so the error sits above them all. */}
       {deepLinkError && (
-        <div className="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-4 border-b border-danger/40 bg-danger-soft px-6 py-3">
-          <p className="text-body text-danger">{deepLinkError}</p>
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-danger bg-danger-soft px-4 py-3">
+          <p className="text-body-sm text-danger">{deepLinkError}</p>
           <Button
             variant="ghost"
             size="sm"
@@ -656,55 +668,22 @@ function App() {
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-            <div className="flex flex-wrap items-center gap-3">
-              <RegistryChip status={registry} />
-              <UpdateBadge />
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={registryBusy}
-                onClick={() => void syncRegistry()}
-              >
-                {registryBusy ? t("registry.syncing") : t("registry.sync")}
-              </Button>
-              {registry.handle ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void signOut()}
-                >
-                  {t("registry.sign_out")}
-                </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSigninOpen(true)}
-                >
-                  {t("registry.sign_in")}
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setView({ name: "settings" })}
-              >
-                {t("settings.title")}
-              </Button>
-            </div>
-          </div>
           {registryError && (
-            <p className="mx-8 -mb-2 rounded-lg border border-danger bg-danger-soft px-4 py-3 text-body-sm text-danger">
-              {registryError}
-            </p>
+            <div className="mx-auto w-full max-w-3xl">
+              <p className="rounded-lg border border-danger bg-danger-soft px-4 py-3 text-body-sm text-danger">
+                {registryError}
+              </p>
+            </div>
           )}
+          <PageHeader title={t("app.title")} description={t("app.tagline")}>
+            <Button onClick={() => setNewOpen(true)}>
+              {t("app.new_template")}
+            </Button>
+          </PageHeader>
           <Tabs
             value={tab}
             onValueChange={(v) => setTab(v as Tab)}
-            className="mx-auto w-full max-w-3xl px-8"
+            className="mx-auto flex w-full max-w-3xl flex-col gap-4"
           >
             <TabsList>
               <TabsTrigger value="mine">{t("tabs.mine")}</TabsTrigger>
@@ -719,7 +698,6 @@ function App() {
                 publications={myPublications}
                 onPrint={(tpl) => setView({ name: "print", template: tpl })}
                 onEdit={editTemplate}
-                onNew={() => setNewOpen(true)}
                 onReprint={(j) => void reprint(j)}
                 onPublish={openPublish}
                 onUnpublish={(tpl) => void unpublish(tpl)}
@@ -897,7 +875,7 @@ function App() {
           </Dialog>
         </>
       )}
-    </div>
+    </Layout>
   );
 }
 

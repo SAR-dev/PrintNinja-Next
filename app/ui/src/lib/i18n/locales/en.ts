@@ -35,6 +35,14 @@ const en = {
     local_storage_note: "Templates and recent jobs are saved on this computer.",
     local_storage_error: "Local storage: {{error}}",
   },
+  nav: {
+    aria: "Primary",
+    skip: "Skip to content",
+    templates: "Templates",
+    settings: "Settings",
+    collapse: "Collapse",
+    expand: "Expand",
+  },
   registry: {
     online: "Registry online",
     offline: "Registry offline",
@@ -89,6 +97,15 @@ const en = {
     retry: "Retry",
     printing: "Printing…",
     partial: "{{printed}} of {{total}}",
+  },
+  status: {
+    online: "Online",
+    offline: "Offline",
+    queued: "Queued",
+    running: "Printing",
+    cancelled: "Cancelled",
+    syncing: "Syncing…",
+    published: "Published",
   },
   result: {
     confirmed: "Confirmed",

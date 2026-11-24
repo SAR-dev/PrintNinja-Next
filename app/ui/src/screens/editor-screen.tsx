@@ -13,6 +13,7 @@ import {
   type ProfileInfo,
 } from "@/api";
 import { JobPreview } from "@/components/job-preview";
+import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -203,32 +204,25 @@ export function EditorScreen({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-8">
-      <header className="flex flex-col gap-2">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <PageHeader title={t("editor.title")}>
         <Button variant="ghost" size="sm" onClick={onBack}>
           {t("editor.back")}
         </Button>
-        <div className="flex items-center gap-3">
-          <h1 className="text-display font-semibold tracking-tight">
-            {t("editor.title")}
-          </h1>
-          <Badge>scene</Badge>
-        </div>
-      </header>
-
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex w-64 flex-col gap-1">
-          <Label htmlFor="t-name">{t("common.name")}</Label>
-          <Input
-            id="t-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
+        <Badge>scene</Badge>
         <Button onClick={save}>{t("editor.save_template")}</Button>
         <Button variant="secondary" onClick={previewJob} disabled={preparing}>
           {preparing ? t("editor.previewing") : t("editor.preview")}
         </Button>
+      </PageHeader>
+
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="t-name">{t("common.name")}</Label>
+        <Input
+          id="t-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">

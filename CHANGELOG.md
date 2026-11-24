@@ -513,3 +513,10 @@ Unreleased.
   the app's own guarded data fetching) and answers CORS for exactly one
   origin — the configured registry's — so the demo page can call it and
   no other web page can
+- The app's chrome rebuilt in the old app's design language: a top bar
+  with the brand and version plus the registry's online/offline chip,
+  the update badge, sync and sign in/out; a collapsible sidebar
+  (Templates, Settings — a strip under the top bar on small screens);
+  a sticky page header on every view with its actions (New template on
+  the list, back/save/preview on the editors); and tone-and-icon
+  status and job-result badges in the top bar and the recent-jobs list

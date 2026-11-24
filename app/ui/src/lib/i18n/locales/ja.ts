@@ -37,6 +37,14 @@ const ja: EnStrings = {
       "テンプレートと最近のジョブはこのコンピュータに保存されます。",
     local_storage_error: "ローカルストレージ: {{error}}",
   },
+  nav: {
+    aria: "メインナビゲーション",
+    skip: "コンテンツへスキップ",
+    templates: "テンプレート",
+    settings: "設定",
+    collapse: "たたむ",
+    expand: "広げる",
+  },
   registry: {
     online: "レジストリ接続中",
     offline: "レジストリ切断中",
@@ -91,6 +99,15 @@ const ja: EnStrings = {
     retry: "リトライ",
     printing: "印刷中…",
     partial: "{{total}} 件中 {{printed}} 件",
+  },
+  status: {
+    online: "オンライン",
+    offline: "オフライン",
+    queued: "待機中",
+    running: "印刷中",
+    cancelled: "キャンセル済み",
+    syncing: "同期中…",
+    published: "公開中",
   },
   result: {
     confirmed: "確認済み",

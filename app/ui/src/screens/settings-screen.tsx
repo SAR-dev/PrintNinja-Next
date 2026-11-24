@@ -20,6 +20,7 @@ import {
   type PairedDevice,
   type ProfileInfo,
 } from "@/api";
+import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -184,20 +185,15 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
     save(deliveryKey(p.model), JSON.stringify({}));
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
-      <header className="flex items-center gap-4">
+    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <PageHeader
+        title={t("settings.title")}
+        description={t("settings.subtitle")}
+      >
         <Button variant="ghost" size="sm" onClick={onBack}>
           {t("common.back")}
         </Button>
-        <div className="flex flex-col gap-1">
-          <h1 className="text-display font-semibold tracking-tight">
-            {t("settings.title")}
-          </h1>
-          <p className="text-body text-muted-foreground">
-            {t("settings.subtitle")}
-          </p>
-        </div>
-      </header>
+      </PageHeader>
 
       {error && (
         <p className="rounded-lg border border-danger bg-danger-soft px-4 py-3 text-body-sm text-danger">

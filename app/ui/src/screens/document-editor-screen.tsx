@@ -6,6 +6,7 @@
  */
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -95,29 +96,22 @@ export function DocumentEditorScreen({
     });
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-8">
-      <header className="flex flex-col gap-2">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+      <PageHeader title={t("editor.document_title")}>
         <Button variant="ghost" size="sm" onClick={onBack}>
           {t("editor.back")}
         </Button>
-        <div className="flex items-center gap-3">
-          <h1 className="text-display font-semibold tracking-tight">
-            {t("editor.document_title")}
-          </h1>
-          <Badge variant="secondary">document</Badge>
-        </div>
-      </header>
-
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex w-64 flex-col gap-1">
-          <Label htmlFor="d-name">{t("common.name")}</Label>
-          <Input
-            id="d-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
+        <Badge variant="secondary">document</Badge>
         <Button onClick={save}>{t("editor.save_template")}</Button>
+      </PageHeader>
+
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="d-name">{t("common.name")}</Label>
+        <Input
+          id="d-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">

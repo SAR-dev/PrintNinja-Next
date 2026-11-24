@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { JobPreview } from "@/components/job-preview";
+import { PageHeader } from "@/components/page-header";
 import { resultTone, toneClass } from "@/result-words";
 import type { AppTemplate, RecentJob } from "@/templates";
 
@@ -246,21 +247,17 @@ export function PrintScreen({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
-      <header className="flex flex-col gap-2">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <PageHeader title={starter.name} description={starter.description}>
         <Button variant="ghost" size="sm" onClick={onBack}>
           {t("print.back")}
         </Button>
-        <div className="flex items-center gap-3">
-          <h1 className="text-display font-semibold tracking-tight">
-            {starter.name}
-          </h1>
-          <Badge variant={starter.track === "scene" ? "default" : "secondary"}>
-            {starter.track === "scene" ? "scene" : "document"}
-          </Badge>
-        </div>
-        <p className="text-body text-muted-foreground">{starter.description}</p>
-      </header>
+        <Badge variant={starter.track === "scene" ? "default" : "secondary"}>
+          {starter.track === "scene"
+            ? t("app.track_scene")
+            : t("app.track_document")}
+        </Badge>
+      </PageHeader>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-6">
