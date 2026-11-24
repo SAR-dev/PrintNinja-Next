@@ -63,6 +63,7 @@ const VIEWS = [
   "settings",
   "new-template",
   "publish-dialog",
+  "template-menu",
   "account-menu",
   "signin-dialog",
 ];
@@ -79,6 +80,8 @@ const L = {
   en: {
     print: "Print",
     edit: "Edit",
+    more: "More actions",
+    duplicate: "Duplicate",
     publish: "Publish",
     newTemplate: "New template",
     settings: "Settings",
@@ -100,6 +103,8 @@ const L = {
   ja: {
     print: "印刷",
     edit: "編集",
+    more: "その他の操作",
+    duplicate: "複製",
     publish: "公開",
     newTemplate: "新しいテンプレート",
     settings: "設定",
@@ -442,11 +447,14 @@ async function navigate(page, view, l) {
       await page.getByRole("button", { name: l.newTemplate }).click();
       await page.getByRole("dialog").waitFor();
       break;
+    case "template-menu":
+      await card.first().getByRole("button", { name: l.more, exact: true }).click();
+      await page.getByRole("menuitem", { name: l.duplicate, exact: true }).waitFor();
+      break;
     case "publish-dialog":
-      await card
-        .first()
-        .getByRole("button", { name: l.publish, exact: true })
-        .click();
+      // Publish moved into the card's overflow menu (D2/M2).
+      await card.first().getByRole("button", { name: l.more, exact: true }).click();
+      await page.getByRole("menuitem", { name: l.publish, exact: true }).click();
       await page.locator("#publish-slug").waitFor();
       break;
     case "account-menu":

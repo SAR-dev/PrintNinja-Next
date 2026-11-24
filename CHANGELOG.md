@@ -608,6 +608,10 @@ Unreleased.
 
 ### Changed
 
+- App: template cards now lead with Print, use an icon-only Edit and
+  put Publish/Unpublish, Duplicate and Delete in a ⋯ menu (also opened
+  by right-click on the PC); New template is a split button on the PC
+  and a small FAB above the bottom nav on the phone
 - App: the PC sidebar groups Templates/Jobs under Workspace and
   Printers/Community under Resources, shows job and saved-template
   counts, and pins Settings below the groups next to Collapse

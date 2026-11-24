@@ -241,6 +241,17 @@ function App() {
     );
   };
 
+  /** A copy of a local template, saved next to the original. The
+   * copy is unpublished: the registry keeps the original's name. */
+  const duplicateTpl = (tpl: AppTemplate) => {
+    const copy: AppTemplate = {
+      ...tpl,
+      id: `user-${Date.now().toString(36)}`,
+      name: `${tpl.name} ${t("app.copy_suffix")}`,
+    };
+    upsert(copy);
+  };
+
   /** What a sync brings back: the status, the mirror, the
    * publications, and the local copies a save materialized. */
   const syncRegistry = async () => {
@@ -542,10 +553,13 @@ function App() {
           publications={myPublications}
           storageError={storageError}
           onNew={() => setNewOpen(true)}
+          onNewScene={newScene}
+          onNewDocument={newDocument}
           onPrint={(tpl) => setView({ name: "print", template: tpl })}
           onEdit={editTemplate}
           onPublish={openPublish}
           onUnpublish={(tpl) => void unpublish(tpl)}
+          onDuplicate={duplicateTpl}
           onDelete={(tpl) => void deleteTpl(tpl)}
         />
       )}

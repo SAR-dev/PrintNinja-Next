@@ -12,6 +12,7 @@ const en = {
     save: "Save",
     delete: "Delete",
     dismiss: "Dismiss",
+    more: "More actions",
   },
   auth: {
     show_password: "Show password",
@@ -25,6 +26,8 @@ const en = {
     published: "published",
     publish: "Publish",
     unpublish: "Unpublish",
+    duplicate: "Duplicate",
+    copy_suffix: "copy",
     delete_blocked: "Unpublish it first — the registry keeps its copy.",
     edit: "Edit",
     print: "Print",

@@ -13,6 +13,7 @@ const ja: EnStrings = {
     save: "保存",
     delete: "削除",
     dismiss: "閉じる",
+    more: "その他の操作",
   },
   auth: {
     show_password: "パスワードを表示",
@@ -26,6 +27,8 @@ const ja: EnStrings = {
     published: "公開中",
     publish: "公開",
     unpublish: "公開解除",
+    duplicate: "複製",
+    copy_suffix: "コピー",
     delete_blocked:
       "先に公開解除してください — レジストリにはコピーが残ります。",
     edit: "編集",
