@@ -14,6 +14,9 @@ spec for the items below.
 
 ## Done
 
+- [x] D1 — icon system: `lib/icons.ts` registry + labelled `IconButton`
+      with tooltips; no screen imports lucide-react directly and primary
+      buttons carry icons (commit 5a2605c)
 - [x] D4 — PC top bar: brand + version on the left (already in
       `layout.tsx`), status dot + account menu on the right (P4) — no
       further code needed; checked in the screenshot matrix
@@ -37,10 +40,6 @@ spec for the items below.
 
 ## Remaining findings, in order
 
-- [ ] D1 — icon system: `app/ui/src/lib/icons.ts` registry + `IconButton`
-      (aria-label + Tooltip, `h-control w-control`), icons on primary
-      buttons per plan §4.3; after this, screens never import
-      lucide-react directly
 - [ ] D2 — template card (PC §5.1 + phone): Print primary, Edit icon,
       ⋯ ActionMenu M2 (Publish/Unpublish, Duplicate, Delete danger;
       right-click on PC); M3 New-template split/FAB
