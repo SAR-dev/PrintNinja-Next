@@ -47,6 +47,8 @@ const themes = list("themes", "dark,light").filter((t) =>
 const jobsN = Number(flag("jobs", "4")) || 4;
 const outDir = flag("out", join(root, "screenshots"));
 const chromiumPath = flag("chromium", null);
+const phoneWidth = Number(flag("width", "0")) || null;
+const overflowCheck = hasFlag("check-overflow");
 const wantIndex = !hasFlag("no-index");
 
 const VIEWS = [
@@ -367,7 +369,7 @@ const PLATFORMS = {
     deviceScaleFactor: 1,
   },
   android: {
-    viewport: { width: 412, height: 915 },
+    viewport: { width: phoneWidth ?? 412, height: 915 },
     deviceScaleFactor: 2.625,
     isMobile: true,
     hasTouch: true,
@@ -653,6 +655,12 @@ async function runJob(browser, job, fakeAgent) {
     await settle(page);
     await navigate(page, job.view, L[job.lang]);
     await settle(page);
+    if (overflowCheck) {
+      const over = await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      );
+      if (over > 1) throw new Error(`horizontal overflow: ${over}px`);
+    }
     await freeze(page);
     mkdirSync(dirname(job.path), { recursive: true });
     await page.screenshot({ path: job.path, fullPage: true });

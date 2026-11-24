@@ -611,6 +611,13 @@ Unreleased.
 
 ### Changed
 
+- App: Ctrl/Cmd+K focuses the top-bar search, Escape clears it, and
+  duplicating a template confirms with a toast; interactions use
+  120–200 ms transitions and the screenshot script can check 360 px
+  (`pnpm shots --platforms android --width 360 --check-overflow`)
+- Docs: `docs/UI_GUIDE.md` rewritten for the five destinations, the
+  account menu and the phone layouts; `docs/ROADMAP.md` and
+  `docs/LIMITATIONS.md` reconciled with what now exists
 - App: the phone's Settings is one grouped list under headings (no
   tab strip), and theme and language use a selected-state segmented
   control instead of pairs of buttons

@@ -64,7 +64,7 @@ artifact on every CI run.
 - 🌍 **A community registry** — publish, browse and save templates with a handle and password, no email.
 - 📴 **Offline-first** — printing never waits on a server; registry changes queue and sync when the connection returns.
 - 🌐 **English and Japanese**, light and dark themes.
-- ⬆️ **An update badge** — a pill appears in the top bar when a newer release exists and points at the release page.
+- ⬆️ **An update check** — a newer release appears as an item in the account menu and points at the release page.
 - 📦 **Date-versioned releases** — `YYYY.MMDD.N` versions with CI-built MSI, deb and AppImage installers, and the registry image on GHCR.
 
 ## 🖥️ Platforms

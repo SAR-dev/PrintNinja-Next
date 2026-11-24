@@ -29,6 +29,7 @@ const ja: EnStrings = {
     unpublish: "公開解除",
     duplicate: "複製",
     copy_suffix: "コピー",
+    duplicated: "「{{name}}」として複製しました。",
     delete_blocked:
       "先に公開解除してください — レジストリにはコピーが残ります。",
     edit: "編集",

@@ -70,7 +70,7 @@ export function ActionMenu({
                 disabled={item.disabled}
                 className={cn(
                   item.danger &&
-                    "text-danger focus:bg-danger-soft focus:text-danger",
+                    "text-danger duration-150 focus:bg-danger-soft focus:text-danger",
                 )}
               >
                 {Icon && <Icon aria-hidden="true" />}

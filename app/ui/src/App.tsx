@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import {
   communityTemplates,
   deleteTemplate,
@@ -252,6 +253,7 @@ function App() {
       name: `${tpl.name} ${t("app.copy_suffix")}`,
     };
     upsert(copy);
+    toast.success(t("app.duplicated", { name: copy.name }));
   };
 
   /** What a sync brings back: the status, the mirror, the

@@ -106,9 +106,6 @@ The renderer, planner, profiles and encoders are shared unchanged.
       third-party apps can print through — the Android counterpart of
       the PC local print API (other apps submit jobs; PrintNinja
       renders, plans and delivers them).
-- [ ] **The phone pass over the app** — the narrow-screen redesign;
-      the overlap that once failed the android `new-template` shots is
-      fixed and the `screenshot-matrix` CI job stays blocking.
 
 **Permanent constraints, not tasks:** Android prints thermal media
 via the scene track only — no html document track, no headless
@@ -152,8 +149,7 @@ are the encoders.
 - More starter templates — the old app shipped six packs (receipt,
   delivery slip, invoice, shipping label, kitchen ticket, blank);
   this app ships two.
-- Local search and sort on the Mine tab (Community already searches
-  server-side).
+- Sort on the Templates list (top-bar search now filters it).
 
 ### History and API
 
@@ -180,7 +176,7 @@ are the encoders.
 ### The app itself
 
 - Onboarding: a setup checklist (printer → template → first print).
-- Command palette (Ctrl/Cmd+K) and keyboard shortcuts.
+- Keyboard shortcuts beyond the search focus (Ctrl/Cmd+K).
 - Appearance extras: a system theme option, density, custom app name
   and logo.
 - Background extras: start minimized, minimize-to-tray (close-to-tray
@@ -197,6 +193,9 @@ update-check badge, and the registry URL override all exist in some
 form here.
 
 ## Decided, deferred
+
+- A command palette — decided against; Ctrl/Cmd+K focuses the search field
+  instead, and search never launches actions.
 
 - i18n beyond the shipped languages and the WCAG 2.1 AA target
   (decided post-release).

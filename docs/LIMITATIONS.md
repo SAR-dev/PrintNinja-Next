@@ -43,9 +43,9 @@ These are not bugs. They are things the roadmap looks at and says "not yet" (or,
 
 ## 📱 The app itself
 
-**🆕 There is no auto-update.** The app checks for a newer release on boot and shows an "Update to vX.Y.Z" badge in the top bar, but clicking it opens the **release page** — you download and install the new version by hand. That is deliberate: there is no update channel to maintain, sign, or be fooled by.
+**🆕 There is no auto-update.** The app checks for a newer release on boot and shows an "Update to vX.Y.Z" item in the account menu, but clicking it opens the **release page** — you download and install the new version by hand. That is deliberate: there is no update channel to maintain, sign, or be fooled by.
 
-**🧪 There is no app-level (UI) e2e yet.** The e2e suite in the repo is Rust-driven against the **virtual printer** — it proves the pipeline's bytes, states and failure handling end to end, but it does not click through the UI. A Playwright e2e for the app itself is a post-release decision, if wanted; UI regressions are caught by the frontend build, type checks and the shared-pipeline tests instead.
+**🧪 There is no app-level (UI) e2e yet.** The e2e suite in the repo is Rust-driven against the **virtual printer** — it proves the pipeline's bytes, states and failure handling end to end, but it does not click through the UI. A Playwright e2e for the app itself is a post-release decision, if wanted; UI regressions are caught by the frontend build, type checks and the blocking `pnpm shots` screenshot matrix instead.
 
 **🗣️ The interface is in English and Japanese only.** The UI ships in those two languages, switchable in **Settings → Language**, and no others are available today — adding a language is a translation file under `app/ui/src/lib/i18n/locales/`, no code changes. (Your *prints* are not limited: the renderer carries a Japanese font fallback, so Japanese text in a template renders on the default family, in either interface language.)
 

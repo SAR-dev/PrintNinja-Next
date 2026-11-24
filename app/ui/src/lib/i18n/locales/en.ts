@@ -28,6 +28,7 @@ const en = {
     unpublish: "Unpublish",
     duplicate: "Duplicate",
     copy_suffix: "copy",
+    duplicated: "Copied as {{name}}.",
     delete_blocked: "Unpublish it first — the registry keeps its copy.",
     edit: "Edit",
     print: "Print",
