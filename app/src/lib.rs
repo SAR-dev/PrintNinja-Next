@@ -505,9 +505,9 @@ pub fn run() {
     // gone. Desktop only: there is no tray on Android, and a
     // relaunched app simply starts a fresh process.
     #[cfg(not(target_os = "android"))]
-    let builder = builder.plugin(tauri_plugin_single_instance::init(
-        |app, _args, _cwd| show_the_main_window(app),
-    ));
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        show_the_main_window(app)
+    }));
     let app = builder
         .setup(|app| {
             let dir = profiles_dir(app.handle());
