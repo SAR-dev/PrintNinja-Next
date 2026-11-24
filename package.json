@@ -12,7 +12,8 @@
     "test:rust": "docker compose -f tests/docker-compose.test.yml run --rm rust-test",
     "test:rust:report": "docker compose -f tests/docker-compose.test.yml run --rm rust-test cargo junit --no-fail-fast -o /workspace/test-report/junit.xml",
     "test:virtual-printer": "cargo test --manifest-path tests/e2e/support/virtual-printer/Cargo.toml",
-    "shots": "node scripts/screenshots.mjs"
+    "shots": "node scripts/screenshots.mjs",
+    "shots:assets": "node scripts/refresh-assets.mjs"
   },
   "engines": {
     "node": "22.x"

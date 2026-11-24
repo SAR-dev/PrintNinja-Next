@@ -76,8 +76,10 @@ Before committing a Rust or app change:
   pnpm project too (`pnpm --dir app/ui install --frozen-lockfile`) — the
   script boots `app/ui`'s vite straight from its `node_modules`, which a
   root-only install never creates.
-- The curated README images are committed under `assets/`. Refresh them
-  from a fresh `screenshots/` run when the UI changes.
+- The curated README images are committed under `assets/` (English
+  shots only). Refresh them with `pnpm shots:assets` after a fresh
+  `pnpm shots` run when the UI changes — the script copies the curated
+  set and drops any `assets/*.png` it no longer uses.
 
 ## Android
 

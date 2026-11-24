@@ -639,6 +639,16 @@ async function main() {
   let failures = 0;
   try {
     await vite.ready;
+    // Vite prints "ready in" a tick before it accepts connections; the
+    // first workers would race it. Wait for a real answer.
+    for (;;) {
+      try {
+        if ((await fetch(URL)).ok) break;
+      } catch {
+        /* not listening yet */
+      }
+      await new Promise((res) => setTimeout(res, 100));
+    }
     browser = await chromium.launch({
       ...(chromiumPath ? { executablePath: chromiumPath } : {}),
     });

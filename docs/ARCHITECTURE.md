@@ -94,6 +94,33 @@ shown to the user in the words of `app/ui/src/result-words.ts`:
 Retry is honest too: it is only offered for failures that happened before
 any byte was flushed, so a retry can never print a job twice.
 
+### The scene format
+
+A scene template is `{ format: "scene", media, fields, elements }`: the
+media in millimetres (a `label`, a `roll` with a label height, or `page`
+paper), the data fields, and the elements, in draw order. The element
+types:
+
+| Type | What it is |
+| --- | --- |
+| `text` | A sized box of text with `{{bindings}}`, size, alignment, faux bold/italic |
+| `line` | A horizontal or vertical stroke, with a thickness |
+| `rect` | An outline (or filled) rectangle |
+| `frame` | A bordered box holding other elements at coordinates **relative to its top-left** |
+| `barcode` / `qr` | A symbology from the shared `pn-encoders` module functions, with the value as a binding |
+| `image` | A local file, scaled to a box |
+| `group` | **Repeating rows**: its items, bound to a list field, once per item, flowing down the page (`page: "flow"`) |
+
+Rules that make the format safe to expand: a frame nests to **four
+levels**, never holds a group, and a child that would leave the frame
+fails validation with a named error; a frame child cannot pick its own
+page (it takes the frame's); and every `{{name}}` must be a declared
+field. At expansion a frame **flattens** into its border rect plus its
+children offset by the frame's position, so the renderers and all
+encoders see only the flat element list — a frame costs nothing at print
+time. Unknown element types fail with a "needs a newer PrintNinja"
+error instead of a parse failure.
+
 ## The app
 
 `app/` is the `printninja` crate — a Tauri 2 shell (Windows and Linux;

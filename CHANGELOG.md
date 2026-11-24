@@ -597,8 +597,20 @@ Unreleased.
   0.1 mm steps, and a frame's children can be moved, nudged or resized
   only as far as the frame's edges allow — plus Delete to remove the
   selection and arrow keys to nudge it 0.1 mm (Shift: 1 mm)
+- `pnpm shots:assets` — refreshes the curated README images under
+  `assets/` from the latest `pnpm shots` run (the English shots only)
+  and drops any png the curated set no longer uses
 
 ### Changed
+
+- Docs: the scene editor and the frame element are now written up in
+  `docs/FEATURES.md`, `docs/ARCHITECTURE.md` (a new "The scene format"
+  section: the element types, the frame's four-level nesting, its
+  flattening at expansion), `docs/GLOSSARY.md` and `docs/UI_GUIDE.md`
+  (resize handles, the sample-data switch, undo/redo, Delete and the
+  arrow-key nudge)
+- README: the screenshot grid shows the scene editor instead of the
+  Japanese template list, refreshed from the new screenshot run
 
 - CI: the `server-publish` docker build adds `--provenance=false`,
   matching the release job's build

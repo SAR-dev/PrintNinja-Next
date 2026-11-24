@@ -136,24 +136,38 @@ and **Reprint** offer the next step.
 
 ## ✏️ The scene editor
 
-Top: `← Templates`, `Edit template`, the `scene` badge, the **name** field,
-and **Save template** / **Preview** (`Preparing…` while working).
+Top: `← Templates`, `Edit template`, the `scene` badge, the **undo** (↩) and
+**redo** (↪) buttons, the **name** field, and **Save template** / **Preview**
+(`Preparing…` while working).
 
-- **Page** — *Drag an element to move it; the numbers do the same thing.*
+- **Page** — *`40 × 50 mm — drag an element to move it`* (the page's real
+  size). Click an element to select it; the selection grows **eight resize
+  handles** (corners and edges, 0.1 mm steps). **Delete** removes the
+  selection; the **arrow keys nudge** it 0.1 mm (Shift: 1 mm); **Ctrl/Cmd+Z**
+  undoes (Shift+Z or Ctrl+Y redoes) — a drag, or a burst of typing in one
+  field, is one step. Barcodes and QR draw live from the sample data; the
+  switch under the canvas (**Show sample data** / **Show fields**) flips
+  between sample values and `{{field}}` placeholders.
 - **Media** — *What the template prints on.* Kind: **Label — fixed size**,
   **Roll — cut per label**, **Page — paper**, with `Width (mm)` / `Height
   (mm)` (a roll asks for `Label height (mm)` instead).
-- **Elements** — *Top to bottom, the order they are drawn.* List with
-  **Delete** on each; **Add element…** / **Add to row…**; empty state:
-  *Nothing yet — add the first element below.* Types: text, line,
-  rectangle, barcode, QR code, image, and group (rows that repeat from a
-  list field).
-- **Selected element** — `X (mm)` / `Y (mm)`, **Page placement** (Every /
-  First / Last / Only page…), then the type's fields — e.g. text: content
-  (`{{name}}` fills from the record), size, alignment, bold/italic; barcode:
-  kind (Code 128, Code 39, Code 93, EAN-13, UPC-A, ITF), value, *Show text
-  under the bars*; QR: size, value; group: column width, gap, **Rows from** —
-  *The record field holding this group's rows (a list).*
+- **Elements** — *Top to bottom, the order they are drawn.* A tree (a
+  frame or group's children are nested under it), **Delete** on each;
+  **Add element…** at the root, **Add to row…** in a selected group and
+  **Add to frame…** in a selected frame; empty state: *Nothing yet — add the
+  first element below.* Types: text, line, rectangle, **frame**, barcode,
+  QR code, image, and group (rows that repeat from a list field). A frame is
+  never offered inside another frame's row, and a group is never offered
+  inside a frame.
+- **Selected element** — `X (mm)` / `Y (mm)` (for a frame's child these are
+  **relative to the frame's top-left** — the card says so, and the header
+  shows the parent's name), **Page placement** (Every / First / Last / Only
+  page…; hidden for a frame's child, which takes the frame's page), then the
+  type's fields — e.g. text: content (`{{name}}` fills from the record),
+  size, alignment, bold/italic; frame: width, height, border thickness;
+  barcode: kind (Code 128, Code 39, Code 93, EAN-13, UPC-A, ITF), value,
+  *Show text under the bars*; QR: size, value; group: column width, gap,
+  **Rows from** — *The record field holding this group's rows (a list).*
 - **Data fields** — *Every binding the template uses, declared for the
   job.* The `{{…}}` bindings as badges.
 - **Preview** — *Prepared on the chosen printer, the same path as the print —
