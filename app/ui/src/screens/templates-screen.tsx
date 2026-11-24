@@ -5,6 +5,7 @@
  * destination.
  */
 import { useTranslation } from "react-i18next";
+import { icons } from "@/lib/icons";
 import type { Publication } from "@/api";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +47,10 @@ export function TemplatesScreen({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title={t("app.title")} description={t("app.tagline")}>
-        <Button onClick={onNew}>{t("app.new_template")}</Button>
+        <Button onClick={onNew}>
+          <icons.add aria-hidden="true" className="h-4 w-4" />
+          {t("app.new_template")}
+        </Button>
       </PageHeader>
 
       <div className="flex flex-col gap-4">
@@ -90,7 +94,10 @@ export function TemplatesScreen({
                   <Button variant="secondary" onClick={() => onEdit(tpl)}>
                     {t("app.edit")}
                   </Button>
-                  <Button onClick={() => onPrint(tpl)}>{t("app.print")}</Button>
+                  <Button onClick={() => onPrint(tpl)}>
+                    <icons.print aria-hidden="true" className="h-4 w-4" />
+                    {t("app.print")}
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"

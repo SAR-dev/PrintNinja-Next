@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { NAV_ITEMS, type NavKey } from "@/lib/nav";
+import { NAV_ITEMS, navIcon, type NavKey } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 function isField(e: Event): boolean {
@@ -60,7 +60,7 @@ export function BottomNav({
       className="flex shrink-0 border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       {NAV_ITEMS.map((item) => {
-        const Icon = item.icon;
+        const Icon = navIcon(item);
         const isActive = active === item.key;
         return (
           <button

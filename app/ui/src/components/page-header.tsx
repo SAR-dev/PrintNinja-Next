@@ -5,8 +5,7 @@
  * and lets the description go — the old app's page header, ported.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { cn } from "@/lib/utils";
 
 interface PageHeaderProps {
@@ -50,15 +49,13 @@ export function PageHeader({
       )}
     >
       {back && (
-        <Button
+        <IconButton
+          icon="back"
+          label={back.label}
           variant="ghost"
-          size="icon"
           onClick={back.onClick}
-          aria-label={back.label}
           className="-ml-2 shrink-0"
-        >
-          <ArrowLeft className="size-5" />
-        </Button>
+        />
       )}
       <h1 className="min-w-0 truncate text-xl font-semibold leading-tight tracking-tight max-md:text-2xl max-md:font-bold max-md:leading-[1.1] max-md:tracking-[-0.03em]">
         {title}

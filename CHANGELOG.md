@@ -10,6 +10,11 @@ Unreleased.
 
 ### Added
 
+- App: one icon registry (`lib/icons.ts`) plus an `IconButton` with a
+  required aria-label, a tooltip and a fixed `h-control w-control`
+  target — screens name icons semantically instead of importing
+  lucide-react directly, and the primary buttons carry icons
+
 - Phase 0 skeleton: Rust workspace (`core/{scene,render,planner,profiles,encoders,transport,job}`, `app`, `tests/golden`)
 - CI: web-check, rust-lint, rust-test-linux (Docker container), rust-test-windows,
   chromium-render (the document track through a real system Chrome), and rust-check

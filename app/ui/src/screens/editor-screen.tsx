@@ -6,7 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Redo2, Undo2 } from "lucide-react";
+import { icons } from "@/lib/icons";
 import {
   listPrinters,
   planJob,
@@ -17,6 +17,7 @@ import { JobPreview } from "@/components/job-preview";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import {
   Card,
   CardContent,
@@ -333,25 +334,24 @@ export function EditorScreen({
         back={{ onClick: onBack, label: t("common.back") }}
       >
         <Badge>scene</Badge>
-        <Button
+        <IconButton
+          icon="undo"
+          label={t("editor.undo")}
           variant="ghost"
-          size="icon"
           onClick={undo}
           disabled={past.length === 0}
-          aria-label={t("editor.undo")}
-        >
-          <Undo2 className="size-4" />
-        </Button>
-        <Button
+        />
+        <IconButton
+          icon="redo"
+          label={t("editor.redo")}
           variant="ghost"
-          size="icon"
           onClick={redo}
           disabled={future.length === 0}
-          aria-label={t("editor.redo")}
-        >
-          <Redo2 className="size-4" />
+        />
+        <Button onClick={save}>
+          <icons.save aria-hidden="true" className="h-4 w-4" />
+          {t("editor.save_template")}
         </Button>
-        <Button onClick={save}>{t("editor.save_template")}</Button>
         <Button variant="secondary" onClick={previewJob} disabled={preparing}>
           {preparing ? t("editor.previewing") : t("editor.preview")}
         </Button>

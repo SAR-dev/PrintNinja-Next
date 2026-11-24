@@ -5,9 +5,9 @@
  * Colour is never the only status cue: the dot has a hidden word and
  * the menu label spells the connection out.
  */
-import { Download, LogIn, LogOut, RefreshCw, UserRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { RegistryStatus } from "@/api";
+import { icons } from "@/lib/icons";
 import { openExternalUrl, useUpdateCheck } from "@/lib/appUpdate";
 import { cn } from "@/lib/utils";
 import {
@@ -57,7 +57,7 @@ export function AccountMenu({
             {signedIn ? (
               handle.slice(0, 1).toUpperCase()
             ) : (
-              <UserRound aria-hidden="true" className="h-4 w-4" />
+              <icons.avatar aria-hidden="true" className="h-4 w-4" />
             )}
             <span
               aria-hidden="true"
@@ -89,7 +89,7 @@ export function AccountMenu({
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => onSync()} disabled={busy}>
-          <RefreshCw
+          <icons.sync
             aria-hidden="true"
             className={cn(busy && "motion-safe:animate-spin")}
           />
@@ -99,9 +99,9 @@ export function AccountMenu({
           onSelect={() => (signedIn ? onSignOut() : onSignIn())}
         >
           {signedIn ? (
-            <LogOut aria-hidden="true" />
+            <icons.sign_out aria-hidden="true" />
           ) : (
-            <LogIn aria-hidden="true" />
+            <icons.sign_in aria-hidden="true" />
           )}
           {signedIn ? t("registry.sign_out") : t("registry.sign_in")}
         </DropdownMenuItem>
@@ -109,7 +109,7 @@ export function AccountMenu({
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => void openExternalUrl(update.url)}>
-              <Download aria-hidden="true" />
+              <icons.update aria-hidden="true" />
               {t("update.available", { version: update.version })}
             </DropdownMenuItem>
           </>

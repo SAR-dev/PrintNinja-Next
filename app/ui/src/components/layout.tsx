@@ -7,10 +7,10 @@
  * active and whether the view is contextual.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronRight, Printer } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getAppVersion } from "@/lib/appUpdate";
-import { NAV_ITEMS, type NavItem, type NavKey } from "@/lib/nav";
+import { icons } from "@/lib/icons";
+import { NAV_ITEMS, navIcon, type NavItem, type NavKey } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { BottomNav } from "./bottom-nav";
 
@@ -37,7 +37,7 @@ function SidebarButton({
   onClick: () => void;
 }) {
   const { t } = useTranslation();
-  const Icon = item.icon;
+  const Icon = navIcon(item);
   const label = t(item.labelKey);
   return (
     <button
@@ -133,7 +133,7 @@ export function Layout({
       <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-card px-3 md:px-4">
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Printer aria-hidden="true" className="h-4 w-4" />
+            <icons.brand aria-hidden="true" className="h-4 w-4" />
           </span>
           <span className="truncate text-base font-semibold tracking-tight">
             {t("app.title")}
@@ -201,7 +201,7 @@ export function Layout({
                 collapsed && "justify-center px-0",
               )}
             >
-              <ChevronRight
+              <icons.collapse
                 aria-hidden="true"
                 className={cn(
                   "h-4 w-4 shrink-0 transition-transform duration-150",
