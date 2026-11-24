@@ -4,8 +4,9 @@
  * re-sends the job's frozen template, data and transport.
  */
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
+import { ActionMenu, type ActionItem } from "@/components/ui/action-menu";
 import { JobResultBadge } from "@/components/status-badge";
 import i18n from "@/lib/i18n";
 import type { RecentJob } from "@/templates";
@@ -27,11 +28,13 @@ export function JobsScreen({
   recent,
   reprintingId,
   onReprint,
+  onOpenTemplate,
 }: {
   recent: RecentJob[];
   /** The job whose reprint is running, if any. */
   reprintingId: string | null;
   onReprint: (job: RecentJob) => void;
+  onOpenTemplate: (job: RecentJob) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -49,6 +52,36 @@ export function JobsScreen({
             const failed =
               j.result.result === "failed" ||
               j.result.result === "wrong_mode_suspected";
+            const actions: ActionItem[] = [
+              {
+                label: busy ? t("recent.printing") : t("recent.reprint"),
+                icon: "print",
+                disabled: busy,
+                onSelect: () => onReprint(j),
+              },
+              {
+                label: t("recent.retry"),
+                icon: "sync",
+                disabled: !failed,
+                onSelect: () => onReprint(j),
+              },
+              {
+                label: t("recent.open_template"),
+                icon: "edit",
+                onSelect: () => onOpenTemplate(j),
+              },
+              {
+                label: t("recent.copy_reason"),
+                icon: "add",
+                disabled: !j.result.reason,
+                separator: true,
+                onSelect: () => {
+                  void navigator.clipboard
+                    .writeText(j.result.reason ?? t("recent.no_reason"))
+                    .then(() => toast.success(t("recent.reason_copied")));
+                },
+              },
+            ];
             return (
               <div
                 key={j.id}
@@ -74,18 +107,7 @@ export function JobsScreen({
                         })}
                       </span>
                     )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => onReprint(j)}
-                  >
-                    {busy
-                      ? t("recent.printing")
-                      : failed
-                        ? t("recent.retry")
-                        : t("recent.reprint")}
-                  </Button>
+                  <ActionMenu items={actions} label={t("common.more")} />
                 </div>
               </div>
             );

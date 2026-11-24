@@ -51,7 +51,9 @@ const wantIndex = !hasFlag("no-index");
 
 const VIEWS = [
   "list",
+  "search",
   "jobs",
+  "job-menu",
   "printers",
   "community",
   "saved",
@@ -83,6 +85,9 @@ const L = {
   en: {
     print: "Print",
     edit: "Edit",
+    search: "Search templates",
+    searchResultsOne: "1 matching",
+    openTemplate: "Open template",
     more: "More actions",
     duplicate: "Duplicate",
     moveUp: "Move up",
@@ -381,6 +386,18 @@ async function navigate(page, view, l) {
   const card = page.locator('[data-slot="card"]');
   switch (view) {
     case "list":
+      break;
+    case "search":
+      // The field is PC-only; the phone just shows the plain list.
+      if ((page.viewportSize()?.width ?? 0) >= 768) {
+        await page.locator('input[type="search"]').fill("Parts");
+        await page.locator('[data-slot="search-results"]').waitFor();
+      }
+      break;
+    case "job-menu":
+      await navigate(page, "jobs", l);
+      await page.getByRole("button", { name: l.more, exact: true }).first().click();
+      await page.getByRole("menuitem", { name: l.openTemplate, exact: true }).first().waitFor();
       break;
     case "jobs":
       // The sidebar button carries a job count after its name.

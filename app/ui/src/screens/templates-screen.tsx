@@ -128,6 +128,8 @@ export function TemplatesScreen({
   templates,
   publications,
   storageError,
+  query,
+  onClearQuery,
   onNew,
   onNewScene,
   onNewDocument,
@@ -143,6 +145,9 @@ export function TemplatesScreen({
   publications: Publication[];
   /** A local-storage failure, in plain words, if there is one. */
   storageError: string | null;
+  /** The top bar's search, applied to name and description. */
+  query: string;
+  onClearQuery: () => void;
   onNew: () => void;
   onNewScene: () => void;
   onNewDocument: () => void;
@@ -156,6 +161,14 @@ export function TemplatesScreen({
   onDelete: (t: AppTemplate) => void;
 }) {
   const { t } = useTranslation();
+  const needle = query.trim().toLowerCase();
+  const shown = needle
+    ? templates.filter(
+        (tpl) =>
+          tpl.name.toLowerCase().includes(needle) ||
+          tpl.description.toLowerCase().includes(needle),
+      )
+    : templates;
   return (
     <div className="flex flex-col gap-6 max-md:pb-16">
       <PageHeader title={t("app.title")} description={t("app.tagline")}>
@@ -166,8 +179,22 @@ export function TemplatesScreen({
         />
       </PageHeader>
 
+      {needle && (
+        <div className="flex items-center gap-3">
+          <p
+            data-slot="search-results"
+            className="text-caption text-muted-foreground"
+          >
+            {t("app.search_results", { count: shown.length })}
+          </p>
+          <Button variant="ghost" size="sm" onClick={onClearQuery}>
+            {t("common.close")}
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-4">
-        {templates.map((tpl) => (
+        {shown.map((tpl) => (
           <TemplateCard
             key={tpl.id}
             tpl={tpl}
@@ -180,6 +207,11 @@ export function TemplatesScreen({
             onDelete={onDelete}
           />
         ))}
+        {needle && shown.length === 0 && (
+          <p className="rounded-lg border border-dashed p-6 text-center text-body text-muted-foreground">
+            {t("app.no_matches")}
+          </p>
+        )}
       </div>
 
       <div>

@@ -10,6 +10,9 @@ Unreleased.
 
 ### Added
 
+- App: a PC top-bar search field that filters the Templates list (no
+  command palette), and a ⋯ menu on each recent job (M4: reprint,
+  retry, open template, copy reason)
 - App: one icon registry (`lib/icons.ts`) plus an `IconButton` with a
   required aria-label, a tooltip and a fixed `h-control w-control`
   target — screens name icons semantically instead of importing

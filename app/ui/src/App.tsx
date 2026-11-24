@@ -28,6 +28,7 @@ import {
 } from "@/api";
 import { AccountMenu } from "@/components/account-menu";
 import { Layout } from "@/components/layout";
+import { SearchField } from "@/components/search-field";
 import {
   Dialog,
   DialogContent,
@@ -151,6 +152,7 @@ function App() {
   const [reprintingId, setReprintingId] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [view, setView] = useState<View>({ name: "templates" });
+  const [search, setSearch] = useState("");
   const [newOpen, setNewOpen] = useState(false);
   /** A deep link that could not be honoured, in plain words. */
   const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
@@ -459,13 +461,24 @@ function App() {
       }}
       onNavigate={(key) => setView({ name: key } as View)}
       topbar={
-        <AccountMenu
-          status={registry}
-          busy={registryBusy}
-          onSync={() => void syncRegistry()}
-          onSignIn={() => setSigninOpen(true)}
-          onSignOut={() => void signOut()}
-        />
+        <>
+          <SearchField
+            value={search}
+            label={t("app.search")}
+            onChange={(value) => {
+              setSearch(value);
+              if (value && view.name !== "templates")
+                setView({ name: "templates" });
+            }}
+          />
+          <AccountMenu
+            status={registry}
+            busy={registryBusy}
+            onSync={() => void syncRegistry()}
+            onSignIn={() => setSigninOpen(true)}
+            onSignOut={() => void signOut()}
+          />
+        </>
       }
     >
       {/* A link can arrive on any view, so the error sits above them all. */}
@@ -533,6 +546,33 @@ function App() {
           recent={recent}
           reprintingId={reprintingId}
           onReprint={(j) => void reprint(j)}
+          onOpenTemplate={(j) =>
+            setView(
+              j.track === "scene"
+                ? {
+                    name: "edit",
+                    template: {
+                      id: j.id,
+                      name: j.templateName,
+                      description: "",
+                      track: "scene",
+                      template: j.template,
+                      sample: j.data,
+                    },
+                  }
+                : {
+                    name: "document-edit",
+                    template: {
+                      id: j.id,
+                      name: j.templateName,
+                      description: "",
+                      track: "document",
+                      template: j.template,
+                      sample: j.data,
+                    },
+                  },
+            )
+          }
         />
       ) : view.name === "printers" ? (
         <PrintersScreen />
@@ -553,6 +593,8 @@ function App() {
           templates={templates}
           publications={myPublications}
           storageError={storageError}
+          query={search}
+          onClearQuery={() => setSearch("")}
           onNew={() => setNewOpen(true)}
           onNewScene={newScene}
           onNewDocument={newDocument}

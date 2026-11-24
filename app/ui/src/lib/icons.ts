@@ -37,6 +37,7 @@ import {
   Printer,
   RefreshCw,
   Save,
+  Search,
   Send,
   Settings,
   Trash2,
@@ -84,6 +85,7 @@ export const icons = {
   wrong_mode_suspected: CircleHelp,
   // Actions
   close: X,
+  search: Search,
   more: Ellipsis,
   add: Plus,
   save: Save,
