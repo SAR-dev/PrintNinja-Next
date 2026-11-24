@@ -462,3 +462,26 @@ Unreleased.
   both editors, the print screen, the registry, settings and every
   dialog), with a language switcher in Settings — the choice is saved
   and comes back on the next start
+- App icon brought over from the current PrintNinja and used as the
+  launcher icon (`app/icons/`, regenerated with `tauri icon`), shown in
+  the README
+- The app icon, a rewritten README, and the documentation set:
+  `docs/ARCHITECTURE.md`, `docs/CI.md`, `docs/DEVELOPMENT.md`,
+  `docs/ENV.md`, `docs/FEATURES.md`, `docs/GLOSSARY.md`,
+  `docs/LIMITATIONS.md`, `docs/PRINT_FROM_PHONE.md`, `docs/RELEASE.md`,
+  `docs/SIGNING.md`, `docs/TROUBLESHOOTING.md`, `docs/UI_GUIDE.md` and
+  `CONTRIBUTING.md`
+- CI: `android-check` (the Android debug build on every pull request)
+  and `android-build` (signed release APK + AAB on `v*` tags, signed
+  with the shared keystore), both pinning the generated project to the
+  newest stable Android platform (36) via `scripts/patch-android-sdk.mjs`
+- Screenshot matrix: `scripts/screenshots.mjs` (`pnpm shots`) renders
+  every screen in both languages, both themes and both viewports (the
+  desktop window and a Pixel-7-sized phone) against the fake Tauri
+  bridge into the gitignored `screenshots/` directory with contact-sheet
+  indices; it runs in CI as the non-blocking `screenshot-matrix` job,
+  which uploads the shots as the `screenshots` artifact. A curated few
+  are committed under `assets/` for the README
+- Version bumped to 0.0.1 in every carrier: Tauri refuses `0.0.0` for
+  Android packages, and the `android-check` build was rejected with
+  "the default value 0.0.0 is not allowed"
