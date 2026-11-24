@@ -42,6 +42,7 @@ import {
   elementsOf,
   getAt,
   insertAt,
+  NESTED_ELEMENT_TYPES,
   removeAt,
   samePath,
   updateAt,
@@ -93,6 +94,13 @@ export function EditorScreen({
 
   const bindings = useMemo(() => allBindings(template), [template]);
   const selected = selection ? (getAt(template, selection.path) ?? null) : null;
+  /** The group or frame the selected element sits in, when not at the
+   * root — its name goes in the panel header and its coordinates are
+   * relative to it. */
+  const selectedParent =
+    selection && selection.path.length > 1
+      ? (getAt(template, selection.path.slice(0, -1)) ?? null)
+      : null;
 
   /** The first record of the sample data, for the canvas's live
    *  barcode/QR substitution (plan step 2). `null` when the sample
@@ -288,7 +296,7 @@ export function EditorScreen({
                 onSelect={setSelection}
                 onDelete={deleteElement}
               />
-              <AddElement onAdd={(type) => addElement([], type)} />
+              <AddElement onAdd={(type) => addElement([], type)} where="root" />
             </CardContent>
           </Card>
 
@@ -296,7 +304,11 @@ export function EditorScreen({
             <Card>
               <CardHeader>
                 <CardTitle>{t("editor.selected_element")}</CardTitle>
-                <CardDescription>{elementLabel(selected)}</CardDescription>
+                <CardDescription>
+                  {selectedParent
+                    ? `${elementLabel(selectedParent)} — ${elementLabel(selected)}`
+                    : elementLabel(selected)}
+                </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <div className="grid grid-cols-2 gap-3">
@@ -323,15 +335,23 @@ export function EditorScreen({
                     }
                   />
                 </div>
-
-                {selected.type !== "group" && (
-                  <PlacementSelect
-                    value={selected.page ?? "every"}
-                    onChange={(p) =>
-                      updateSelected((el) => ({ ...el, page: p }))
-                    }
-                  />
+                {selectedParent && (
+                  <span className="-mt-2 text-caption text-muted-foreground">
+                    {t("editor.coords_relative")}
+                  </span>
                 )}
+
+                {/* A frame decides which page its children appear on,
+                    so a child in a frame cannot choose one. */}
+                {selected.type !== "group" &&
+                  selectedParent?.type !== "frame" && (
+                    <PlacementSelect
+                      value={selected.page ?? "every"}
+                      onChange={(p) =>
+                        updateSelected((el) => ({ ...el, page: p }))
+                      }
+                    />
+                  )}
 
                 {selected.type === "text" && (
                   <div className="flex flex-col gap-3">
@@ -718,7 +738,53 @@ export function EditorScreen({
                     </div>
                     <AddElement
                       onAdd={(type) => addElement(selection.path, type)}
-                      group
+                      where="row"
+                    />
+                  </div>
+                )}
+
+                {selected.type === "frame" && selection && (
+                  <div className="flex flex-col gap-3">
+                    <div className="grid grid-cols-3 gap-3">
+                      <NumField
+                        id="f-w"
+                        label={t("editor.width_mm")}
+                        value={selected.size.w_mm}
+                        onChange={(v) =>
+                          updateSelected((el) =>
+                            el.type === "frame"
+                              ? { ...el, size: { ...el.size, w_mm: v } }
+                              : el,
+                          )
+                        }
+                      />
+                      <NumField
+                        id="f-h"
+                        label={t("editor.height_mm")}
+                        value={selected.size.h_mm}
+                        onChange={(v) =>
+                          updateSelected((el) =>
+                            el.type === "frame"
+                              ? { ...el, size: { ...el.size, h_mm: v } }
+                              : el,
+                          )
+                        }
+                      />
+                      <NumField
+                        id="f-border"
+                        label={t("editor.border_mm")}
+                        step={0.05}
+                        value={selected.border_mm}
+                        onChange={(v) =>
+                          updateSelected((el) =>
+                            el.type === "frame" ? { ...el, border_mm: v } : el,
+                          )
+                        }
+                      />
+                    </div>
+                    <AddElement
+                      onAdd={(type) => addElement(selection.path, type)}
+                      where="frame"
                     />
                   </div>
                 )}
@@ -818,6 +884,7 @@ function ElementList({
       const path = [...base, i];
       rows.push({ el, path, depth });
       if (el.type === "group") collect(el.items, path, depth + 1);
+      else if (el.type === "frame") collect(el.children, path, depth + 1);
     });
   };
   collect(elements, basePath, basePath.length);
@@ -860,23 +927,28 @@ function ElementList({
   );
 }
 
+/** Where new elements can go: at the root, in a group's row, or in a
+ * frame. A group cannot sit in a frame (v1), so a row and a frame offer
+ * the same nested list. */
 function AddElement({
   onAdd,
-  group = false,
+  where,
 }: {
   onAdd: (type: string) => void;
-  group?: boolean;
+  where: "root" | "row" | "frame";
 }) {
   const { t } = useTranslation();
-  const types = group
-    ? ["text", "line", "rect", "barcode", "qr", "image"]
-    : ELEMENT_TYPES;
+  const types = where === "root" ? ELEMENT_TYPES : NESTED_ELEMENT_TYPES;
+  const placeholder =
+    where === "root"
+      ? t("editor.add_element")
+      : where === "row"
+        ? t("editor.add_to_row")
+        : t("editor.add_to_frame");
   return (
     <Select onValueChange={(v) => onAdd(v)}>
       <SelectTrigger>
-        <SelectValue
-          placeholder={group ? t("editor.add_to_row") : t("editor.add_element")}
-        />
+        <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
         {types.map((type) => (

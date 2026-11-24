@@ -31,10 +31,23 @@ export const ELEMENT_TYPES = [
   "text",
   "line",
   "rect",
+  "frame",
   "barcode",
   "qr",
   "image",
   "group",
+] as const;
+
+/** What can sit inside a group row or a frame (everything but a group —
+ * a group cannot sit in a frame, v1). */
+export const NESTED_ELEMENT_TYPES = [
+  "text",
+  "line",
+  "rect",
+  "frame",
+  "barcode",
+  "qr",
+  "image",
 ] as const;
 
 /** A blank label to start a new scene template from. */
@@ -62,6 +75,14 @@ export function defaultElement(type: string): Element {
         type: "rect",
         at: { x_mm: 2, y_mm: 12 },
         size: { w_mm: 16, h_mm: 8 },
+      };
+    case "frame":
+      return {
+        type: "frame",
+        at: { x_mm: 2, y_mm: 2 },
+        size: { w_mm: 30, h_mm: 16 },
+        border_mm: 0.3,
+        children: [],
       };
     case "barcode":
       return {
@@ -137,6 +158,8 @@ export function elementLabel(el: Element): string {
         : i18n.t("editor.el_rect");
     case "group":
       return i18n.t("editor.el_group", { bind: el.bind });
+    case "frame":
+      return i18n.t("editor.el_frame");
   }
 }
 
@@ -153,6 +176,8 @@ export function allBindings(template: Template): string[] {
       else if (el.type === "group") {
         if (!names.includes(el.bind)) names.push(el.bind);
         walk(el.items);
+      } else if (el.type === "frame") {
+        walk(el.children);
       }
     }
   };
@@ -181,6 +206,19 @@ export function samePath(a: Path, b: Path): boolean {
   return a.length === b.length && a.every((n, i) => n === b[i]);
 }
 
+/** The children of a container element — a group's items, a frame's
+ * children — or `undefined` when the element holds no children. */
+function childrenOf(el: Element): Element[] | undefined {
+  switch (el.type) {
+    case "group":
+      return el.items;
+    case "frame":
+      return el.children;
+    default:
+      return undefined;
+  }
+}
+
 /** The element at a path, if the template has one there. */
 export function getAt(template: Template, path: Path): Element | undefined {
   let els: Element[] = template.elements;
@@ -188,16 +226,17 @@ export function getAt(template: Template, path: Path): Element | undefined {
   for (const i of path) {
     node = els[i];
     if (!node) return undefined;
-    els = node.type === "group" ? node.items : [];
+    els = childrenOf(node) ?? [];
   }
   return node;
 }
 
-/** The elements living in a container (root, or the group at a path). */
+/** The elements living in a container (root, or the group/frame at a
+ * path). */
 export function elementsOf(template: Template, container: Path): Element[] {
   if (container.length === 0) return template.elements;
   const el = getAt(template, container);
-  return el && el.type === "group" ? el.items : [];
+  return el ? (childrenOf(el) ?? []) : [];
 }
 
 /** Run `fn` on the children of the container at a path ([] = root). */
@@ -209,11 +248,14 @@ function withChildren(
   const rewrite = (els: Element[], rest: Path): Element[] => {
     if (rest.length === 0) return fn(els);
     const [i, ...deeper] = rest;
-    return els.map((el, j) =>
-      j === i && el.type === "group"
-        ? { ...el, items: rewrite(el.items, deeper) }
-        : el,
-    );
+    return els.map((el, j) => {
+      if (j !== i) return el;
+      if (el.type === "group")
+        return { ...el, items: rewrite(el.items, deeper) };
+      if (el.type === "frame")
+        return { ...el, children: rewrite(el.children, deeper) };
+      return el;
+    });
   };
   return { ...template, elements: rewrite(template.elements, container) };
 }
@@ -264,6 +306,7 @@ export function placementWord(p: Placement): string {
 export function rowHeightMm(item: Element): number {
   switch (item.type) {
     case "text":
+    case "frame":
       return item.size.h_mm;
     case "barcode":
     case "image":

@@ -119,6 +119,17 @@ export type Element =
       page?: Placement;
     }
   | {
+      type: "frame";
+      at: At;
+      size: Size;
+      /** The outline's thickness in mm; 0 = no border. */
+      border_mm: number;
+      /** Relative to the frame's top-left, like group items. */
+      children: Element[];
+      /** The frame's children take this page. */
+      page?: Placement;
+    }
+  | {
       type: "group";
       /** Where the flow starts (top-left of the first item). */
       at: At;

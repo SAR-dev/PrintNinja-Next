@@ -583,9 +583,19 @@ Unreleased.
   each get their own named validation error, and a template that uses an
   element type this build does not know fails with a plain "needs a
   newer PrintNinja" instead of a raw parse error
+- Scene editor: frames can now be created and edited — a "Frame" option
+  in the add-element list (never offered inside a frame, and a group is
+  never offered inside one), a frame's children selected and dragged on
+  the canvas at coordinates relative to the frame's top-left (the
+  properties panel says so, and shows the parent's name in the header),
+  and a frame's own width, height and border-thickness properties. A
+  frame's children take the frame's page, so the page picker is hidden
+  for them
 
 ### Changed
 
+- CI: the `server-publish` docker build adds `--provenance=false`,
+  matching the release job's build
 - Docs: `docs/ROADMAP.md` is now a priority-ordered checklist without
   phase numbers — a point is deleted once it is implemented (the
   header says so), points that wait on a decision sit in a "Needs

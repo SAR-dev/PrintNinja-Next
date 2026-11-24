@@ -137,6 +137,7 @@ export function SceneCanvas({
               path={path}
               scale={scale}
               selected={isSelected(path)}
+              isSelected={isSelected}
               beginDrag={beginDrag}
               record={record}
               showSample={showSample}
@@ -160,12 +161,15 @@ interface GlyphProps {
   dpi: number | null;
 }
 
-/** One selectable element (or group), with its selection ring. */
+/** One selectable element (or group or frame), with its selection
+ * ring. A frame's children are selectable in their own right — the
+ * deepest element under the pointer wins. */
 function ElementNode({
   el,
   path,
   scale,
   selected,
+  isSelected,
   beginDrag,
   record,
   showSample,
@@ -175,6 +179,7 @@ function ElementNode({
   path: Path;
   scale: number;
   selected: boolean;
+  isSelected: (path: Path) => boolean;
   beginDrag: (path: Path) => (e: React.PointerEvent) => void;
   record: Record<string, unknown> | null;
   showSample: boolean;
@@ -183,7 +188,18 @@ function ElementNode({
   const [bx, by, bw, bh] = boundsMm(el);
   return (
     <g className="cursor-move" onPointerDown={beginDrag(path)}>
-      {el.type === "group" ? (
+      {el.type === "frame" ? (
+        <FrameGlyph
+          el={el}
+          path={path}
+          scale={scale}
+          isSelected={isSelected}
+          beginDrag={beginDrag}
+          record={record}
+          showSample={showSample}
+          dpi={dpi}
+        />
+      ) : el.type === "group" ? (
         <GroupGlyph
           el={el}
           scale={scale}
@@ -205,6 +221,72 @@ function ElementNode({
           strokeWidth={1.5}
           pointerEvents="none"
         />
+      )}
+    </g>
+  );
+}
+
+/** A frame: its border, then its children at coordinates relative to
+ * the frame's top-left. The border is skipped at 0, as the renderer
+ * does. Without `path` it draws plain (a frame in a group row); with
+ * it, each child is itself selectable. */
+function FrameGlyph({
+  el,
+  path,
+  scale,
+  isSelected,
+  beginDrag,
+  record,
+  showSample,
+  dpi,
+}: {
+  el: Extract<Element, { type: "frame" }>;
+  path?: Path;
+  scale: number;
+  isSelected?: (path: Path) => boolean;
+  beginDrag?: (path: Path) => (e: React.PointerEvent) => void;
+  record: Record<string, unknown> | null;
+  showSample: boolean;
+  dpi: number | null;
+}) {
+  const interactive = path !== undefined && isSelected !== undefined;
+  return (
+    <g transform={`translate(${el.at.x_mm * scale} ${el.at.y_mm * scale})`}>
+      {interactive && (
+        // The frame's interior, so the box itself is clickable where no
+        // child sits; the children, drawn above, take the pointer first.
+        <rect
+          width={el.size.w_mm * scale}
+          height={el.size.h_mm * scale}
+          fill="transparent"
+        />
+      )}
+      {el.border_mm > 0 && (
+        <rect
+          width={el.size.w_mm * scale}
+          height={el.size.h_mm * scale}
+          fill="none"
+          stroke={INK}
+          strokeWidth={Math.max(0.5, el.border_mm * scale)}
+        />
+      )}
+      {el.children.map((child, i) =>
+        interactive ? (
+          <ElementNode
+            key={i}
+            el={child}
+            path={[...path, i]}
+            scale={scale}
+            selected={isSelected([...path, i])}
+            isSelected={isSelected}
+            beginDrag={beginDrag!}
+            record={record}
+            showSample={showSample}
+            dpi={dpi}
+          />
+        ) : (
+          <g key={i}>{glyph(child, scale, record, showSample, dpi)}</g>
+        ),
       )}
     </g>
   );
@@ -443,6 +525,7 @@ function boundsMm(el: Element): [number, number, number, number] {
     case "barcode":
     case "image":
     case "rect":
+    case "frame":
       return [x, y, el.size.w_mm, el.size.h_mm];
     case "qr":
       return [x, y, el.h_mm, el.h_mm];
@@ -558,6 +641,16 @@ function glyph(
           h={el.size.h_mm}
           label={`image: ${el.src}`}
           scale={scale}
+        />
+      );
+    case "frame":
+      return (
+        <FrameGlyph
+          el={el}
+          scale={scale}
+          record={record}
+          showSample={showSample}
+          dpi={dpi}
         />
       );
     case "group":
