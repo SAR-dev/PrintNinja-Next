@@ -10,6 +10,7 @@ const ja: EnStrings = {
     cancel: "キャンセル",
     back: "戻る",
     name: "名前",
+    description: "説明",
     save: "保存",
     delete: "削除",
     dismiss: "閉じる",

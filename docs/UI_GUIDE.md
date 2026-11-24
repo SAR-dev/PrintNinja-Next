@@ -131,7 +131,8 @@ offers **Retry** and **Reprint**.
 
 ## ✏️ The scene editor
 
-The header has a back arrow, the inline **name** field, an **unsaved dot**
+The header has a back arrow, the inline **name** field, a **Description**
+field, an **unsaved dot**
 while there are changes, the `scene` badge, **undo** (↩) and **redo** (↪)
 icon buttons, **Save template**, **Preview**, and a **⋯** menu showing the
 template size and a second **Save template** command.
@@ -157,7 +158,8 @@ template size and a second **Save template** command.
 
 ## 📄 The document editor
 
-Back arrow, inline name, `document` badge, **Save template**:
+Back arrow, inline name, Description field, `document` badge,
+**Save template**:
 
 - **HTML/CSS** — one record per page, `{{field}}` fills from the record,
   with `Bindings:` badges.

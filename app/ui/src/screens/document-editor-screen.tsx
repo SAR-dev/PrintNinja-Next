@@ -92,6 +92,7 @@ export function DocumentEditorScreen({
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState(initial.name);
+  const [description, setDescription] = useState(initial.description);
   const [html, setHtml] = useState(initial.template.html ?? "");
   const [width, setWidth] = useState(initial.template.media.width_mm);
   const [height, setHeight] = useState(paperHeight(initial));
@@ -156,7 +157,7 @@ export function DocumentEditorScreen({
     onSave({
       id: initial.id,
       name: name.trim() || t("editor.untitled_document"),
-      description: initial.description,
+      description: description.trim(),
       track: "document",
       template: {
         format: "html",
@@ -187,6 +188,15 @@ export function DocumentEditorScreen({
           id="d-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
+        />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="d-description">{t("common.description")}</Label>
+        <Input
+          id="d-description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
         />
       </div>
 

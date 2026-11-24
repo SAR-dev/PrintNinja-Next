@@ -614,6 +614,8 @@ Unreleased.
 
 ### Changed
 
+- App: both editors now have a Description field and save edits to it
+  instead of keeping the original text
 - App: Ctrl/Cmd+K focuses the top-bar search, Escape clears it, and
   duplicating a template confirms with a toast; interactions use
   120–200 ms transitions and the screenshot script can check 360 px

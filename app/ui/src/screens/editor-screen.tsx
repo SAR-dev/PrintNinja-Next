@@ -103,6 +103,7 @@ export function EditorScreen({
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState(initial.name);
+  const [description, setDescription] = useState(initial.description);
   const [template, setTemplate] = useState<Template>(() =>
     structuredClone(initial.template),
   );
@@ -349,7 +350,7 @@ export function EditorScreen({
     onSave({
       id: initial.id,
       name: name.trim() || t("editor.untitled_template"),
-      description: initial.description,
+      description: description.trim(),
       track: "scene",
       template: withSyncedFields(template),
       sample: initial.sample,
@@ -438,6 +439,15 @@ export function EditorScreen({
           label={t("common.more")}
         />
       </PageHeader>
+
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="t-description">{t("common.description")}</Label>
+        <Input
+          id="t-description"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-w-0 flex-col gap-6">

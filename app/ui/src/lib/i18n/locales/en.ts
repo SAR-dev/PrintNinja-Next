@@ -9,6 +9,7 @@ const en = {
     cancel: "Cancel",
     back: "Back",
     name: "Name",
+    description: "Description",
     save: "Save",
     delete: "Delete",
     dismiss: "Dismiss",
