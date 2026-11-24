@@ -14,6 +14,9 @@ spec for the items below.
 
 ## Done
 
+- [x] D2 — template card: Print primary, icon Edit, ⋯ menu (M2:
+      publish/unpublish, duplicate, delete; right-click on PC) and
+      new-template split/FAB (M3) (commit 88685b7)
 - [x] D1 — icon system: `lib/icons.ts` registry + labelled `IconButton`
       with tooltips; no screen imports lucide-react directly and primary
       buttons carry icons (commit 5a2605c)
@@ -40,9 +43,6 @@ spec for the items below.
 
 ## Remaining findings, in order
 
-- [ ] D2 — template card (PC §5.1 + phone): Print primary, Edit icon,
-      ⋯ ActionMenu M2 (Publish/Unpublish, Duplicate, Delete danger;
-      right-click on PC); M3 New-template split/FAB
 - [ ] D5 — editor: split `editor-screen.tsx`, element rows with icons +
       ⋯ M8 (reorder up/down, delete), add-element icon toolbar, header
       inline name + unsaved dot + ⋯ M7 (template size, save)
