@@ -10,6 +10,8 @@ Unreleased.
 
 ### Added
 
+- App: the scene editor has a Sample data card; edits feed the live
+  canvas, the preview and the saved template, and count as unsaved changes
 - App: a Test print menu on each saved printer (text label or A4 page)
   that sends a one-record job through the saved profile and transport
   and shows the honest result

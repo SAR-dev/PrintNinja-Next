@@ -152,6 +152,8 @@ template size and a second **Save template** command.
   child), page placement, and the type's own fields. On the phone this panel
   is a bottom sheet with a close button; picking an element brings the canvas
   back into view first.
+- **Sample data** — the records used for the live canvas substitution and
+  the preview; the saved template carries them too.
 - **Data fields** — the `{{…}}` bindings as badges.
 - **Preview** — prepared on the chosen printer, one record, same path as
   print.

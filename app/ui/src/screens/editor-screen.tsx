@@ -104,6 +104,7 @@ export function EditorScreen({
   const { t } = useTranslation();
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description);
+  const [sample, setSample] = useState(initial.sample);
   const [template, setTemplate] = useState<Template>(() =>
     structuredClone(initial.template),
   );
@@ -156,8 +157,12 @@ export function EditorScreen({
   const dirty = useMemo(() => {
     const saved = JSON.stringify(withSyncedFields(initial.template));
     const current = JSON.stringify(withSyncedFields(template));
-    return saved !== current || name.trim() !== initial.name;
-  }, [initial, name, template]);
+    return (
+      saved !== current ||
+      name.trim() !== initial.name ||
+      sample.trim() !== initial.sample.trim()
+    );
+  }, [initial, name, sample, template]);
 
   // -- undo/redo: one step per action, bursts of the same key (a drag,
   // typing in one field) coalesced within 800 ms.
@@ -329,7 +334,7 @@ export function EditorScreen({
     setPreparing(true);
     setPreviewError(null);
     try {
-      const firstRecord = previewRecord(initial.sample);
+      const firstRecord = previewRecord(sample);
       setPreview(
         await planJob(
           JSON.stringify(withSyncedFields(template)),
@@ -353,7 +358,7 @@ export function EditorScreen({
       description: description.trim(),
       track: "scene",
       template: withSyncedFields(template),
-      sample: initial.sample,
+      sample,
     });
 
   const media = template.media;
@@ -1060,6 +1065,22 @@ export function EditorScreen({
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("editor.sample_data")}</CardTitle>
+              <CardDescription>{t("editor.sample_data_note")}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                rows={4}
+                spellCheck={false}
+                className="font-mono text-body-sm"
+                value={sample}
+                onChange={(e) => setSample(e.target.value)}
+              />
+            </CardContent>
+          </Card>
 
           {bindings.length > 0 && (
             <Card>

@@ -73,9 +73,6 @@ found by behavior inspection and verified against the code:
       cannot bind, the failure is an `eprintln` only; the whole
       print-from-elsewhere feature is down and the user is told
       nothing (TROUBLESHOOTING.md even points at the console line).
-- [ ] **The scene editor cannot edit the template's sample data** —
-      the document editor has the Sample data card, the scene one does
-      not.
 - [ ] **New-template names are hardcoded English** — "New label" /
       "New document" and their descriptions bypass the locale files,
       so a Japanese interface still creates English-named templates.
