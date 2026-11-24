@@ -133,6 +133,12 @@ const ja: EnStrings = {
     title: "結果",
   },
   print: {
+    summary: "ジョブの概要",
+    summary_note: "これから印刷する内容です。",
+    edit_template: "テンプレートを編集",
+    save_default_printer: "既定のプリンターに保存",
+    clear_data: "データをクリア",
+    default_saved: "既定のプリンターを保存しました。",
     printer: "プリンター",
     printer_note: "プロファイルセットから — プロファイルがプリンターです。",
     pick_printer: "プリンターを選択",

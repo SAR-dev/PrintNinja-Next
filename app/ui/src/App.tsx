@@ -508,6 +508,7 @@ function App() {
           prefill={view.prefill}
           onBack={() => setView({ name: "templates" })}
           onJob={recordJob}
+          onEditTemplate={() => editTemplate(view.template)}
         />
       ) : view.name === "edit" ? (
         <EditorScreen

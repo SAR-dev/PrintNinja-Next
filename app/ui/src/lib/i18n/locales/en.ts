@@ -130,6 +130,12 @@ const en = {
     title: "Result",
   },
   print: {
+    summary: "Job summary",
+    summary_note: "What is about to print.",
+    edit_template: "Edit template",
+    save_default_printer: "Save as default printer",
+    clear_data: "Clear data",
+    default_saved: "Default printer saved.",
     printer: "Printer",
     printer_note: "From the profile set — the profile is the printer.",
     pick_printer: "Pick a printer",

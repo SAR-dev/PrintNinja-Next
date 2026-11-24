@@ -608,6 +608,9 @@ Unreleased.
 
 ### Changed
 
+- App: the PC print screen has a sticky job summary with a distinct
+  Preview (Eye) and primary Print (Printer) action, plus a ⋯ menu
+  (M9: edit template, save as default printer, clear data)
 - App: the scene editor is split into editor components, its element
   rows have type icons and a ⋯ menu (move up/down, delete), adding an
   element uses an icon toolbar, and the header holds an inline name,

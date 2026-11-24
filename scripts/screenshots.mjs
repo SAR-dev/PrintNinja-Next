@@ -58,6 +58,7 @@ const VIEWS = [
   "print",
   "print-preview",
   "print-done",
+  "print-menu",
   "edit",
   "element-menu",
   "document-edit",
@@ -84,6 +85,7 @@ const L = {
     more: "More actions",
     duplicate: "Duplicate",
     moveUp: "Move up",
+    editTemplate: "Edit template",
     elementsTitle: "Elements",
     publish: "Publish",
     newTemplate: "New template",
@@ -109,6 +111,7 @@ const L = {
     more: "その他の操作",
     duplicate: "複製",
     moveUp: "上へ移動",
+    editTemplate: "テンプレートを編集",
     elementsTitle: "要素",
     publish: "公開",
     newTemplate: "新しいテンプレート",
@@ -423,6 +426,13 @@ async function navigate(page, view, l) {
           .click();
         await page.getByText(l.confirmed, { exact: true }).waitFor();
       }
+      break;
+    case "print-menu":
+      await navigate(page, "print", l);
+      await page
+        .getByRole("button", { name: l.more, exact: true })
+        .click();
+      await page.getByRole("menuitem", { name: l.editTemplate, exact: true }).waitFor();
       break;
     case "edit":
       await card
