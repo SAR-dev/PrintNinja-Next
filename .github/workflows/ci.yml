@@ -217,7 +217,10 @@ jobs:
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' | head -n 1)
           if [ -z "$SDKMANAGER" ]; then echo "::error::sdkmanager not found at \$ANDROID_HOME=$ANDROID_HOME"; exit 1; fi
           yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" "ndk;27.0.12077973" "platforms;android-37" "build-tools;34.0.0"
+          # The stable SDK repository has no platforms;android-37 yet;
+          # pin the newest stable platform (the patch step below keeps
+          # the generated compileSdk/targetSdk on the same one).
+          "$SDKMANAGER" "ndk;27.0.12077973" "platforms;android-36" "build-tools;34.0.0"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - name: Generate Android project if not committed
@@ -230,6 +233,11 @@ jobs:
       # way AGP suggests.
       - name: Suppress expected AGP deprecation warnings
         run: node scripts/patch-android-gradle-props.mjs
+      # The Tauri template pins compileSdk/targetSdk to 37, a platform
+      # the stable SDK repository does not carry; pin the generated
+      # project to the platform the job installed.
+      - name: Pin compileSdk/targetSdk to the stable platform
+        run: node scripts/patch-android-sdk.mjs
       # Phones stay portrait (single-column layout); tablets (sw600dp+)
       # keep rotating freely. The release job runs the same script.
       - name: Lock phone orientation to portrait
@@ -539,7 +547,10 @@ jobs:
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' | head -n 1)
           if [ -z "$SDKMANAGER" ]; then echo "::error::sdkmanager not found at \$ANDROID_HOME=$ANDROID_HOME"; exit 1; fi
           yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" "ndk;27.0.12077973" "platforms;android-37" "build-tools;34.0.0"
+          # The stable SDK repository has no platforms;android-37 yet;
+          # pin the newest stable platform (the patch step below keeps
+          # the generated compileSdk/targetSdk on the same one).
+          "$SDKMANAGER" "ndk;27.0.12077973" "platforms;android-36" "build-tools;34.0.0"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - name: Generate Android project if not committed
@@ -552,6 +563,11 @@ jobs:
       # way AGP suggests.
       - name: Suppress expected AGP deprecation warnings
         run: node scripts/patch-android-gradle-props.mjs
+      # The Tauri template pins compileSdk/targetSdk to 37, a platform
+      # the stable SDK repository does not carry; pin the generated
+      # project to the platform the job installed.
+      - name: Pin compileSdk/targetSdk to the stable platform
+        run: node scripts/patch-android-sdk.mjs
       # `tauri android init` regenerates res/mipmap-* from tauri.conf
       # bundle.icon. Copy the launchers that `tauri icon` actually
       # generated (adaptive foreground, anydpi-v26 xml + background
