@@ -197,6 +197,8 @@ export interface DiscoveredPrinter {
   port: number;
   /** The transport the found service is: "ipp" or "raw_tcp". */
   kind: string;
+  /** The service is the TLS variant (_ipps._tcp): the address is https://. */
+  secure?: boolean;
   /** An IPP resource path, when the advertisement carried one. */
   resourcePath?: string;
 }

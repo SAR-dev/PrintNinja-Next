@@ -242,6 +242,8 @@ const ja: EnStrings = {
     scan_found_one: "{{count}} 件見つかりました",
     scan_found_other: "{{count}} 件見つかりました",
     use_printer: "使う",
+    ipp_tls_hint:
+      "このプリンターは TLS 経由の IPP (ipps) のみで応答します。TLS はまだ未対応です — アドレスは https:// で入っていますが、TLS 対応が入るまで印刷は失敗します。",
     printer_name: "プリンター名",
     printer_profile: "プロファイル",
     save_printer: "プリンターを保存",

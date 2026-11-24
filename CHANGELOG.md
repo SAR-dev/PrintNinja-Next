@@ -605,3 +605,8 @@ Unreleased.
 - Network scan: a discovered service that advertises only public IP
   addresses is now kept by its mDNS hostname — the name it is reachable
   by on the LAN — instead of being handed one of those public IPs
+- Network scan: a TLS-only printer (`_ipps._tcp`) is now marked `· TLS`
+  in the scan list, and using it prefills the form with the address's
+  real `https://` scheme plus a plain-words note that TLS is not
+  supported yet — instead of an `http://` address the printer would
+  refuse

@@ -239,6 +239,8 @@ const en = {
     scan_found_one: "{{count}} found",
     scan_found_other: "{{count}} found",
     use_printer: "Use",
+    ipp_tls_hint:
+      "This printer only speaks IPP over TLS (ipps). TLS is not supported yet — the address is prefilled with https://, but printing to it will fail until the TLS work lands.",
     printer_name: "Printer name",
     printer_profile: "Profile",
     save_printer: "Save printer",

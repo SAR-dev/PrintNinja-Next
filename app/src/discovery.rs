@@ -53,6 +53,10 @@ pub struct DiscoveredPrinter {
     pub port: u16,
     /// The transport the found service is: `ipp` or `raw_tcp`.
     pub kind: String,
+    /// Whether the found service is the TLS variant
+    /// (`_ipps._tcp`): its address is `https://`, and the
+    /// transport refuses it until TLS support lands.
+    pub secure: bool,
     /// An IPP resource path (`printers/laser`), when the
     /// advertisement carried one.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -61,12 +65,14 @@ pub struct DiscoveredPrinter {
 
 /// The four printer service types, and the transport each means:
 /// IPP (plain and TLS) is the ipp transport, the raw command ports
-/// are the tcp transport.
-const PRINTER_SERVICES: &[(&str, &str)] = &[
-    ("_ipp._tcp.local.", "ipp"),
-    ("_ipps._tcp.local.", "ipp"),
-    ("_pdl-datastream._tcp.local.", "raw_tcp"),
-    ("_printer._tcp.local.", "raw_tcp"),
+/// are the tcp transport. The third entry marks the TLS variant,
+/// whose address is `https://` and which the transport refuses
+/// until TLS support lands.
+const PRINTER_SERVICES: &[(&str, &str, bool)] = &[
+    ("_ipp._tcp.local.", "ipp", false),
+    ("_ipps._tcp.local.", "ipp", true),
+    ("_pdl-datastream._tcp.local.", "raw_tcp", false),
+    ("_printer._tcp.local.", "raw_tcp", false),
 ];
 
 /// The queues this machine's spooler already knows, with their
@@ -105,7 +111,7 @@ pub fn browse_network_printers(timeout_secs: u64) -> Vec<DiscoveredPrinter> {
     };
 
     let mut receivers = Vec::new();
-    for (svc, _kind) in PRINTER_SERVICES {
+    for (svc, _, _) in PRINTER_SERVICES {
         match mdns.browse(svc) {
             Ok(rx) => receivers.push((svc.to_string(), rx)),
             Err(e) => eprintln!("browse {svc} failed: {e}"),
@@ -121,12 +127,12 @@ pub fn browse_network_printers(timeout_secs: u64) -> Vec<DiscoveredPrinter> {
         for (svc, rx) in &receivers {
             while let Ok(event) = rx.recv_timeout(Duration::from_millis(50)) {
                 if let ServiceEvent::ServiceResolved(info) = event {
-                    let kind = PRINTER_SERVICES
+                    let (kind, secure) = PRINTER_SERVICES
                         .iter()
-                        .find(|(s, _)| *s == svc.as_str())
-                        .map(|(_, k)| *k)
-                        .unwrap_or("ipp");
-                    if let Some(printer) = service_info_to_printer(&info, kind) {
+                        .find(|(s, _, _)| *s == svc.as_str())
+                        .map(|(_, k, s)| (*k, *s))
+                        .unwrap_or(("ipp", false));
+                    if let Some(printer) = service_info_to_printer(&info, kind, secure) {
                         if !is_lan_host(&printer.host) {
                             // mDNS only answers on the LAN, so a
                             // result whose address is public is
@@ -154,8 +160,13 @@ pub fn browse_network_printers(timeout_secs: u64) -> Vec<DiscoveredPrinter> {
 }
 
 /// An mDNS record's fields, as one found printer. `None` when the
-/// record cannot point at a device (no port, no address).
-fn service_info_to_printer(info: &ServiceInfo, kind: &str) -> Option<DiscoveredPrinter> {
+/// record cannot point at a device (no port, no address). `secure`
+/// is the TLS variant's mark, carried from the service table.
+fn service_info_to_printer(
+    info: &ServiceInfo,
+    kind: &str,
+    secure: bool,
+) -> Option<DiscoveredPrinter> {
     let port = info.get_port();
     if port == 0 {
         return None;
@@ -197,6 +208,7 @@ fn service_info_to_printer(info: &ServiceInfo, kind: &str) -> Option<DiscoveredP
         host,
         port,
         kind: kind.to_string(),
+        secure,
         resource_path,
     })
 }
@@ -411,10 +423,10 @@ mod tests {
 
     #[test]
     fn the_service_types_map_to_their_transports() {
-        assert!(PRINTER_SERVICES.contains(&("_ipp._tcp.local.", "ipp")));
-        assert!(PRINTER_SERVICES.contains(&("_ipps._tcp.local.", "ipp")));
-        assert!(PRINTER_SERVICES.contains(&("_pdl-datastream._tcp.local.", "raw_tcp")));
-        assert!(PRINTER_SERVICES.contains(&("_printer._tcp.local.", "raw_tcp")));
+        assert!(PRINTER_SERVICES.contains(&("_ipp._tcp.local.", "ipp", false)));
+        assert!(PRINTER_SERVICES.contains(&("_ipps._tcp.local.", "ipp", true)));
+        assert!(PRINTER_SERVICES.contains(&("_pdl-datastream._tcp.local.", "raw_tcp", false)));
+        assert!(PRINTER_SERVICES.contains(&("_printer._tcp.local.", "raw_tcp", false)));
     }
 
     #[test]
@@ -449,12 +461,38 @@ mod tests {
             std::collections::HashMap::from([("rp".to_string(), "/printers/laser".to_string())]),
         )
         .expect("a valid service record");
-        let p = service_info_to_printer(&info, "ipp").expect("a printer");
+        let p = service_info_to_printer(&info, "ipp", false).expect("a printer");
         assert_eq!(p.name, "HP-OfficeJet");
         assert_eq!(p.host, "192.168.1.20");
         assert_eq!(p.port, 631);
         assert_eq!(p.kind, "ipp");
+        assert!(!p.secure);
         assert_eq!(p.resource_path.as_deref(), Some("printers/laser"));
+    }
+
+    #[test]
+    fn the_tls_variant_keeps_the_ipp_kind_and_its_mark() {
+        let addrs = [IpAddr::V4(Ipv4Addr::new(192, 168, 1, 20))];
+        let info = ServiceInfo::new(
+            "_ipps._tcp.local.",
+            "HP-Secure",
+            "hp-secure.local.",
+            &addrs[..],
+            631,
+            std::collections::HashMap::new(),
+        )
+        .expect("a valid service record");
+        // The TLS variant is still the ipp transport — the mark
+        // says the address is https://, and the transport refuses
+        // it until TLS support lands.
+        let (kind, secure) = PRINTER_SERVICES
+            .iter()
+            .find(|(s, _, _)| *s == "_ipps._tcp.local.")
+            .map(|(_, k, s)| (*k, *s))
+            .expect("the ipps service");
+        let p = service_info_to_printer(&info, kind, secure).expect("a printer");
+        assert_eq!(p.kind, "ipp");
+        assert!(p.secure);
     }
 
     #[test]
@@ -469,7 +507,7 @@ mod tests {
             std::collections::HashMap::new(),
         )
         .expect("a valid service record");
-        assert!(service_info_to_printer(&info, "ipp").is_none());
+        assert!(service_info_to_printer(&info, "ipp", false).is_none());
     }
 
     #[test]
@@ -488,7 +526,7 @@ mod tests {
         // mDNS hostname (trailing dot trimmed), and a name always
         // passes the scan's LAN filter — the advertisement came over
         // the LAN, and the name is how the printer is reached.
-        let p = service_info_to_printer(&info, "ipp").expect("a printer");
+        let p = service_info_to_printer(&info, "ipp", false).expect("a printer");
         assert_eq!(p.host, "public.local");
         assert!(is_lan_host(&p.host));
     }
