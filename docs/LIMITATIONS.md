@@ -29,7 +29,7 @@ These are not bugs. They are things the roadmap looks at and says "not yet" (or,
 
 **🔌 USB printers need a queue, not a cable.** There is no USB transport of its own: a USB printer is a CUPS raw queue on Linux (`lpadmin -p MyPrinter -m raw -v usb://…`) and an installed spooler queue on Windows (Printers & scanners → Add device). Then print to it over IPP or the spooler. Bluetooth is the one path that talks to the device directly.
 
-**📄 The document track needs a browser installed.** `html` templates render to PDF with the desktop's own headless browser — Edge on Windows, Chromium or Chrome on Linux. If the machine has none (or none produces a PDF), the job fails with an honest error that includes the browser's own stderr excerpt — never a placeholder PDF.
+**📄 The document track needs a browser — but the app can install one.** `html` templates render to PDF with the PC's own headless browser (Edge on Windows, Chromium or Chrome on Linux) by default. In **Settings → Diagnostics** you can switch to a managed Chromium and download it on request; the app never downloads anything without that choice. If a render still fails (no browser, a bad document, or a timeout), the error is honest and includes the browser's own stderr excerpt — never a placeholder PDF.
 
 <a id="registry-and-accounts"></a>
 
