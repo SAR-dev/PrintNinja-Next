@@ -128,7 +128,7 @@ Each phase is shippable on its own and ends with the house verification loop fro
 
 ### Phase 5 — Settings and dialogs (F, G)
 
-- Settings: group into sections with headings (Appearance, Startup & network, Printing), rows with label + control on one line and the description below; replace the button pairs with a segmented control (selected = filled, others plain).
+- Settings: ~~group into sections with headings (Appearance, Startup & network, Printing)~~ — superseded: the screen is now five tabs (General, Printers, Network, Data, Registry), which also took in the saved printers and the per-printer pacing settings. Rows with label + control on one line and the description below; replace the button pairs with a segmented control (selected = filled, others plain).
 - New-template dialog: two selectable cards with icon, title, one-line explanation and a tiny illustration; Enter confirms the highlighted one.
 - Publish dialog: right-aligned footer, Cancel as a secondary button, slug helper text with live preview of the URL and inline validation.
 
@@ -137,7 +137,7 @@ Each phase is shippable on its own and ends with the house verification loop fro
 - Motion: 120–200 ms fades on dialogs, skeletons on list load, toast on save/publish (tokens already exist).
 - Re-run the full screenshot matrix (en/ja × light/dark × desktop/phone) and check: no text clipping in ja, no overlap at 360 px, keyboard path through every screen, contrast tests green.
 - Refresh the curated README images in `assets/` and update `docs/UI_GUIDE.md` (it still says "no sidebar" and describes the topbar-only navigation, which is out of date).
-- Remove `continue-on-error` from the `screenshot-matrix` job when all cases pass (per `docs/CI.md`).
+- ~~Remove `continue-on-error` from the `screenshot-matrix` job when all cases pass (per `docs/CI.md`)~~ — done: the matrix is all green and the job is blocking again.
 
 ## 5. Suggested order and size
 

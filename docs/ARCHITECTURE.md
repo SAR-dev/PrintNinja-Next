@@ -99,8 +99,39 @@ any byte was flushed, so a retry can never print a job twice.
 `app/` is the `printninja` crate — a Tauri 2 shell (Windows and Linux;
 Android is a later phase). `app/src/lib.rs` is deliberately thin: it
 holds the loaded printer profiles, exposes the pipeline through a small
-set of Tauri commands (`list_printers`, `plan_job`, `print_job`, template
-and settings persistence, registry commands), and wires up the plugins.
+set of Tauri commands (`list_printers`, `plan_job`, `print_job`, printer
+discovery and saved printers, template and settings persistence,
+registry commands), and wires up the plugins.
+
+```mermaid
+flowchart LR
+    subgraph in["Entry points"]
+        UI["app/ui — the React screens"]
+        DL["deep links — printninja://"]
+        HTTP["local print API — 127.0.0.1:17717"]
+        LAN["a paired device on the LAN"]
+    end
+    subgraph shell["app/ — the Tauri shell"]
+        CMDS["lib.rs — the Tauri commands"]
+        PIPE["pipeline.rs — prepare → print"]
+        DISC["discovery.rs — system + mDNS scans"]
+        STORE["store.rs — SQLite printninja.db"]
+        REG["registry.rs — offline-first sync"]
+        PAIR["pairing.rs — the LAN token gate"]
+    end
+    CORE["core crates — scene · render · planner · profiles · encoders · browser · transport · job"]
+    UI --> CMDS
+    DL --> CMDS
+    LAN --> PAIR
+    HTTP --> PAIR
+    PAIR --> PIPE
+    CMDS --> PIPE
+    CMDS --> DISC
+    CMDS --> STORE
+    CMDS --> REG
+    PIPE --> CORE
+    DISC -. hint .-> STORE
+```
 
 **The UI** lives in `app/ui/` — React + TypeScript built with Vite,
 styled with Tailwind, built on Radix UI components, with i18next
@@ -111,12 +142,33 @@ Japanese font fallback so *prints* can be in Japanese).
 view router — a `View` state machine over five screens: the template
 **list** (with Mine / Community / Saved tabs), the **print** screen, the
 scene **editor**, the **document** (HTML/CSS) editor, and **settings**.
+The settings screen itself is five tabs (General, Printers, Network,
+Data, Registry) — the Printers tab holds the saved printers, the system
+and network scans, and the per-printer pacing overrides.
 
 **The local store** is one SQLite file — `printninja.db` in the app's
 data directory (`app/src/lib.rs`, backed by `app/src/store.rs`).
-Templates, recent jobs (the last 10, with reprint/retry) and settings all
-live there. If the store cannot open, the app still runs and names the
-failure.
+Templates, recent jobs (the last 10, with reprint/retry), settings and
+saved printers all live there. If the store cannot open, the app still
+runs and names the failure.
+
+**Printer discovery and saved printers** (`app/src/discovery.rs`): a
+system scan enumerates the queues the OS already knows — Windows reads
+the spooler's local and connected printers (`EnumPrintersA`,
+LOCAL | CONNECTIONS) with each queue's fault in plain words, Linux reads
+`lpstat -v` — and a network scan browses the LAN over mDNS for
+`_ipp._tcp`, `_ipps._tcp`, `_pdl-datastream._tcp` and `_printer._tcp`,
+keeping only the records on a private address (a record that advertises
+only public addresses is kept by its mDNS hostname, never by one of
+those IPs) and collapsing them by host:port. A discovery is only a
+hint: the found printer is saved as a named row — profile + transport
+JSON — in the store's `saved_printers` table, and the print screen
+offers the saved rows in a picker that fills in the profile and the
+transport the row stores. The profile is still the printer; the saved
+row just remembers where one of them lives. The commands are
+`scan_system_printers`, `scan_network_printers` (a bounded wait, clamped
+2–30 s), `list_saved_printers`, `save_printer` (the profile must exist)
+and `remove_printer`.
 
 **The local print API** (`app/src/api.rs`) is the same pipeline over HTTP
 on `127.0.0.1:17717`: a till, a script or a web page on the machine can

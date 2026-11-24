@@ -115,9 +115,14 @@ A template plus some data becomes bytes for one printer. In order:
 ## 💾 The local app
 
 - **Local store** — one SQLite file, `printninja.db`, in the app's data
-  directory. Templates, recent jobs, settings, the registry mirror and
-  the offline queue all live in it. The schema is created on open, so a
-  missing file is not an error — a *failed open* is.
+  directory. Templates, recent jobs, settings, saved printers, the
+  registry mirror and the offline queue all live in it. The schema is
+  created on open, so a missing file is not an error — a *failed open* is.
+- **Saved printer** — a named row in the store: a display name, the
+  profile the printer speaks, and the transport that reaches it (host,
+  port, queue or MAC). A scan or a by-hand form creates one; picking it
+  on the print screen fills in the profile and the transport. The
+  profile is still the printer — the row only remembers where one lives.
 - **Local print API** — the HTTP endpoint on the LAN that phones and
   other scripts print through. It only starts when the store opened.
 - **Paired device** — a phone/tablet that claimed a pairing code. The

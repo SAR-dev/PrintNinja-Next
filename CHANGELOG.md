@@ -562,9 +562,26 @@ Unreleased.
   click away from being saved, and the per-printer pacing settings moved
   here with it. The print screen gains a saved-printer picker that fills
   in the profile and the transport the row stores
+- Docs: `docs/ARCHITECTURE.md` gains the app-shell picture — a mermaid
+  diagram from the entry points (the UI, deep links, the local print API,
+  a paired LAN device) through the Tauri commands to the core crates —
+  and a section on printer discovery and the saved-printer store;
+  `docs/UI_GUIDE.md` describes the five settings tabs and the
+  saved-printer picker on the print screen; `docs/FEATURES.md` lists the
+  saved printers and `docs/GLOSSARY.md` gains the "saved printer" term
 
 ### Changed
 
+- Docs: `docs/CI.md`, the CI workflow comments and `docs/ROADMAP.md`
+  match the `screenshot-matrix` job as it is today — blocking, all shots
+  green (the old note said it was still non-blocking) — and
+  `docs/ROADMAP.md` picks up two audits: a "needs fixing" list found by
+  scanning this app (template deletion, the unusable `_ipps` prefill, raw
+  error strings in the result card, the silent API bind failure, a docs
+  over-promise in `docs/REGISTRY.md`), and the feature audit against the
+  previous app — a test print and a capability probe for new printers,
+  the raw console the phase 10 hardware checklist already references, and
+  a ranked post-v1 list of what the old app had that this one does not
 - The settings screen is now five tabs (General, Printers, Network,
   Data, Registry) instead of one long page; the General tab is the
   default

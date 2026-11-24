@@ -20,7 +20,7 @@ Five screens, connected like pages:
 | **Print**         | Pick a printer, enter the data, press Print.                        |
 | **Scene editor**  | Build a template by placing elements on a canvas.                   |
 | **Document editor** | Write an HTML/CSS template, one record per page.                  |
-| **Settings**      | Theme, startup, network access, registry server, printer pacing.    |
+| **Settings**      | Five tabs: General, Printers, Network, Data, Registry.             |
 
 No menus, no sidebar — the topbar of the list and a `← Templates` (or
 `Back`) button on the other screens do all the navigating. Two kinds of
@@ -80,11 +80,15 @@ rolls and pages** (starts a 40 × 50 mm label named `New label`) and
 Top: `← Templates`, the template's name, track badge, and description. Four
 cards.
 
-**Printer** — *From the profile set — the profile is the printer.* The
-**Pick a printer** dropdown. A profile bundles the printer's language,
-media, and pacing — the profile set *is* the printer list. After a pick the
-card shows `language · media` (e.g. `zpl · label`) and, when the printer can
-answer for its work, a green **can confirm** badge. Printers without it still
+**Printer** — *From the profile set — the profile is the printer.* When you
+have saved printers (Settings → **Printers**), the card starts with a
+**Saved printer** picker (*Use a saved printer*) — picking a row fills in
+the profile and the transport the row remembers, and you can still change
+either by hand. The **Pick a printer** dropdown below it is the profile
+list. A profile bundles the printer's language, media, and pacing — the
+profile set *is* the printer list. After a pick the card shows
+`language · media` (e.g. `zpl · label`) and, when the printer can answer
+for its work, a green **can confirm** badge. Printers without it still
 print — they just can't say afterwards whether it happened.
 
 **Where the bytes go** — *The transport for this job.* Four choices:
@@ -174,7 +178,10 @@ Top: `← Templates`, `Edit document`, the `document` badge, name field,
 ## ⚙️ Settings
 
 Top: **Back**, `Settings`, *How the app looks and starts, and how each
-printer is paced.*
+printer is paced.* Five tabs — **General** (the default), **Printers**,
+**Network**, **Data**, **Registry**.
+
+**General**
 
 - **Appearance** — *The theme of the whole app. It comes back the same on
   the next start.* **Light** / **Dark**.
@@ -184,6 +191,26 @@ printer is paced.*
   then lives in the tray: closing the window only hides it.* Switch:
   **Start PrintNinja at sign-in**. (In the tray, the menu offers *Show
   PrintNinja* and *Quit PrintNinja* — the window's close button only hides.)
+
+**Printers**
+
+- **Saved printers** — *Printers you added from a scan or by hand. Pick one
+  on the print screen to fill in the profile and the transport.* Three ways
+  in: **Scan system** (the queues the OS already knows — Windows' spooler
+  local and connected printers, Linux' `lpstat -v` — each with its fault in
+  plain words), **Scan network** (the printers that announce themselves on
+  the LAN), and **Add manually** (a form: **Printer name**, **Profile**, and
+  the transport's fields). A scan shows `N found` — each found row has a
+  **Use** button that saves it in one click; each saved row has **Remove**.
+- **Printers** — *Pacing and close delay, per printer. Leave a field empty
+  to use the value the profile ships with.* One card per printer: **Chunk
+  size (bytes)** (*How much goes out at a time.*), **Pause between chunks
+  (ms)** (*A slow printer needs a longer pause.*), **Close delay (ms)**
+  (*How long the connection stays open after the last byte.*) — and, while
+  any override is set, **Reset to the profile's values**.
+
+**Network**
+
 - **Network** — *When on, other devices on the network can send jobs to this
   PC — each one paired by a one-time code and holding its own token. Off by
   default; the switch applies from the next start.* Switch: **Let other
@@ -192,20 +219,27 @@ printer is paced.*
   it runs out:*, counting down from 90 seconds — plus every paired device
   (name · platform · date) with **Revoke**. The other side of this is in
   [Print from your phone](PRINT_FROM_PHONE.md).
+
+**Data**
+
+- **Data from a URL** — *The print screen can fetch a job's data from a URL
+  instead of typing it. The fetch is guarded: http and https only, and
+  private addresses are refused by default.* Switch: **Block private IP
+  ranges** — *When on, a data URL cannot reach loopback, link-local or
+  private addresses — the safe default. Turn it off only when a printer or
+  server on your own network serves the data (like
+  `http://192.168.0.10/data.json`).*
+
+**Registry**
+
 - **Registry** — *The server the community templates live on. Leave it empty
   to use the server on this computer (`http://127.0.0.1:8787`).* Field:
   **Server address** — a shared one, like `https://registry.example.com`,
   the same one your team uses. *It applies at the next sync.*
-- **Printers** — *Pacing and close delay, per printer. Leave a field empty
-  to use the value the profile ships with.* One card per printer: **Chunk
-  size (bytes)** (*How much goes out at a time.*), **Pause between chunks
-  (ms)** (*A slow printer needs a longer pause.*), **Close delay (ms)**
-  (*How long the connection stays open after the last byte.*) — and, while
-  any override is set, **Reset to the profile's values**.
 
 That is everything the settings screen has today — the app is deliberately
-small: theme, language, start behaviour, network pairing, the registry
-address, and per-printer pacing.
+small: theme, language, start behaviour, saved printers and their pacing,
+network pairing, the data-URL guard, and the registry address.
 
 ## 🌍 Community and Saved
 

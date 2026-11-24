@@ -46,6 +46,7 @@ One pipeline, decided per job, with the reasoning you can read:
   - **IPP:** CUPS queues on Linux, or a printer's own IPP interface — one Print-Job per unit, with the reply checked for honesty.
   - **Bluetooth:** Linux dials the paired device's RFCOMM socket directly; Windows writes to the device's SPP COM port (`COM7` named directly, or a MAC whose port is looked up).
   - **USB needs no adapter of its own:** a USB printer is a CUPS queue on Linux and a spooler queue on Windows — use IPP or the spooler.
+- **Saved printers:** the settings screen scans the queues the OS already knows and the printers that announce themselves on the LAN (mDNS), or adds one by hand — each saved printer remembers its profile and how to reach it, and picking one on the print screen fills in the profile and the transport in one click.
 - **Honest job results** — every job ends in one of these, shown in plain words:
   - ✅ **Confirmed** — the printer's own status or reply confirms completion
   - 📮 **Sent, not confirmed** — the bytes were accepted, but this printer cannot confirm; the app says so instead of pretending

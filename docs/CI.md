@@ -88,11 +88,7 @@ ship a throwaway key when they are missing), and uploads
 in both languages, both themes and both viewports (the desktop window and a
 Pixel-7-sized phone) rendered against the fake Tauri bridge in headless
 Chromium, uploaded as the `screenshots` artifact for a visual eyeball pass.
-It is **non-blocking** (`continue-on-error: true`): two android cases — the
-new-template dialog — fail today because a recent-jobs row overlaps the
-list's footer button on narrow screens. That is an app layout issue the app
-redesign (plan phase 11) settles, not a test bug; the job is re-blocked when
-the shots are all green again.
+It is **blocking**: a broken screen fails the build.
 
 ### The registry jobs
 

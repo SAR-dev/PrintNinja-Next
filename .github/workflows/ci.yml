@@ -8,7 +8,7 @@
 #   rust-test-windows workspace tests natively + fixture tests
 #   chromium-render   the document-track e2e through a real system Chrome
 #   android-check     Android debug build on pull requests
-#   screenshot-matrix UI screenshot matrix (non-blocking, artifact review)
+#   screenshot-matrix UI screenshot matrix (blocking, artifact review)
 #   server-check      registry (pn-server) fmt + clippy + tests
 #   server-image      the registry Docker image builds
 #   server-e2e        the registry image through a full HTTP lifecycle
@@ -273,10 +273,7 @@ jobs:
   # Renders every screen in both languages, both themes and both
   # viewports against the fake Tauri bridge (scripts/screenshots.mjs) and
   # uploads the result as an artifact for a visual eyeball pass.
-  # Non-blocking: two android cases (the new-template dialog) fail today
-  # because a recent-jobs row overlaps the list's footer button on
-  # narrow screens — an app layout issue, fixed with the app redesign
-  # (plan phase 11), not by changing the test.
+  # Blocking: a broken screen fails the build.
   screenshot-matrix:
     runs-on: ubuntu-latest
     steps:
