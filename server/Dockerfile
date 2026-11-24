@@ -24,11 +24,15 @@ RUN adduser --disabled-password --gecos "" printninja \
 WORKDIR /app
 COPY --from=build /src/target/release/pn-server /app/pn-server
 COPY server/migrations /app/migrations
+# Starts as root only to fix the ownership of a freshly mounted volume
+# (Fly and similar hosts mount /data root-owned), then runs the server
+# as the printninja user.
+COPY server/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 ENV PN_SERVER_BIND=0.0.0.0:8787 \
     PN_SERVER_DB=/data/printninja-server.db \
     PN_SERVER_MIGRATIONS_DIR=/app/migrations
 VOLUME ["/data"]
 EXPOSE 8787
-USER printninja
-ENTRYPOINT ["/app/pn-server"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["serve"]
