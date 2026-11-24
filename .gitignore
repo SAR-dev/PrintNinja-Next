@@ -14,6 +14,11 @@ app/ui/dist/
 .DS_Store
 Thumbs.db
 
+# IDE local state
+.idea/
+.vscode/
+*.iml
+
 # graphify knowledge graph: graph.json is committed (rewritten whole on every
 # build, per CLAUDE.md); everything else is local or regenerable (report,
 # HTML viz, caches, sidecars, per-machine paths).
