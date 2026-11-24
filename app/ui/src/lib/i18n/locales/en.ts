@@ -296,6 +296,12 @@ const en = {
     html_css_note:
       "One record per page; {{field}} fills from the record. Tailwind classes work too (p-4, flex, w-[37mm]).",
     bindings: "Bindings:",
+    fonts: "Fonts",
+    fonts_note:
+      "Font files the document uses. Each one is embedded in the template and referenced by its font-family — nothing is installed on the machine.",
+    add_font: "Add font…",
+    font_unsupported: "Unsupported font file: {{file}} (ttf, otf, woff, woff2)",
+    font_too_large: "Font files up to 2 MB: {{file}}",
     paper: "Paper",
     paper_note: "The page the document prints on, in millimetres.",
     sample_data: "Sample data",

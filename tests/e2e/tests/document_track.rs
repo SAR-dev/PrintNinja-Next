@@ -87,6 +87,7 @@ fn document_template() -> Template {
             },
         ],
         elements: Vec::new(),
+        fonts: vec![],
     }
 }
 

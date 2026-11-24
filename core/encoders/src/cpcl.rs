@@ -207,6 +207,7 @@ native = ["4"]
                     page: Placement::Every,
                 },
             ],
+            fonts: vec![],
         };
         let records = Records::from_json("[{}]").unwrap();
         (profile, expand(&template, &records).unwrap())

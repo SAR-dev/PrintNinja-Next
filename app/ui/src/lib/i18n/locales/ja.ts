@@ -301,6 +301,13 @@ const ja: EnStrings = {
     html_css_note:
       "ページごとに 1 レコード。{{field}} はレコードから埋められます。Tailwind クラス（p-4、flex、w-[37mm] など）も使えます。",
     bindings: "バインディング:",
+    fonts: "フォント",
+    fonts_note:
+      "ドキュメントが使うフォントファイル。各フォントはテンプレートに埋め込まれ、font-family で参照されます — このコンピュータにインストールされません。",
+    add_font: "フォントを追加…",
+    font_unsupported:
+      "対応していないフォントファイル: {{file}}（ttf、otf、woff、woff2）",
+    font_too_large: "フォントファイルは 2 MB までです: {{file}}",
     paper: "用紙",
     paper_note: "ドキュメントを印刷するページ（ミリメートル）。",
     sample_data: "サンプルデータ",

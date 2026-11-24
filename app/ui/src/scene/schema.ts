@@ -142,6 +142,23 @@ export interface Field {
   kind?: FieldKind;
 }
 
+/** The `@font-face` format of an embedded font. */
+export type FontFormat = "truetype" | "opentype" | "woff" | "woff2";
+
+/**
+ * An embedded font for the document track (the previous app's "upload a
+ * font"): the UI turns each entry into an `@font-face` data URI before the
+ * HTML reaches the browser, so the rendered document carries its own font
+ * and nothing is installed on the machine.
+ */
+export interface TemplateFont {
+  /** The `font-family` the template's CSS references. */
+  family: string;
+  format: FontFormat;
+  /** The font file's bytes, base64. */
+  data: string;
+}
+
 /** One template: the media it prints on and the elements it draws. */
 export interface Template {
   /** Which track renders this template (default `scene`). */
@@ -152,6 +169,8 @@ export interface Template {
   /** Declared data fields (optional). */
   fields?: Field[];
   elements: Element[];
+  /** The document's embedded fonts (document track only). */
+  fonts?: TemplateFont[];
 }
 
 /**

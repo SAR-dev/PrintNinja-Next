@@ -365,6 +365,26 @@ pub struct Template {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fields: Vec<Field>,
     pub elements: Vec<Element>,
+    /// The document's embedded fonts (document track only; see
+    /// [`TemplateFont`]). Ignored by the scene track.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fonts: Vec<TemplateFont>,
+}
+
+/// An embedded font for the document track (the previous app's
+/// "upload a font" feature): the UI turns each entry into an
+/// `@font-face` data URI before the HTML reaches the browser, so the
+/// rendered document carries its own font and nothing is installed on
+/// the machine.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct TemplateFont {
+    /// The `font-family` the template's CSS references.
+    pub family: String,
+    /// The `@font-face` format: `truetype`, `opentype`, `woff` or
+    /// `woff2`.
+    pub format: String,
+    /// The font file's bytes, base64.
+    pub data: String,
 }
 
 impl Template {
@@ -807,6 +827,7 @@ mod tests {
                 kind: FieldKind::String,
             }],
             elements: vec![text(6.0, "Hello {{customer}}")],
+            fonts: vec![],
         };
         let once = t.to_json().unwrap();
         let back = Template::from_json(&once).unwrap();
@@ -849,6 +870,7 @@ mod tests {
             media: label(),
             fields: vec![],
             elements: vec![],
+            fonts: vec![],
         };
         let err = t.validate().unwrap_err();
         assert!(
@@ -888,6 +910,7 @@ mod tests {
             media: label(),
             fields: vec![],
             elements: vec![flow],
+            fonts: vec![],
         };
         t.validate().unwrap();
 
@@ -967,6 +990,7 @@ mod tests {
                 kind: FieldKind::String,
             }],
             elements: vec![group.clone()],
+            fonts: vec![],
         };
         assert!(matches!(
             declared_string.validate(),
@@ -994,6 +1018,7 @@ mod tests {
                 kind: FieldKind::String,
             }],
             elements: vec![text(6.0, "Hello {{custmoer}}")],
+            fonts: vec![],
         };
         assert!(matches!(
             t.validate(),
@@ -1016,6 +1041,7 @@ mod tests {
             media: label(),
             fields: vec![],
             elements: vec![text(38.0, "too low")], // y 38 + h 4 = 42 > 40
+            fonts: vec![],
         };
         let err = t.validate().unwrap_err();
         let msg = err.to_string();
@@ -1034,6 +1060,7 @@ mod tests {
             },
             fields: vec![],
             elements: vec![text_xy(4.0, 6.0, "x", Placement::Only(0))],
+            fonts: vec![],
         };
         assert!(matches!(t.validate(), Err(TemplateError::PageNumberZero)));
     }
@@ -1074,6 +1101,7 @@ mod tests {
                 },
                 text_xy(4.0, 16.0, "Total: {{amount}}", Placement::default()),
             ],
+            fonts: vec![],
         };
         let json = t.to_json().unwrap();
         golden_harness::assert_matches_golden("scene/label-template.json", json.as_bytes());
@@ -1099,6 +1127,7 @@ mod tests {
             },
             fields: Vec::new(),
             elements: Vec::new(),
+            fonts: Vec::new(),
         }
     }
 
@@ -1126,6 +1155,7 @@ mod tests {
             media: label(),
             fields: Vec::new(),
             elements: Vec::new(),
+            fonts: Vec::new(),
         };
         t.html = Some("<html></html>".into());
         assert!(matches!(t.validate(), Err(TemplateError::HtmlOnScene)));
@@ -1167,6 +1197,7 @@ mod tests {
             media: label(),
             fields: Vec::new(),
             elements: Vec::new(),
+            fonts: Vec::new(),
         };
         let scene_json = scene.to_json().unwrap();
         assert!(

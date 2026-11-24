@@ -569,6 +569,7 @@ mod tests {
                 kind: FieldKind::String,
             }],
             elements: vec![text(4.0, 6.0, 50.0, 4.0, "Hello {{customer}}")],
+            fonts: vec![],
         };
         let job = expand(
             &t,
@@ -598,6 +599,7 @@ mod tests {
             media: label(58.0, 40.0),
             fields: vec![],
             elements: vec![text(4.0, 6.0, 50.0, 4.0, "x")],
+            fonts: vec![],
         };
         assert!(matches!(
             expand(&t, &Records(Vec::new())),
@@ -620,6 +622,7 @@ mod tests {
                 },
                 line_items(),
             )],
+            fonts: vec![],
         };
         let err = expand(&t, &json(r#"[ { "nope": 1 } ]"#)).unwrap_err();
         assert!(matches!(
@@ -643,6 +646,7 @@ mod tests {
                 },
                 line_items(),
             )],
+            fonts: vec![],
         };
         // Six rows of 3.0 + 1.0 gap, from y 20 on a 40 mm label:
         // 20 + 6×3 + 5×1 = 43 > 40.
@@ -666,6 +670,7 @@ mod tests {
             media: label(58.0, 40.0),
             fields: vec![],
             elements: vec![text(4.0, 6.0, 50.0, 4.0, "Hi {{who}}")],
+            fonts: vec![],
         };
         let job = expand(&t, &json(r#"[ { "other": 1 } ]"#)).unwrap();
         assert_eq!(text_at(&job.outputs[0].pages[0], 4.0, 6.0), Some("Hi "));
@@ -712,6 +717,7 @@ mod tests {
                 },
                 text(4.0, 16.0, 50.0, 4.0, "Total: {{amount}}"),
             ],
+            fonts: vec![],
         };
         let data = json(
             r#"[ { "customer": "Ada", "amount": "12.50" },
@@ -750,6 +756,7 @@ mod tests {
                     ],
                 ),
             ],
+            fonts: vec![],
         };
         // 12 rows of a 6 mm stride from y 20: ten on the first page,
         // two on the second.
@@ -784,6 +791,7 @@ mod tests {
                 ),
                 text_page(4.0, 55.0, 50.0, 4.0, "Total: {{total}}", Placement::Last),
             ],
+            fonts: vec![],
         };
         // One long receipt (two cuts), one short (one cut) — the total
         // rides on each receipt's last cut.

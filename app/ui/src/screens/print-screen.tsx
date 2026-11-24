@@ -36,7 +36,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { JobPreview } from "@/components/job-preview";
 import { PageHeader } from "@/components/page-header";
-import { withTailwindCss } from "@/lib/tailwind";
+import { withTemplateStyles } from "@/lib/tailwind";
 import { resultTone, toneClass } from "@/result-words";
 import type { AppTemplate, RecentJob } from "@/templates";
 
@@ -141,14 +141,18 @@ export function PrintScreen({
 
   /**
    * The template JSON the pipeline gets. A document template carries its
-   * Tailwind styles at this moment — the classes are compiled and injected
-   * in memory (see lib/tailwind) before the HTML leaves the UI, so the
-   * preview and the print render the same classes the editor shows.
+   * styles at this moment — the embedded fonts become `@font-face` data
+   * URIs and the Tailwind classes are compiled, both injected in memory
+   * (see lib/tailwind) before the HTML leaves the UI, so the preview and
+   * the print render what the editor shows.
    */
   const preparedTemplateJson = async () => {
     const tpl = starter.template;
     if (starter.track === "document" && tpl.html) {
-      return JSON.stringify({ ...tpl, html: await withTailwindCss(tpl.html) });
+      return JSON.stringify({
+        ...tpl,
+        html: await withTemplateStyles(tpl.html, tpl.fonts),
+      });
     }
     return JSON.stringify(tpl);
   };

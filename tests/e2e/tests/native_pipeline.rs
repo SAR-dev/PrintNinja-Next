@@ -139,6 +139,7 @@ fn label_template() -> Template {
                 page: Placement::Every,
             },
         ],
+        fonts: vec![],
     }
 }
 

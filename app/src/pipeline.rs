@@ -615,6 +615,7 @@ media = ["page"]
                 },
                 page: Placement::Every,
             }],
+            fonts: vec![],
         }
     }
 
@@ -795,6 +796,7 @@ media = ["page"]
                 },
                 page: Placement::Every,
             }],
+            fonts: vec![],
         };
         let units = prepare_units(
             &template,
@@ -839,6 +841,7 @@ media = ["page"]
                 kind: Default::default(),
             }],
             elements: Vec::new(),
+            fonts: vec![],
         };
         let records = Records::from_json(r#"[{"title":"INVOICE 1042"}]"#).unwrap();
         match prepare_units(&template, &page_profile(), &records, 1) {

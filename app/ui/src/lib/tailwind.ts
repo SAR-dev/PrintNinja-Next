@@ -1,13 +1,18 @@
 /**
- * Per-template Tailwind for the document track, run inside the app.
+ * Per-template styles for the document track, run inside the app.
  *
  * Document templates are plain HTML with their own CSS, and their markup is
- * only known at run time, so the classes a template uses are compiled when
- * the template is prepared (preview or print) and injected as a `<style>` —
- * never stored, never sent to the pipeline already styled. `withTailwindCss`
- * returns the HTML unchanged when no class attribute yields a single utility
- * rule, so a plain-CSS template is byte for byte what it was before this
- * file existed.
+ * only known at run time, so the styles a template needs are built when the
+ * template is prepared (preview or print) and injected as a `<style>` —
+ * never stored, never sent to the pipeline already styled.
+ * `withTemplateStyles` returns the HTML unchanged when no class attribute
+ * yields a single utility rule and the template carries no embedded font, so
+ * a plain-CSS template is byte for byte what it was before this file
+ * existed.
+ *
+ * Embedded fonts (the previous app's "upload a font"): each entry the user
+ * attached to the template becomes an `@font-face` data URI, so the rendered
+ * document carries its own font and nothing is installed on the machine.
  *
  * The compiler is Tailwind v4's `compile()`, which works on an in-memory
  * candidate list: no Node, no filesystem. It is installed under the alias
@@ -26,6 +31,7 @@ import { compile } from "tailwind4";
 import preflight from "tailwind4/preflight.css?raw";
 import theme from "tailwind4/theme.css?raw";
 import utilities from "tailwind4/utilities.css?raw";
+import type { TemplateFont } from "@/scene/schema";
 
 /** Bump when INPUT or the post-processing changes. */
 const COMPILER_REV = "tw4.3-layered-r1";
@@ -142,6 +148,35 @@ const memo = new Map<string, { promise: Promise<string>; settled: boolean }>();
 
 const STYLE_ID = "printninja-tw";
 
+const FONT_MIME: Record<TemplateFont["format"], string> = {
+  truetype: "font/ttf",
+  opentype: "font/otf",
+  woff: "font/woff",
+  woff2: "font/woff2",
+};
+
+/**
+ * The `@font-face` rules for a template's embedded fonts, each as a data
+ * URI, so the document is self-contained and CSP-clean. A font with an
+ * unknown format is skipped with a warning — the template's own font stack
+ * still applies to the rest.
+ */
+function fontFaceCss(fonts: TemplateFont[]): string {
+  const rules: string[] = [];
+  for (const f of fonts) {
+    const mime = FONT_MIME[f.format as TemplateFont["format"]];
+    if (!mime) {
+      console.warn(`Font "${f.family}": unknown format "${f.format}"`);
+      continue;
+    }
+    const family = `"${f.family.replace(/"/g, '\\"')}"`;
+    rules.push(
+      `@font-face { font-family: ${family}; src: url(data:${mime};base64,${f.data}) format("${f.format}"); }`,
+    );
+  }
+  return rules.join("\n");
+}
+
 function inject(html: string, css: string): string {
   if (html.includes(STYLE_ID)) return html; // already styled
   const tag = `<style id="${STYLE_ID}">${css}</style>`;
@@ -159,13 +194,20 @@ function inject(html: string, css: string): string {
 }
 
 /**
- * `html` with the Tailwind styles its classes ask for, compiled in memory
- * and injected before `</head>`. Never throws: on a compile failure the HTML
- * comes back as written, and its own CSS still applies.
+ * `html` with the styles it asks for — its embedded fonts as `@font-face`
+ * data URIs and the Tailwind utilities its classes use, compiled in memory —
+ * injected before `</head>`. Never throws: on a compile failure the fonts
+ * are still injected and the template's own CSS still applies.
  */
-export async function withTailwindCss(html: string): Promise<string> {
+export async function withTemplateStyles(
+  html: string,
+  fonts?: TemplateFont[],
+): Promise<string> {
+  const fontCss = fonts && fonts.length > 0 ? fontFaceCss(fonts) : "";
   const candidates = extractCandidates(html);
-  if (candidates.length === 0) return html;
+  if (candidates.length === 0) {
+    return fontCss ? inject(html, fontCss) : html;
+  }
   const key = classSetKey(candidates);
 
   let entry = memo.get(key);
@@ -208,8 +250,8 @@ export async function withTailwindCss(html: string): Promise<string> {
       "Tailwind compile failed; the template's own CSS still applies:",
       e,
     );
-    return html;
+    return fontCss ? inject(html, fontCss) : html;
   }
-  if (!hasUtilities(css)) return html;
-  return inject(html, css);
+  if (!hasUtilities(css)) return fontCss ? inject(html, fontCss) : html;
+  return inject(html, fontCss ? `${fontCss}\n${css}` : css);
 }

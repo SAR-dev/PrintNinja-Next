@@ -596,6 +596,7 @@ mod tests {
             },
             fields: vec![],
             elements,
+            fonts: vec![],
         }
     }
 

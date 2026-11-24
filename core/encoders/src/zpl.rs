@@ -303,6 +303,7 @@ native = ["CODE128", "EAN13", "QR"]
                     page: Placement::Every,
                 },
             ],
+            fonts: vec![],
         };
         let records = Records::from_json("[{}]").unwrap();
         (profile, expand(&template, &records).unwrap())
@@ -353,6 +354,7 @@ native = ["CODE128", "EAN13", "QR"]
                 },
                 fields: vec![],
                 elements: vec![],
+                fonts: vec![],
             }
         };
         let records = Records::from_json("[{}]").unwrap();

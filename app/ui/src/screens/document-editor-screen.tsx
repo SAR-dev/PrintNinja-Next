@@ -19,8 +19,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { withTailwindCss } from "@/lib/tailwind";
-import { bindingNames } from "@/scene/schema";
+import { withTemplateStyles } from "@/lib/tailwind";
+import {
+  bindingNames,
+  type FontFormat,
+  type TemplateFont,
+} from "@/scene/schema";
 import type { AppTemplate } from "@/templates";
 
 const PRESETS: { name: string; w: number; h: number }[] = [
@@ -28,6 +32,20 @@ const PRESETS: { name: string; w: number; h: number }[] = [
   { name: "A5", w: 148, h: 210 },
   { name: "Letter", w: 215.9, h: 279.4 },
 ];
+
+/** Fonts ride inside the template JSON on every prepare and print, so a
+ * cap keeps that payload sane. */
+const FONT_MAX_BYTES = 2 * 1024 * 1024;
+
+/** The `@font-face` format a font file name's extension means. */
+function fontFormat(name: string): FontFormat | null {
+  const ext = name.toLowerCase().split(".").pop() ?? "";
+  if (ext === "ttf") return "truetype";
+  if (ext === "otf") return "opentype";
+  if (ext === "woff") return "woff";
+  if (ext === "woff2") return "woff2";
+  return null;
+}
 
 /**
  * The first record's values in the document — the same rule the
@@ -77,23 +95,61 @@ export function DocumentEditorScreen({
   const [width, setWidth] = useState(initial.template.media.width_mm);
   const [height, setHeight] = useState(paperHeight(initial));
   const [sample, setSample] = useState(initial.sample);
+  const [fonts, setFonts] = useState<TemplateFont[]>(
+    initial.template.fonts ?? [],
+  );
+  const [fontError, setFontError] = useState<string | null>(null);
+  const [fontInput, setFontInput] = useState<HTMLInputElement | null>(null);
 
   const bindings = useMemo(() => bindingNames(html), [html]);
   const filled = useMemo(() => previewHtml(html, sample), [html, sample]);
 
   // The preview shows the same styles the print will: the document's
-  // Tailwind classes are compiled and injected the way the print screen
-  // does, so what the iframe shows is what the page will be.
+  // embedded fonts and Tailwind classes are compiled and injected the
+  // way the print screen does, so what the iframe shows is what the
+  // page will be.
   const [previewDoc, setPreviewDoc] = useState(filled);
   useEffect(() => {
     let live = true;
-    void withTailwindCss(filled).then((doc) => {
+    void withTemplateStyles(filled, fonts).then((doc) => {
       if (live) setPreviewDoc(doc);
     });
     return () => {
       live = false;
     };
-  }, [filled]);
+  }, [filled, fonts]);
+
+  /** A font file the user picks: read it as base64 and attach it to the
+   * template under the file name's stem as its font-family. Re-picking a
+   * file with the same family replaces the earlier upload. */
+  const addFont = async (f: File) => {
+    const format = fontFormat(f.name);
+    if (!format) {
+      setFontError(t("editor.font_unsupported", { file: f.name }));
+      return;
+    }
+    if (f.size > FONT_MAX_BYTES) {
+      setFontError(t("editor.font_too_large", { file: f.name }));
+      return;
+    }
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = () => reject(r.error);
+        r.readAsDataURL(f);
+      });
+      const family = f.name.replace(/\.[^.]+$/, "");
+      const data = dataUrl.split(",")[1] ?? "";
+      setFontError(null);
+      setFonts((fs) => [
+        ...fs.filter((x) => x.family !== family),
+        { family, format, data },
+      ]);
+    } catch (e) {
+      setFontError(String(e));
+    }
+  };
 
   const save = () =>
     onSave({
@@ -106,6 +162,7 @@ export function DocumentEditorScreen({
         media: { kind: "page", width_mm: width, height_mm: height },
         elements: [],
         html,
+        fonts: fonts.length > 0 ? fonts : undefined,
       },
       sample,
     });
@@ -158,6 +215,63 @@ export function DocumentEditorScreen({
                       {"}}"}
                     </Badge>
                   ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("editor.fonts")}</CardTitle>
+              <CardDescription>{t("editor.fonts_note")}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fontInput?.click()}
+                >
+                  {t("editor.add_font")}
+                </Button>
+                <input
+                  ref={setFontInput}
+                  type="file"
+                  accept=".ttf,.otf,.woff,.woff2"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void addFont(f);
+                    e.target.value = "";
+                  }}
+                />
+              </div>
+              {fonts.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  {fonts.map((f) => (
+                    <div
+                      key={f.family}
+                      className="flex items-center justify-between rounded-md border border-border px-3 py-1.5"
+                    >
+                      <span className="font-mono text-body-sm">{f.family}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setFonts((fs) =>
+                            fs.filter((x) => x.family !== f.family),
+                          )
+                        }
+                      >
+                        {t("common.delete")}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {fontError && (
+                <div className="rounded-md bg-danger-soft px-3 py-2 text-body-sm text-danger">
+                  {fontError}
                 </div>
               )}
             </CardContent>

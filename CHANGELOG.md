@@ -535,6 +535,13 @@ Unreleased.
   beats any Tailwind rule. Fonts, the `dark:` ancestor variant and the
   default border colour match the previous app's build, so its templates
   keep rendering the way they did
+- Document templates can embed their own fonts (the previous app's font
+  upload): the editor accepts `.ttf`, `.otf`, `.woff` and `.woff2` files
+  up to 2 MB, each stored in the template's `fonts` array as base64 under
+  the file name's stem as its font-family; at prepare and at preview the
+  entries become `@font-face` data URIs injected with the Tailwind styles,
+  so the document renders in its own font and nothing is installed on the
+  machine
 
 ### Changed
 

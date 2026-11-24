@@ -161,6 +161,7 @@ mod tests {
             media,
             fields: Vec::new(),
             elements: Vec::new(),
+            fonts: Vec::new(),
         }
     }
 

@@ -857,6 +857,7 @@ poll_after_ms = 200
                 },
                 page: Default::default(),
             }],
+            fonts: vec![],
         };
         serde_json::to_string(&template).expect("the template serializes")
     }
