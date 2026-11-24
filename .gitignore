@@ -19,3 +19,6 @@ Thumbs.db
 # HTML viz, caches, sidecars, per-machine paths).
 graphify-out/*
 !graphify-out/graph.json
+
+# Tauri-generated Android project (CI runs `tauri android init`; local copy is regenerable)
+app/gen/android/

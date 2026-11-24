@@ -7,6 +7,7 @@
 #                     virtual-printer fixture tests (host)
 #   rust-test-windows workspace tests natively + fixture tests
 #   chromium-render   the document-track e2e through a real system Chrome
+#   android-check     Android debug build on pull requests
 #   server-check      registry (pn-server) fmt + clippy + tests
 #   server-image      the registry Docker image builds
 #   server-e2e        the registry image through a full HTTP lifecycle
@@ -16,6 +17,7 @@
 #   version-check         tag is vX.Y.Z, on main, all manifests match
 #   windows-build         MSI installer (windows-latest)
 #   linux-build           deb + AppImage (ubuntu-24.04)
+#   android-build         release APK + AAB (ubuntu, shared keystore)
 #   github-release        draft GitHub release with the installers
 #   server-publish-release registry image tagged with the release version
 #
@@ -151,6 +153,110 @@ jobs:
         env:
           PRINTNINJA_BROWSER: /opt/google/chrome/chrome
         run: cargo test -p pn-e2e --test document_track
+
+  # Android compiles the Rust crate and the Kotlin shell only here and in
+  # android-build, so a break would surface on the release tag. A debug
+  # build on every pull request catches it earlier.
+  android-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [web-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@1.90.0
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app
+          cache-on-failure: true
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      # The generated project's Gradle wrapper downloads its distribution
+      # from services.gradle.org on first use; a CDN hiccup (e.g. a 504)
+      # would fail the whole build, and the wrapper does not retry. Cache
+      # the distribution and dependency cache across runs. Bump the key
+      # when the Tauri template bumps Gradle (the version is in the
+      # wrapper's download URL, visible in build logs).
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle
+          key: gradle-9.6.1-${{ runner.os }}
+      # Download the cmdline-tools when sdkmanager is missing and point
+      # ANDROID_HOME at them for the steps below.
+      - name: Bootstrap Android cmdline-tools if the runner has none
+        run: |
+          if [ -n "${ANDROID_HOME:-}" ] && SDK=$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' 2>/dev/null | head -n 1) && [ -n "$SDK" ]; then
+            echo "sdkmanager already present at $SDK"
+            exit 0
+          fi
+          echo "No sdkmanager found; downloading cmdline-tools…"
+          export ANDROID_HOME="$RUNNER_TEMP/Android/Sdk"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q /tmp/cmdtools.zip -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          rm /tmp/cmdtools.zip
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+      # The template's compileSdk/targetSdk is 37.
+      - name: Install Android SDK + NDK
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' | head -n 1)
+          if [ -z "$SDKMANAGER" ]; then echo "::error::sdkmanager not found at \$ANDROID_HOME=$ANDROID_HOME"; exit 1; fi
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "ndk;27.0.12077973" "platforms;android-37" "build-tools;34.0.0"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Android project if not committed
+        run: |
+          if [ ! -d app/gen/android ]; then pnpm exec tauri android init --config app/tauri.conf.json --ci; fi
+      # The generated project still opts out of AGP's new DSL and variant
+      # API (`android.newDsl=false` et al. in the Tauri template), which
+      # AGP 9 warns about on every build. The options are load-bearing
+      # until Tauri moves off the legacy DSL, so silence the warnings the
+      # way AGP suggests.
+      - name: Suppress expected AGP deprecation warnings
+        run: node scripts/patch-android-gradle-props.mjs
+      # Phones stay portrait (single-column layout); tablets (sw600dp+)
+      # keep rotating freely. The release job runs the same script.
+      - name: Lock phone orientation to portrait
+        run: node scripts/patch-android-orientation.mjs
+      - name: Make gradlew executable
+        run: chmod +x app/gen/android/gradlew || true
+      # The Gradle wrapper downloads its distribution with a 10s read
+      # timeout and a single attempt, so one flaky services.gradle.org
+      # response kills the whole build. Pre-fetch it with retries — the
+      # Gradle cache step above persists it across runs — so the real
+      # build never pays the download cost.
+      - name: Pre-fetch Gradle distribution
+        run: |
+          cd app/gen/android
+          for attempt in 1 2 3 4 5; do
+            if ./gradlew --version > /dev/null 2>&1; then
+              echo "Gradle distribution ready on attempt $attempt"
+              exit 0
+            fi
+            echo "::warning::Gradle distribution fetch failed (attempt $attempt/5)"
+            sleep 15
+          done
+          echo "::error::Gradle distribution still unreachable after 5 attempts"
+          exit 1
+      # Debug variant: compiles the Rust crate for aarch64 and every
+      # Kotlin source without needing the release keystore.
+      - run: pnpm exec tauri android build --config app/tauri.conf.json --debug --target aarch64 --apk
 
   # The community registry (plan phase 9). It never compiles the app
   # crate, so none of these jobs needs the web-dist artifact.
@@ -370,13 +476,163 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  android-build:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: [web-check, rust-check, version-check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@1.90.0
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app
+          cache-on-failure: true
+      # Icon changed via `tauri icon` — a cached target would ship stale
+      # launcher resources; clear the Android outputs before building.
+      - name: Clear stale Android build cache
+        run: rm -rf target/aarch64-linux-android app/gen/android/app/build || true
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      # The generated project's Gradle wrapper downloads its distribution
+      # from services.gradle.org on first use; a CDN hiccup (e.g. a 504)
+      # would fail the whole build, and the wrapper does not retry. Cache
+      # the distribution and dependency cache across runs. Bump the key
+      # when the Tauri template bumps Gradle (the version is in the
+      # wrapper's download URL, visible in build logs).
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle
+          key: gradle-9.6.1-${{ runner.os }}
+      # Download the cmdline-tools when sdkmanager is missing and point
+      # ANDROID_HOME at them for the steps below.
+      - name: Bootstrap Android cmdline-tools if the runner has none
+        run: |
+          if [ -n "${ANDROID_HOME:-}" ] && SDK=$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' 2>/dev/null | head -n 1) && [ -n "$SDK" ]; then
+            echo "sdkmanager already present at $SDK"
+            exit 0
+          fi
+          echo "No sdkmanager found; downloading cmdline-tools…"
+          export ANDROID_HOME="$RUNNER_TEMP/Android/Sdk"
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q /tmp/cmdtools.zip -d "$ANDROID_HOME/cmdline-tools"
+          mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+          rm /tmp/cmdtools.zip
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+      # The template's compileSdk/targetSdk is 37.
+      - name: Install Android SDK + NDK
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -path '*/bin/sdkmanager' | head -n 1)
+          if [ -z "$SDKMANAGER" ]; then echo "::error::sdkmanager not found at \$ANDROID_HOME=$ANDROID_HOME"; exit 1; fi
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "ndk;27.0.12077973" "platforms;android-37" "build-tools;34.0.0"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Android project if not committed
+        run: |
+          if [ ! -d app/gen/android ]; then pnpm exec tauri android init --config app/tauri.conf.json --ci; fi
+      # The generated project still opts out of AGP's new DSL and variant
+      # API (`android.newDsl=false` et al. in the Tauri template), which
+      # AGP 9 warns about on every build. The options are load-bearing
+      # until Tauri moves off the legacy DSL, so silence the warnings the
+      # way AGP suggests.
+      - name: Suppress expected AGP deprecation warnings
+        run: node scripts/patch-android-gradle-props.mjs
+      # `tauri android init` regenerates res/mipmap-* from tauri.conf
+      # bundle.icon. Copy the launchers that `tauri icon` actually
+      # generated (adaptive foreground, anydpi-v26 xml + background
+      # colour) over them, otherwise the APK ships placeholder art
+      # instead of the app icon.
+      - name: Apply generated launcher icons
+        run: |
+          RES=app/gen/android/app/src/main/res
+          cp -r app/icons/android/. "$RES"/
+          find "$RES" -name 'ic_launcher*.png' -printf '%p %s\n' | sort
+      # Light status and navigation bars, to match the app's light theme.
+      - name: Apply light Android theme
+        run: node scripts/patch-android-theme.mjs
+      # Phones stay portrait (single-column layout is guaranteed by the
+      # vertical-only rule); tablets (sw600dp+) keep rotating freely.
+      - name: Lock phone orientation to portrait
+        run: node scripts/patch-android-orientation.mjs
+      - name: Make gradlew executable
+        run: chmod +x app/gen/android/gradlew || true
+      # The Gradle wrapper downloads its distribution with a 10s read
+      # timeout and a single attempt, so one flaky services.gradle.org
+      # response kills the whole build. Pre-fetch it with retries — the
+      # Gradle cache step above persists it across runs — so the real
+      # build never pays the download cost.
+      - name: Pre-fetch Gradle distribution
+        run: |
+          cd app/gen/android
+          for attempt in 1 2 3 4 5; do
+            if ./gradlew --version > /dev/null 2>&1; then
+              echo "Gradle distribution ready on attempt $attempt"
+              exit 0
+            fi
+            echo "::warning::Gradle distribution fetch failed (attempt $attempt/5)"
+            sleep 15
+          done
+          echo "::error::Gradle distribution still unreachable after 5 attempts"
+          exit 1
+      # Pin both variants to the shared keystore so every release APK
+      # carries the same signer and installs as an upgrade. Fails the job
+      # when the secrets are missing rather than shipping a throwaway key.
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: node scripts/patch-android-signing.mjs
+      # arm64-v8a only (new mobiles). Production build (no --debug flag):
+      # R8-optimized, non-debuggable, signed with the shared keystore
+      # above. Cleartext stays allowed (patched in) so WebView fetch to
+      # http:// LAN servers and the local print API keeps working exactly
+      # like the debug builds.
+      - run: pnpm exec tauri android build --config app/tauri.conf.json --target aarch64 --apk --aab
+      # `tauri android build` names its outputs after the Gradle module
+      # (app-<abi>-release.apk/.aab, currently app-universal-*); rename
+      # them to the product name and version so the release attachments
+      # match the MSI/deb/AppImage set.
+      - name: Name the Android artifacts
+        run: |
+          OUT=app/gen/android/app/build/outputs
+          VER="${GITHUB_REF_NAME#v}"
+          mapfile -t APKS < <(find "$OUT/apk" -name '*.apk')
+          mapfile -t AABS < <(find "$OUT/bundle" -name '*.aab')
+          [ "${#APKS[@]}" -eq 1 ] || { echo "::error::expected exactly 1 APK, found ${#APKS[@]}: ${APKS[*]}"; exit 1; }
+          [ "${#AABS[@]}" -eq 1 ] || { echo "::error::expected exactly 1 AAB, found ${#AABS[@]}: ${AABS[*]}"; exit 1; }
+          mv "${APKS[0]}" "$OUT/PrintNinja_${VER}_aarch64.apk"
+          mv "${AABS[0]}" "$OUT/PrintNinja_${VER}_aarch64.aab"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: |
+            app/gen/android/app/build/outputs/**/*.apk
+            app/gen/android/app/build/outputs/**/*.aab
+          if-no-files-found: error
+          retention-days: 30
+
   # Collects the installer artifacts into a draft GitHub release. Re-runs
   # reuse the draft and overwrite same-name assets instead of duplicating
   # them.
   github-release:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    needs: [windows-build, linux-build]
+    needs: [windows-build, linux-build, android-build]
     permissions:
       contents: write
     steps:
@@ -399,7 +655,7 @@ jobs:
           fi
           shopt -s globstar nullglob
           fail=0
-          for pattern in "dist-artifacts/*.msi" "dist-artifacts/**/*.deb" "dist-artifacts/**/*.AppImage"; do
+          for pattern in "dist-artifacts/*.msi" "dist-artifacts/**/*.deb" "dist-artifacts/**/*.AppImage" "dist-artifacts/**/*.apk" "dist-artifacts/**/*.aab"; do
             files=($pattern)
             if [ "${#files[@]}" -eq 0 ]; then echo "::error::no artifacts match $pattern"; fail=1; continue; fi
             for f in "${files[@]}"; do
