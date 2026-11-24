@@ -7,11 +7,16 @@
 #                     virtual-printer fixture tests (host)
 #   rust-test-windows workspace tests natively + fixture tests
 #   chromium-render   the document-track e2e through a real system Chrome
+#   server-check      registry (pn-server) fmt + clippy + tests
+#   server-image      the registry Docker image builds
+#   server-e2e        the registry image through a full HTTP lifecycle
+#   server-publish    push the registry image to GHCR (push to main)
 #   rust-check        gate job: passes only when all Rust jobs passed
 #
 # The app crate embeds app/ui/dist at compile time
-# (tauri::generate_context!), so every Rust job downloads the web-dist
-# artifact first.
+# (tauri::generate_context!), so the app's Rust jobs download the
+# web-dist artifact first; the server jobs never compile the app
+# crate and skip it.
 
 name: CI
 
@@ -137,18 +142,107 @@ jobs:
           PRINTNINJA_BROWSER: /opt/google/chrome/chrome
         run: cargo test -p pn-e2e --test document_track
 
+  # The community registry (plan phase 9). It never compiles the app
+  # crate, so none of these jobs needs the web-dist artifact.
+  server-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.90.0
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server
+      - run: cargo fmt -p pn-server --check
+      - run: cargo clippy -p pn-server --all-targets -- -D warnings
+      - run: cargo test -p pn-server
+
+  # The deployable package (server/Dockerfile): prove the image builds.
+  # The same image server-e2e runs and server-publish pushes.
+  server-image:
+    runs-on: ubuntu-latest
+    needs: server-check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the registry image
+        run: docker build -f server/Dockerfile -t printninja-server:ci .
+
+  # The registry image through the full HTTP lifecycle an app uses:
+  # account, login, publish, gallery, fetch, save, change feed with
+  # tombstone, unpublish, logout (server/e2e.py). Runs on a localhost
+  # port with a throwaway volume, so no runner state survives.
+  server-e2e:
+    runs-on: ubuntu-latest
+    needs: server-check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the registry image
+        run: docker build -f server/Dockerfile -t printninja-server:ci .
+      - name: Start the server
+        run: |
+          docker run -d --name printninja-e2e \
+            -p 127.0.0.1:8788:8787 \
+            -v printninja-e2e-data:/data \
+            printninja-server:ci
+      - name: Wait for the health endpoint
+        run: |
+          for _ in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:8788/v1/health >/dev/null && exit 0
+            sleep 1
+          done
+          echo "the server never became healthy:"
+          docker logs printninja-e2e
+          exit 1
+      - name: Run the HTTP e2e
+        run: python3 server/e2e.py http://127.0.0.1:8788
+      - name: Dump server logs on failure
+        if: failure()
+        run: docker logs printninja-e2e
+      - name: Clean up
+        if: always()
+        run: |
+          docker rm -f printninja-e2e || true
+          docker volume rm printninja-e2e-data || true
+
+  # Every push to main publishes the registry image to GHCR, so a
+  # deployment is one pull away. Tagged by commit sha and latest; the
+  # version tag arrives with the release flow (plan phase 10).
+  server-publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: [server-image, server-e2e]
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build, tag and push
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/printninja-server"
+          TAG="sha-${GITHUB_SHA::7}"
+          docker build -f server/Dockerfile -t "$IMAGE:latest" -t "$IMAGE:$TAG" .
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:$TAG"
+
   # One gate name for branch protection: it passes only when every
   # Rust job passed (same shape as the old repo's ci.yml).
   rust-check:
     if: ${{ always() }}
     runs-on: ubuntu-latest
-    needs: [rust-lint, rust-test-linux, rust-test-windows]
+    needs: [rust-lint, rust-test-linux, rust-test-windows, server-check]
     steps:
       - name: All Rust jobs must have passed
         run: |
           echo "rust-lint:         ${{ needs.rust-lint.result }}"
           echo "rust-test-linux:   ${{ needs.rust-test-linux.result }}"
           echo "rust-test-windows: ${{ needs.rust-test-windows.result }}"
+          echo "server-check:      ${{ needs.server-check.result }}"
           [ "${{ needs.rust-lint.result }}" = "success" ] && \
           [ "${{ needs.rust-test-linux.result }}" = "success" ] && \
-          [ "${{ needs.rust-test-windows.result }}" = "success" ]
+          [ "${{ needs.rust-test-windows.result }}" = "success" ] && \
+          [ "${{ needs.server-check.result }}" = "success" ]

@@ -415,6 +415,7 @@ Each phase ends in something testable; no phase is "done" until its exit criteri
 - Publishing server: accounts, publish (a template — scene JSON or HTML/CSS — plus readme), community gallery (browse/search), save community templates as editable local copies, and offline-first sync of local changes. The current `server/` (TypeScript) is the reference implementation; port or rebuild it against the template schemas (both tracks).
 - UI (extends phase 7): Community and Saved tabs in the template list, a publish flow with metadata from a template, and saved-community-template state.
 - The server validates the template (scene schema, or `format: html` with `page` media for the document track); publishing never involves rendering or printing.
+- Deployable on its own (parity with the old repo): a Docker image (`server/Dockerfile`) with the binary and migrations baked in and the database on a `/data` volume, so any host runs the registry and terminal DB commands work through `docker exec`. Plus the CI parity jobs: `server-check` (fmt/clippy/tests for `pn-server`, part of the rust-check gate), `server-image` (the image builds), `server-e2e` (the image through the full HTTP lifecycle via `server/e2e.py`), and `server-publish` (the image to GHCR on every push to main).
 
 **Exit:** one user's published template can be found, saved and printed by another user; offline changes sync when the connection returns; the registry has its own test suite.
 

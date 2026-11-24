@@ -449,3 +449,12 @@ Unreleased.
   the app (accounts, publishing, saving, offline sync, the shared
   server URL) and hosting one (Docker image, terminal database
   commands, configuration, the HTTP surface, upgrading)
+- The delivery e2e harness builds the virtual-printer fixture into the
+  workspace's `target/fixture` instead of the fixture's own source
+  tree: the Docker test container runs as root on a bind-mounted
+  checkout, and the root-owned `target/` it left behind made CI's
+  host-side fixture step (`rust-test-linux`) fail with a permission
+  error on every run
+- The registry's auth rejection now carries a JSON body, keeping the
+  documented "all bodies are JSON" contract — an expired or missing
+  session token used to get back an empty `401`

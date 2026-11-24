@@ -119,17 +119,32 @@ impl Printer {
 }
 
 /// The fixture's release binary, built on first use if it is not there yet.
+///
+/// The build goes to the workspace's `target/fixture`, not the fixture's
+/// own source tree: the Docker test container runs as root on a
+/// bind-mounted checkout, and a root-owned `support/virtual-printer/
+/// target/` would lock the host-side fixture step (plain `cargo test`
+/// on the checkout) out with a permission error. In CI the workspace
+/// `target/` is a named Docker volume, so the artifact never lands in
+/// the host tree at all.
 fn binary_path() -> PathBuf {
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("support/virtual-printer");
-    let bin = dir.join(if cfg!(windows) {
-        "target/release/virtualprinter.exe"
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("support/virtual-printer");
+    let target_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("workspace root")
+        .join("target")
+        .join("fixture");
+    let bin = target_dir.join(if cfg!(windows) {
+        "release/virtualprinter.exe"
     } else {
-        "target/release/virtualprinter"
+        "release/virtualprinter"
     });
     if !bin.exists() {
         let status = Command::new("cargo")
             .args(["build", "--release"])
-            .current_dir(&dir)
+            .current_dir(&fixture)
+            .env("CARGO_TARGET_DIR", &target_dir)
             .status()
             .expect("run `cargo build --release` for the virtual printer");
         assert!(status.success(), "virtualprinter release build failed");

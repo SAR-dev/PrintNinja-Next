@@ -15,9 +15,11 @@ use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, Salt
 use argon2::{Algorithm, Argon2, Params, Version};
 use axum::extract::FromRequestParts;
 use axum::http::{header, request::Parts, StatusCode};
+use axum::Json;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use rand::RngCore;
+use serde_json::json;
 use sha2::{Digest, Sha256};
 
 use crate::store::now_unix;
@@ -120,8 +122,10 @@ pub fn token_hash(token: &str) -> String {
 }
 
 /// The authenticated caller of a request, resolved from the
-/// `Authorization: Bearer <token>` header. Rejected with `401` when the
-/// header is missing, the token is unknown, or its session has expired.
+/// `Authorization: Bearer <token>` header. Rejected with a JSON `401`
+/// when the header is missing, the token is unknown, or its session has
+/// expired (the registry's contract: all bodies are JSON, including
+/// errors).
 pub struct AuthedUser {
     pub id: String,
     pub handle: String,
@@ -136,24 +140,43 @@ pub struct AuthedUser {
 }
 
 impl FromRequestParts<ServerState> for AuthedUser {
-    type Rejection = StatusCode;
+    type Rejection = (StatusCode, Json<serde_json::Value>);
 
     async fn from_request_parts(
         parts: &mut Parts,
         state: &ServerState,
     ) -> Result<Self, Self::Rejection> {
-        let token = bearer_token(parts).ok_or(StatusCode::UNAUTHORIZED)?;
+        let token = bearer_token(parts).ok_or((
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "no session token" })),
+        ))?;
         let th = token_hash(&token);
         let user_id = state
             .store
             .find_session(&th, now_unix())
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "the registry hit a problem" })),
+                )
+            })?
+            .ok_or((
+                StatusCode::UNAUTHORIZED,
+                Json(json!({ "error": "no session token" })),
+            ))?;
         let rec = state
             .store
             .find_user_record(&user_id)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({ "error": "the registry hit a problem" })),
+                )
+            })?
+            .ok_or((
+                StatusCode::UNAUTHORIZED,
+                Json(json!({ "error": "no session token" })),
+            ))?;
         Ok(AuthedUser {
             id: rec.id,
             handle: rec.handle,
