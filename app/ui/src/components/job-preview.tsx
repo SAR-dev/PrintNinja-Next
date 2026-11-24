@@ -6,6 +6,7 @@
  * browser path, the whole document on the pdf path.
  */
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Preview } from "@/api";
 
 type Bitmap = Extract<Preview, { kind: "bitmap" }>;
@@ -82,6 +83,7 @@ function BitmapPreview({
 }
 
 function PdfPreview({ pdf }: { pdf: number[] }) {
+  const { t } = useTranslation();
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -96,11 +98,11 @@ function PdfPreview({ pdf }: { pdf: number[] }) {
     <div className="flex flex-col gap-2">
       <iframe
         src={`${url}#toolbar=0`}
-        title="Preview: the PDF the printer will receive"
+        title={t("preview.pdf_iframe_title")}
         className="h-[420px] w-full rounded-sm border border-border bg-white"
       />
       <span className="text-caption text-muted-foreground">
-        The PDF the printer will receive
+        {t("preview.pdf_caption")}
       </span>
     </div>
   );
@@ -112,6 +114,7 @@ function PdfPreview({ pdf }: { pdf: number[] }) {
  * stack one per record.
  */
 export function JobPreview({ previews }: { previews: Preview[] }) {
+  const { t } = useTranslation();
   if (previews.length === 0) return null;
   const bitmaps = previews.filter(isBitmap);
 
@@ -136,8 +139,14 @@ export function JobPreview({ previews }: { previews: Preview[] }) {
             scale={multi ? Math.min(15, 150 / p.width_mm) : 15}
             caption={
               multi
-                ? `page ${i + 1} of ${bitmaps.length}`
-                : `${p.width_mm} × ${p.height_mm} mm`
+                ? t("preview.page_of", {
+                    current: i + 1,
+                    total: bitmaps.length,
+                  })
+                : t("preview.size_mm", {
+                    width: p.width_mm,
+                    height: p.height_mm,
+                  })
             }
           />
         ))}
@@ -153,7 +162,7 @@ export function JobPreview({ previews }: { previews: Preview[] }) {
           <PdfPreview pdf={p.pdf} />
           {pdfs.length > 1 && (
             <span className="text-caption text-muted-foreground">
-              document {i + 1} of {pdfs.length}
+              {t("preview.document_of", { current: i + 1, total: pdfs.length })}
             </span>
           )}
         </div>

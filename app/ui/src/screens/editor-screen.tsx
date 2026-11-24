@@ -5,6 +5,7 @@
  * as the print (plan §3.4) — on the chosen printer, at its own dpi.
  */
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   listPrinters,
   planJob,
@@ -83,6 +84,7 @@ export function EditorScreen({
   onBack: () => void;
   onSave: (t: AppTemplate) => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(initial.name);
   const [template, setTemplate] = useState<Template>(() =>
     structuredClone(initial.template),
@@ -100,7 +102,7 @@ export function EditorScreen({
         setPrinters(ps);
         setPrinter((p) => p || ps[0]?.model || "");
       })
-      .catch(() => setPreviewError("The printer list could not be loaded."));
+      .catch(() => setPreviewError(t("editor.printer_list_error")));
   }, []);
 
   const bindings = useMemo(() => allBindings(template), [template]);
@@ -185,7 +187,7 @@ export function EditorScreen({
   const save = () =>
     onSave({
       id: initial.id,
-      name: name.trim() || "Untitled template",
+      name: name.trim() || t("editor.untitled_template"),
       description: initial.description,
       track: "scene",
       template: withSyncedFields(template),
@@ -204,11 +206,11 @@ export function EditorScreen({
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-8">
       <header className="flex flex-col gap-2">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          ← Templates
+          {t("editor.back")}
         </Button>
         <div className="flex items-center gap-3">
           <h1 className="text-display font-semibold tracking-tight">
-            Edit template
+            {t("editor.title")}
           </h1>
           <Badge>scene</Badge>
         </div>
@@ -216,16 +218,16 @@ export function EditorScreen({
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex w-64 flex-col gap-1">
-          <Label htmlFor="t-name">Name</Label>
+          <Label htmlFor="t-name">{t("common.name")}</Label>
           <Input
             id="t-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </div>
-        <Button onClick={save}>Save template</Button>
+        <Button onClick={save}>{t("editor.save_template")}</Button>
         <Button variant="secondary" onClick={previewJob} disabled={preparing}>
-          {preparing ? "Preparing…" : "Preview"}
+          {preparing ? t("editor.previewing") : t("editor.preview")}
         </Button>
       </div>
 
@@ -233,10 +235,8 @@ export function EditorScreen({
         <div className="flex min-w-0 flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Page</CardTitle>
-              <CardDescription>
-                Drag an element to move it; the numbers do the same thing.
-              </CardDescription>
+              <CardTitle>{t("editor.page")}</CardTitle>
+              <CardDescription>{t("editor.page_note")}</CardDescription>
             </CardHeader>
             <CardContent>
               <SceneCanvas
@@ -252,12 +252,12 @@ export function EditorScreen({
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Media</CardTitle>
-              <CardDescription>What the template prints on.</CardDescription>
+              <CardTitle>{t("editor.media")}</CardTitle>
+              <CardDescription>{t("editor.media_note")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <Label>Kind</Label>
+                <Label>{t("editor.kind")}</Label>
                 <Select
                   value={media.kind}
                   onValueChange={(v) => changeMediaKind(v as Media["kind"])}
@@ -266,23 +266,31 @@ export function EditorScreen({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="label">Label — fixed size</SelectItem>
-                    <SelectItem value="roll">Roll — cut per label</SelectItem>
-                    <SelectItem value="page">Page — paper</SelectItem>
+                    <SelectItem value="label">
+                      {t("editor.kind_label")}
+                    </SelectItem>
+                    <SelectItem value="roll">
+                      {t("editor.kind_roll")}
+                    </SelectItem>
+                    <SelectItem value="page">
+                      {t("editor.kind_page")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <NumField
                   id="m-w"
-                  label="Width (mm)"
+                  label={t("editor.width_mm")}
                   value={media.width_mm}
                   onChange={(v) => setMedia({ ...media, width_mm: v })}
                 />
                 <NumField
                   id="m-h"
                   label={
-                    media.kind === "roll" ? "Label height (mm)" : "Height (mm)"
+                    media.kind === "roll"
+                      ? t("editor.label_height_mm")
+                      : t("editor.height_mm")
                   }
                   value={
                     media.kind === "roll"
@@ -301,10 +309,8 @@ export function EditorScreen({
 
           <Card>
             <CardHeader>
-              <CardTitle>Elements</CardTitle>
-              <CardDescription>
-                Top to bottom, the order they are drawn.
-              </CardDescription>
+              <CardTitle>{t("editor.elements")}</CardTitle>
+              <CardDescription>{t("editor.elements_note")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <ElementList
@@ -320,14 +326,14 @@ export function EditorScreen({
           {selected && (
             <Card>
               <CardHeader>
-                <CardTitle>Selected element</CardTitle>
+                <CardTitle>{t("editor.selected_element")}</CardTitle>
                 <CardDescription>{elementLabel(selected)}</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <div className="grid grid-cols-2 gap-3">
                   <NumField
                     id="el-x"
-                    label="X (mm)"
+                    label={t("editor.x_mm")}
                     value={selected.at.x_mm}
                     onChange={(v) =>
                       updateSelected((el) => ({
@@ -338,7 +344,7 @@ export function EditorScreen({
                   />
                   <NumField
                     id="el-y"
-                    label="Y (mm)"
+                    label={t("editor.y_mm")}
                     value={selected.at.y_mm}
                     onChange={(v) =>
                       updateSelected((el) => ({
@@ -361,7 +367,7 @@ export function EditorScreen({
                 {selected.type === "text" && (
                   <div className="flex flex-col gap-3">
                     <div className="flex flex-col gap-1">
-                      <Label>Content</Label>
+                      <Label>{t("editor.content")}</Label>
                       <Textarea
                         rows={2}
                         spellCheck={false}
@@ -375,13 +381,13 @@ export function EditorScreen({
                         }
                       />
                       <span className="text-caption text-muted-foreground">
-                        {"{{name}}"} fills from the record's fields.
+                        {t("editor.content_note", { field: "{{name}}" })}
                       </span>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       <NumField
                         id="t-w"
-                        label="Width (mm)"
+                        label={t("editor.width_mm")}
                         value={selected.size.w_mm}
                         onChange={(v) =>
                           updateSelected((el) =>
@@ -393,7 +399,7 @@ export function EditorScreen({
                       />
                       <NumField
                         id="t-h"
-                        label="Height (mm)"
+                        label={t("editor.height_mm")}
                         value={selected.size.h_mm}
                         onChange={(v) =>
                           updateSelected((el) =>
@@ -405,7 +411,7 @@ export function EditorScreen({
                       />
                       <NumField
                         id="t-size"
-                        label="Text size (mm)"
+                        label={t("editor.text_size_mm")}
                         value={selected.style.size_mm}
                         step={0.5}
                         onChange={(v) =>
@@ -419,7 +425,7 @@ export function EditorScreen({
                     </div>
                     <div className="flex items-end gap-3">
                       <div className="flex flex-1 flex-col gap-1">
-                        <Label>Align</Label>
+                        <Label>{t("editor.align")}</Label>
                         <Select
                           value={selected.style.align ?? "left"}
                           onValueChange={(v) =>
@@ -437,16 +443,22 @@ export function EditorScreen({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="left">Left</SelectItem>
-                            <SelectItem value="center">Center</SelectItem>
-                            <SelectItem value="right">Right</SelectItem>
+                            <SelectItem value="left">
+                              {t("editor.align_left")}
+                            </SelectItem>
+                            <SelectItem value="center">
+                              {t("editor.align_center")}
+                            </SelectItem>
+                            <SelectItem value="right">
+                              {t("editor.align_right")}
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
                     <div className="flex gap-5">
                       <SwitchRow
-                        label="Bold"
+                        label={t("editor.bold")}
                         checked={!!selected.style.bold}
                         onCheckedChange={(v) =>
                           updateSelected((el) =>
@@ -457,7 +469,7 @@ export function EditorScreen({
                         }
                       />
                       <SwitchRow
-                        label="Italic"
+                        label={t("editor.italic")}
                         checked={!!selected.style.italic}
                         onCheckedChange={(v) =>
                           updateSelected((el) =>
@@ -476,7 +488,7 @@ export function EditorScreen({
                     <div className="grid grid-cols-2 gap-3">
                       <NumField
                         id="l-len"
-                        label="Length (mm)"
+                        label={t("editor.length_mm")}
                         value={selected.length_mm}
                         onChange={(v) =>
                           updateSelected((el) =>
@@ -486,7 +498,7 @@ export function EditorScreen({
                       />
                       <NumField
                         id="l-th"
-                        label="Thickness (mm)"
+                        label={t("editor.thickness_mm")}
                         step={0.05}
                         value={selected.thickness_mm}
                         onChange={(v) =>
@@ -499,7 +511,7 @@ export function EditorScreen({
                       />
                     </div>
                     <SwitchRow
-                      label="Vertical"
+                      label={t("editor.vertical")}
                       checked={!!selected.vertical}
                       onCheckedChange={(v) =>
                         updateSelected((el) =>
@@ -515,7 +527,7 @@ export function EditorScreen({
                     <div className="grid grid-cols-2 gap-3">
                       <NumField
                         id="r-w"
-                        label="Width (mm)"
+                        label={t("editor.width_mm")}
                         value={selected.size.w_mm}
                         onChange={(v) =>
                           updateSelected((el) =>
@@ -527,7 +539,7 @@ export function EditorScreen({
                       />
                       <NumField
                         id="r-h"
-                        label="Height (mm)"
+                        label={t("editor.height_mm")}
                         value={selected.size.h_mm}
                         onChange={(v) =>
                           updateSelected((el) =>
@@ -539,7 +551,7 @@ export function EditorScreen({
                       />
                     </div>
                     <SwitchRow
-                      label="Filled"
+                      label={t("editor.filled")}
                       checked={!!selected.fill}
                       onCheckedChange={(v) =>
                         updateSelected((el) =>
@@ -556,7 +568,7 @@ export function EditorScreen({
                       <div className="grid grid-cols-3 gap-3">
                         <NumField
                           id="b-w"
-                          label="Width (mm)"
+                          label={t("editor.width_mm")}
                           value={selected.size.w_mm}
                           onChange={(v) =>
                             updateSelected((el) =>
@@ -568,7 +580,7 @@ export function EditorScreen({
                         />
                         <NumField
                           id="b-h"
-                          label="Height (mm)"
+                          label={t("editor.height_mm")}
                           value={selected.size.h_mm}
                           onChange={(v) =>
                             updateSelected((el) =>
@@ -579,7 +591,7 @@ export function EditorScreen({
                           }
                         />
                         <div className="flex flex-col gap-1">
-                          <Label>Kind</Label>
+                          <Label>{t("editor.kind")}</Label>
                           <Select
                             value={selected.kind ?? "code128"}
                             onValueChange={(v) =>
@@ -608,7 +620,7 @@ export function EditorScreen({
                     {selected.type === "qr" && (
                       <NumField
                         id="q-h"
-                        label="Size (mm)"
+                        label={t("editor.qr_size_mm")}
                         value={selected.h_mm}
                         onChange={(v) =>
                           updateSelected((el) =>
@@ -618,7 +630,7 @@ export function EditorScreen({
                       />
                     )}
                     <div className="flex flex-col gap-1">
-                      <Label>Value</Label>
+                      <Label>{t("editor.value")}</Label>
                       <Input
                         spellCheck={false}
                         value={selected.value}
@@ -633,7 +645,7 @@ export function EditorScreen({
                     </div>
                     {selected.type === "barcode" && (
                       <SwitchRow
-                        label="Show text under the bars"
+                        label={t("editor.barcode_text")}
                         checked={selected.show_text !== false}
                         onCheckedChange={(v) =>
                           updateSelected((el) =>
@@ -652,7 +664,7 @@ export function EditorScreen({
                     <div className="grid grid-cols-2 gap-3">
                       <NumField
                         id="i-w"
-                        label="Width (mm)"
+                        label={t("editor.width_mm")}
                         value={selected.size.w_mm}
                         onChange={(v) =>
                           updateSelected((el) =>
@@ -664,7 +676,7 @@ export function EditorScreen({
                       />
                       <NumField
                         id="i-h"
-                        label="Height (mm)"
+                        label={t("editor.height_mm")}
                         value={selected.size.h_mm}
                         onChange={(v) =>
                           updateSelected((el) =>
@@ -676,7 +688,7 @@ export function EditorScreen({
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <Label>Source</Label>
+                      <Label>{t("editor.source")}</Label>
                       <Input
                         spellCheck={false}
                         value={selected.src}
@@ -697,7 +709,7 @@ export function EditorScreen({
                     <div className="grid grid-cols-2 gap-3">
                       <NumField
                         id="g-w"
-                        label="Column width (mm)"
+                        label={t("editor.column_width_mm")}
                         value={selected.w_mm}
                         onChange={(v) =>
                           updateSelected((el) =>
@@ -707,7 +719,7 @@ export function EditorScreen({
                       />
                       <NumField
                         id="g-gap"
-                        label="Gap (mm)"
+                        label={t("editor.gap_mm")}
                         value={selected.item_gap_mm}
                         onChange={(v) =>
                           updateSelected((el) =>
@@ -719,7 +731,7 @@ export function EditorScreen({
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <Label>Rows from</Label>
+                      <Label>{t("editor.rows_from")}</Label>
                       <Input
                         spellCheck={false}
                         value={selected.bind}
@@ -732,11 +744,13 @@ export function EditorScreen({
                         }
                       />
                       <span className="text-caption text-muted-foreground">
-                        The record field holding this group's rows (a list).
+                        {t("editor.rows_from_note")}
                       </span>
                     </div>
                     <div className="flex flex-col gap-2">
-                      <span className="text-body-sm font-medium">Rows</span>
+                      <span className="text-body-sm font-medium">
+                        {t("editor.rows")}
+                      </span>
                       <ElementList
                         elements={selected.items}
                         selection={selection}
@@ -758,9 +772,9 @@ export function EditorScreen({
           {bindings.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Data fields</CardTitle>
+                <CardTitle>{t("editor.data_fields")}</CardTitle>
                 <CardDescription>
-                  Every binding the template uses, declared for the job.
+                  {t("editor.data_fields_note")}
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
@@ -777,16 +791,13 @@ export function EditorScreen({
 
           <Card>
             <CardHeader>
-              <CardTitle>Preview</CardTitle>
-              <CardDescription>
-                Prepared on the chosen printer, the same path as the print —
-                every page of one record.
-              </CardDescription>
+              <CardTitle>{t("editor.preview")}</CardTitle>
+              <CardDescription>{t("editor.preview_note")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <Select value={printer} onValueChange={setPrinter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick a printer" />
+                  <SelectValue placeholder={t("editor.pick_printer")} />
                 </SelectTrigger>
                 <SelectContent>
                   {printers.map((p) => (
@@ -806,14 +817,13 @@ export function EditorScreen({
                   <div className="flex flex-wrap items-center gap-2 text-body-sm text-muted-foreground">
                     <Badge variant="outline">{preview.path}</Badge>
                     <span>
-                      {preview.pages} page{preview.pages === 1 ? "" : "s"} ·{" "}
+                      {t("print.pages", { count: preview.pages })} ·{" "}
                       {preview.bytes} B
                     </span>
                   </div>
                   {preview.fallback && (
                     <div className="rounded-md bg-warning-soft px-3 py-2 text-body-sm text-warning">
-                      Fell back from the track's preferred path:{" "}
-                      {preview.fallback}
+                      {t("print.fallback", { path: preview.fallback })}
                     </div>
                   )}
                   {preview.preview && preview.preview.length > 0 && (
@@ -844,11 +854,12 @@ function ElementList({
   onDelete: (container: Container, index: number) => void;
   container?: Container;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-1">
       {elements.length === 0 && (
         <span className="text-body-sm text-muted-foreground">
-          Nothing yet — add the first element below.
+          {t("editor.element_empty")}
         </span>
       )}
       {elements.map((el, i) => {
@@ -874,7 +885,7 @@ function ElementList({
               className="shrink-0 px-2 text-muted-foreground"
               onClick={() => onDelete(container, i)}
             >
-              Delete
+              {t("common.delete")}
             </Button>
           </div>
         );
@@ -890,18 +901,21 @@ function AddElement({
   onAdd: (type: string) => void;
   group?: boolean;
 }) {
+  const { t } = useTranslation();
   const types = group
     ? ["text", "line", "rect", "barcode", "qr", "image"]
     : ELEMENT_TYPES;
   return (
     <Select onValueChange={(v) => onAdd(v)}>
       <SelectTrigger>
-        <SelectValue placeholder={group ? "Add to row…" : "Add element…"} />
+        <SelectValue
+          placeholder={group ? t("editor.add_to_row") : t("editor.add_element")}
+        />
       </SelectTrigger>
       <SelectContent>
-        {types.map((t) => (
-          <SelectItem key={t} value={t}>
-            {t}
+        {types.map((type) => (
+          <SelectItem key={type} value={type}>
+            {type}
           </SelectItem>
         ))}
       </SelectContent>
@@ -917,11 +931,12 @@ function PlacementSelect({
   value: Placement;
   onChange: (p: Placement) => void;
 }) {
+  const { t } = useTranslation();
   const isOnly = typeof value === "object";
   return (
     <div className="flex items-end gap-2">
       <div className="flex flex-1 flex-col gap-1">
-        <Label>Page</Label>
+        <Label>{t("editor.page")}</Label>
         <Select
           value={isOnly ? "only" : value}
           onValueChange={(v) =>
@@ -932,16 +947,16 @@ function PlacementSelect({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="every">Every page</SelectItem>
-            <SelectItem value="first">First page</SelectItem>
-            <SelectItem value="last">Last page</SelectItem>
-            <SelectItem value="only">Only page…</SelectItem>
+            <SelectItem value="every">{t("editor.page_every")}</SelectItem>
+            <SelectItem value="first">{t("editor.page_first")}</SelectItem>
+            <SelectItem value="last">{t("editor.page_last")}</SelectItem>
+            <SelectItem value="only">{t("editor.page_only")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       {isOnly && (
         <div className="flex w-20 flex-col gap-1">
-          <Label>Number</Label>
+          <Label>{t("editor.page_number")}</Label>
           <Input
             type="number"
             min={1}

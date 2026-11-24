@@ -6,6 +6,7 @@
  * empty uses the profile's own value, shown as the placeholder.
  */
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   beginPairing,
   isAutostart,
@@ -30,6 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { setLanguage } from "@/lib/i18n";
 
 /** The user's delivery override for one printer, as it is saved. */
 interface DeliveryOverride {
@@ -54,6 +56,7 @@ function readOverride(
 }
 
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
+  const { t, i18n } = useTranslation();
   const [printers, setPrinters] = useState<ProfileInfo[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [autostart, setAutostartState] = useState(false);
@@ -102,17 +105,17 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   // takes the code down when it is up.
   useEffect(() => {
     if (pairCode === null) return;
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       setPairLeft((n) => {
         if (n <= 1) {
-          clearInterval(t);
+          clearInterval(timer);
           setPairCode(null);
           return 0;
         }
         return n - 1;
       });
     }, 1000);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, [pairCode]);
 
   const save = (key: string, value: string) => {
@@ -182,14 +185,14 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
       <header className="flex items-center gap-4">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          Back
+          {t("common.back")}
         </Button>
         <div className="flex flex-col gap-1">
           <h1 className="text-display font-semibold tracking-tight">
-            Settings
+            {t("settings.title")}
           </h1>
           <p className="text-body text-muted-foreground">
-            How the app looks and starts, and how each printer is paced.
+            {t("settings.subtitle")}
           </p>
         </div>
       </header>
@@ -202,64 +205,73 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Appearance</CardTitle>
-          <CardDescription>
-            The theme of the whole app. It comes back the same on the next
-            start.
-          </CardDescription>
+          <CardTitle>{t("settings.appearance")}</CardTitle>
+          <CardDescription>{t("settings.appearance_note")}</CardDescription>
         </CardHeader>
         <CardContent className="flex gap-2">
           <Button
             variant={theme === "light" ? "default" : "outline"}
             onClick={() => pickTheme("light")}
           >
-            Light
+            {t("settings.light")}
           </Button>
           <Button
             variant={theme === "dark" ? "default" : "outline"}
             onClick={() => pickTheme("dark")}
           >
-            Dark
+            {t("settings.dark")}
           </Button>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Start with the computer</CardTitle>
-          <CardDescription>
-            Start PrintNinja when you sign in. The app then lives in the tray:
-            closing the window only hides it.
-          </CardDescription>
+          <CardTitle>{t("settings.language")}</CardTitle>
+          <CardDescription>{t("settings.language_note")}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex gap-2">
+          <Button
+            variant={i18n.language === "en" ? "default" : "outline"}
+            onClick={() => setLanguage("en")}
+          >
+            {t("settings.language_english")}
+          </Button>
+          <Button
+            variant={i18n.language === "ja" ? "default" : "outline"}
+            onClick={() => setLanguage("ja")}
+          >
+            {t("settings.language_japanese")}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("settings.autostart")}</CardTitle>
+          <CardDescription>{t("settings.autostart_note")}</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-between gap-4">
-          <span className="text-body">Start PrintNinja at sign-in</span>
+          <span className="text-body">{t("settings.autostart_switch")}</span>
           <Switch
             checked={autostart}
             onCheckedChange={toggleAutostart}
-            aria-label="Start PrintNinja at sign-in"
+            aria-label={t("settings.autostart_switch")}
           />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Network</CardTitle>
-          <CardDescription>
-            When on, other devices on the network can send jobs to this PC —
-            each one paired by a one-time code and holding its own token. Off by
-            default; the switch applies from the next start.
-          </CardDescription>
+          <CardTitle>{t("settings.network")}</CardTitle>
+          <CardDescription>{t("settings.network_note")}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-4">
-            <span className="text-body">
-              Let other devices print to this PC
-            </span>
+            <span className="text-body">{t("settings.lan_switch")}</span>
             <Switch
               checked={lanOn}
               onCheckedChange={(on) => save("api.lan", on ? "true" : "false")}
-              aria-label="Let other devices print to this PC"
+              aria-label={t("settings.lan_switch")}
             />
           </div>
           {lanOn && (
@@ -267,18 +279,18 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               {pairCode !== null ? (
                 <div className="flex flex-col gap-1 rounded-lg border p-3">
                   <span className="text-body">
-                    Enter this code on the device, before it runs out:
+                    {t("settings.pair_code_note")}
                   </span>
                   <span className="font-mono text-title tracking-[0.3em]">
                     {pairCode.replace(/(.{4})/g, "$1 ").trim()}
                   </span>
                   <span className="text-caption text-muted-foreground">
-                    {pairLeft} seconds left
+                    {t("settings.pair_seconds_left", { seconds: pairLeft })}
                   </span>
                 </div>
               ) : (
                 <Button variant="outline" size="sm" onClick={pair}>
-                  Pair a device
+                  {t("settings.pair_a_device")}
                 </Button>
               )}
               {devices.length > 0 && (
@@ -301,7 +313,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                         size="sm"
                         onClick={() => revoke(d.id)}
                       >
-                        Revoke
+                        {t("settings.revoke")}
                       </Button>
                     </div>
                   ))}
@@ -314,16 +326,15 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Registry</CardTitle>
+          <CardTitle>{t("settings.registry")}</CardTitle>
           <CardDescription>
-            The server the community templates live on. Leave it empty to use
-            the server on this computer (
-            {registryDefault || "http://127.0.0.1:8787"}
-            ).
+            {t("settings.registry_note", {
+              default: registryDefault || "http://127.0.0.1:8787",
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
-          <Label htmlFor="registry-url">Server address</Label>
+          <Label htmlFor="registry-url">{t("settings.registry_url")}</Label>
           <Input
             id="registry-url"
             value={registryUrlText}
@@ -332,18 +343,16 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             placeholder={registryDefault}
           />
           <span className="text-caption text-muted-foreground">
-            A shared server, like <code>https://registry.example.com</code> —
-            the same one your team uses. It applies at the next sync.
+            {t("settings.registry_url_note")}
           </span>
         </CardContent>
       </Card>
 
       <section className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <h2 className="text-title font-semibold">Printers</h2>
+          <h2 className="text-title font-semibold">{t("settings.printers")}</h2>
           <p className="text-body text-muted-foreground">
-            Pacing and close delay, per printer. Leave a field empty to use the
-            value the profile ships with.
+            {t("settings.printers_note")}
           </p>
         </div>
         {printers.map((p) => {
@@ -361,7 +370,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div className="flex flex-col gap-2">
                     <Label htmlFor={`chunk-${p.model}`}>
-                      Chunk size (bytes)
+                      {t("settings.chunk_size")}
                     </Label>
                     <Input
                       id={`chunk-${p.model}`}
@@ -378,12 +387,12 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                       }
                     />
                     <span className="text-caption text-muted-foreground">
-                      How much goes out at a time.
+                      {t("settings.chunk_size_note")}
                     </span>
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor={`pause-${p.model}`}>
-                      Pause between chunks (ms)
+                      {t("settings.pause")}
                     </Label>
                     <Input
                       id={`pause-${p.model}`}
@@ -400,11 +409,13 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                       }
                     />
                     <span className="text-caption text-muted-foreground">
-                      A slow printer needs a longer pause.
+                      {t("settings.pause_note")}
                     </span>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor={`close-${p.model}`}>Close delay (ms)</Label>
+                    <Label htmlFor={`close-${p.model}`}>
+                      {t("settings.close_delay")}
+                    </Label>
                     <Input
                       id={`close-${p.model}`}
                       inputMode="numeric"
@@ -420,7 +431,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                       }
                     />
                     <span className="text-caption text-muted-foreground">
-                      How long the connection stays open after the last byte.
+                      {t("settings.close_delay_note")}
                     </span>
                   </div>
                 </div>
@@ -431,7 +442,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
                       size="sm"
                       onClick={() => resetPrinter(p)}
                     >
-                      Reset to the profile's values
+                      {t("settings.reset_profile_values")}
                     </Button>
                   </div>
                 )}

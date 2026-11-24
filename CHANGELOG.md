@@ -458,3 +458,7 @@ Unreleased.
 - The registry's auth rejection now carries a JSON body, keeping the
   documented "all bodies are JSON" contract — an expired or missing
   session token used to get back an empty `401`
+- Japanese interface language: the whole UI is translated (templates,
+  both editors, the print screen, the registry, settings and every
+  dialog), with a language switcher in Settings — the choice is saved
+  and comes back on the next start

@@ -4,6 +4,7 @@
  * repeating group), and the rule that the template's declared fields
  * follow the bindings its elements actually use.
  */
+import i18n from "@/lib/i18n";
 import {
   bindingNames,
   type Element,
@@ -108,23 +109,30 @@ export function defaultElement(type: string): Element {
   }
 }
 
-/** A short, human line for the element list. */
+/** A short, human line for the element list, in the UI language. */
 export function elementLabel(el: Element): string {
   switch (el.type) {
     case "text":
-      return `Text — ${el.content}`;
+      return i18n.t("editor.el_text", { content: el.content });
     case "barcode":
-      return `Barcode (${el.kind ?? "code128"}) — ${el.value}`;
+      return i18n.t("editor.el_barcode", {
+        kind: el.kind ?? "code128",
+        value: el.value,
+      });
     case "qr":
-      return `QR — ${el.value}`;
+      return i18n.t("editor.el_qr", { value: el.value });
     case "image":
-      return `Image — ${el.src}`;
+      return i18n.t("editor.el_image", { src: el.src });
     case "line":
-      return el.vertical ? "Line (vertical)" : "Line";
+      return el.vertical
+        ? i18n.t("editor.el_line_vertical")
+        : i18n.t("editor.el_line");
     case "rect":
-      return el.fill ? "Rectangle (filled)" : "Rectangle";
+      return el.fill
+        ? i18n.t("editor.el_rect_filled")
+        : i18n.t("editor.el_rect");
     case "group":
-      return `Group — one row per ${el.bind}`;
+      return i18n.t("editor.el_group", { bind: el.bind });
   }
 }
 

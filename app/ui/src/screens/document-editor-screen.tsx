@@ -5,6 +5,7 @@
  * richer CSS designer toolbar lands post-v1.
  */
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -68,6 +69,7 @@ export function DocumentEditorScreen({
   onBack: () => void;
   onSave: (t: AppTemplate) => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(initial.name);
   const [html, setHtml] = useState(initial.template.html ?? "");
   const [width, setWidth] = useState(initial.template.media.width_mm);
@@ -80,7 +82,7 @@ export function DocumentEditorScreen({
   const save = () =>
     onSave({
       id: initial.id,
-      name: name.trim() || "Untitled document",
+      name: name.trim() || t("editor.untitled_document"),
       description: initial.description,
       track: "document",
       template: {
@@ -96,11 +98,11 @@ export function DocumentEditorScreen({
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-8">
       <header className="flex flex-col gap-2">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          ← Templates
+          {t("editor.back")}
         </Button>
         <div className="flex items-center gap-3">
           <h1 className="text-display font-semibold tracking-tight">
-            Edit document
+            {t("editor.document_title")}
           </h1>
           <Badge variant="secondary">document</Badge>
         </div>
@@ -108,23 +110,23 @@ export function DocumentEditorScreen({
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex w-64 flex-col gap-1">
-          <Label htmlFor="d-name">Name</Label>
+          <Label htmlFor="d-name">{t("common.name")}</Label>
           <Input
             id="d-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </div>
-        <Button onClick={save}>Save template</Button>
+        <Button onClick={save}>{t("editor.save_template")}</Button>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>HTML/CSS</CardTitle>
+              <CardTitle>{t("editor.html_css")}</CardTitle>
               <CardDescription>
-                One record per page; {"{{field}}"} fills from the record.
+                {t("editor.html_css_note", { field: "{{field}}" })}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
@@ -138,7 +140,7 @@ export function DocumentEditorScreen({
               {bindings.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-caption text-muted-foreground">
-                    Bindings:
+                    {t("editor.bindings")}
                   </span>
                   {bindings.map((b) => (
                     <Badge key={b} variant="outline">
@@ -154,22 +156,20 @@ export function DocumentEditorScreen({
 
           <Card>
             <CardHeader>
-              <CardTitle>Paper</CardTitle>
-              <CardDescription>
-                The page the document prints on, in millimetres.
-              </CardDescription>
+              <CardTitle>{t("editor.paper")}</CardTitle>
+              <CardDescription>{t("editor.paper_note")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-3">
                 <NumField
                   id="p-w"
-                  label="Width (mm)"
+                  label={t("editor.width_mm")}
                   value={width}
                   onChange={setWidth}
                 />
                 <NumField
                   id="p-h"
-                  label="Height (mm)"
+                  label={t("editor.height_mm")}
                   value={height}
                   onChange={setHeight}
                 />
@@ -194,11 +194,8 @@ export function DocumentEditorScreen({
 
           <Card>
             <CardHeader>
-              <CardTitle>Sample data</CardTitle>
-              <CardDescription>
-                The records the print screen starts with; the first one is what
-                the preview shows.
-              </CardDescription>
+              <CardTitle>{t("editor.sample_data")}</CardTitle>
+              <CardDescription>{t("editor.sample_data_note")}</CardDescription>
             </CardHeader>
             <CardContent>
               <Textarea
@@ -214,14 +211,14 @@ export function DocumentEditorScreen({
 
         <Card className="self-start">
           <CardHeader>
-            <CardTitle>Preview</CardTitle>
+            <CardTitle>{t("editor.preview")}</CardTitle>
             <CardDescription>
-              {width} × {height} mm — the first record, live.
+              {t("editor.live_preview", { width, height })}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <iframe
-              title="Live preview of the document"
+              title={t("editor.live_preview_iframe")}
               sandbox=""
               srcDoc={filled}
               className="h-[560px] w-full rounded-sm border border-border bg-white"

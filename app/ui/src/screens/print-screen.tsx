@@ -4,6 +4,7 @@
  * the result vocabulary (plan §5.7) has its own words.
  */
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   listPrinters,
   planJob,
@@ -33,30 +34,33 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { JobPreview } from "@/components/job-preview";
-import { RESULT_WORDS, toneClass } from "@/result-words";
+import { resultTone, toneClass } from "@/result-words";
 import type { AppTemplate, RecentJob } from "@/templates";
 
 type TransportKind = "tcp" | "ipp" | "spooler" | "bluetooth";
 
 function ResultCard({ report }: { report: JobReport }) {
-  const entry = RESULT_WORDS[report.result] ?? {
-    word: report.result,
-    tone: "danger",
-  };
+  const { t, i18n } = useTranslation();
+  const word = i18n.exists(`result.${report.result}`)
+    ? t(`result.${report.result}`)
+    : report.result;
   const detail =
     report.result === "partially_printed" && report.counts
-      ? `${report.counts[0]} of ${report.counts[1]} made it.`
+      ? t("result.made_it", {
+          printed: report.counts[0],
+          total: report.counts[1],
+        })
       : null;
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Result</CardTitle>
+        <CardTitle>{t("result.title")}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         <div
-          className={`rounded-md px-3 py-2 text-body font-medium ${toneClass(entry.tone)}`}
+          className={`rounded-md px-3 py-2 text-body font-medium ${toneClass(resultTone(report.result))}`}
         >
-          {entry.word}
+          {word}
           {detail ? ` — ${detail}` : ""}
         </div>
         {report.reason && (
@@ -64,13 +68,12 @@ function ResultCard({ report }: { report: JobReport }) {
         )}
         {report.result === "wrong_mode_suspected" && (
           <p className="text-body-sm text-muted-foreground">
-            The printer answered in a language other than its profile's — check
-            the printer's mode, then try again.
+            {t("result.wrong_mode_hint")}
           </p>
         )}
         {report.result === "sent_unconfirmed" && (
           <p className="text-body-sm text-muted-foreground">
-            This printer takes jobs but cannot say whether they printed.
+            {t("result.sent_unconfirmed_hint")}
           </p>
         )}
       </CardContent>
@@ -92,6 +95,7 @@ export function PrintScreen({
   /** The job, with its result — the recent-jobs list remembers it. */
   onJob: (job: RecentJob) => void;
 }) {
+  const { t } = useTranslation();
   const [printers, setPrinters] = useState<ProfileInfo[]>([]);
   const [printer, setPrinter] = useState<string>("");
   const [kind, setKind] = useState<TransportKind>("tcp");
@@ -206,7 +210,7 @@ export function PrintScreen({
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
       <header className="flex flex-col gap-2">
         <Button variant="ghost" size="sm" onClick={onBack}>
-          ← Templates
+          {t("print.back")}
         </Button>
         <div className="flex items-center gap-3">
           <h1 className="text-display font-semibold tracking-tight">
@@ -223,15 +227,13 @@ export function PrintScreen({
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Printer</CardTitle>
-              <CardDescription>
-                From the profile set — the profile is the printer.
-              </CardDescription>
+              <CardTitle>{t("print.printer")}</CardTitle>
+              <CardDescription>{t("print.printer_note")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <Select value={printer} onValueChange={setPrinter}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Pick a printer" />
+                  <SelectValue placeholder={t("print.pick_printer")} />
                 </SelectTrigger>
                 <SelectContent>
                   {printers.map((p) => (
@@ -247,7 +249,7 @@ export function PrintScreen({
                   <span>·</span>
                   <span>{chosen.media.join(", ")}</span>
                   {chosen.can_confirm && (
-                    <Badge variant="success">can confirm</Badge>
+                    <Badge variant="success">{t("print.can_confirm")}</Badge>
                   )}
                 </div>
               )}
@@ -256,8 +258,8 @@ export function PrintScreen({
 
           <Card>
             <CardHeader>
-              <CardTitle>Where the bytes go</CardTitle>
-              <CardDescription>The transport for this job.</CardDescription>
+              <CardTitle>{t("print.transport_title")}</CardTitle>
+              <CardDescription>{t("print.transport_note")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <Select
@@ -268,16 +270,24 @@ export function PrintScreen({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="tcp">Raw port (TCP)</SelectItem>
-                  <SelectItem value="ipp">IPP</SelectItem>
-                  <SelectItem value="spooler">Spooler (Windows)</SelectItem>
-                  <SelectItem value="bluetooth">Bluetooth</SelectItem>
+                  <SelectItem value="tcp">
+                    {t("print.transport_tcp")}
+                  </SelectItem>
+                  <SelectItem value="ipp">
+                    {t("print.transport_ipp")}
+                  </SelectItem>
+                  <SelectItem value="spooler">
+                    {t("print.transport_spooler")}
+                  </SelectItem>
+                  <SelectItem value="bluetooth">
+                    {t("print.transport_bluetooth")}
+                  </SelectItem>
                 </SelectContent>
               </Select>
               {kind === "tcp" && (
                 <div className="grid grid-cols-[1fr_100px] gap-3">
                   <div className="flex flex-col gap-1">
-                    <Label htmlFor="host">Host</Label>
+                    <Label htmlFor="host">{t("print.host")}</Label>
                     <Input
                       id="host"
                       value={host}
@@ -285,7 +295,7 @@ export function PrintScreen({
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <Label htmlFor="port">Port</Label>
+                    <Label htmlFor="port">{t("print.port")}</Label>
                     <Input
                       id="port"
                       inputMode="numeric"
@@ -298,7 +308,7 @@ export function PrintScreen({
               {kind === "ipp" && (
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-1">
-                    <Label htmlFor="ipp-address">Address</Label>
+                    <Label htmlFor="ipp-address">{t("print.address")}</Label>
                     <Input
                       id="ipp-address"
                       placeholder="http://printer:631/ipp/print"
@@ -307,7 +317,7 @@ export function PrintScreen({
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <Label htmlFor="ipp-user">User (optional)</Label>
+                    <Label htmlFor="ipp-user">{t("print.user_optional")}</Label>
                     <Input
                       id="ipp-user"
                       value={ippUser}
@@ -318,7 +328,7 @@ export function PrintScreen({
               )}
               {kind === "spooler" && (
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="spooler-name">Printer queue name</Label>
+                  <Label htmlFor="spooler-name">{t("print.queue_name")}</Label>
                   <Input
                     id="spooler-name"
                     value={spoolerName}
@@ -328,7 +338,7 @@ export function PrintScreen({
               )}
               {kind === "bluetooth" && (
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="bt-address">Address</Label>
+                  <Label htmlFor="bt-address">{t("print.address")}</Label>
                   <Input
                     id="bt-address"
                     placeholder="00:11:22:33:44:55"
@@ -342,11 +352,9 @@ export function PrintScreen({
 
           <Card>
             <CardHeader>
-              <CardTitle>Data</CardTitle>
+              <CardTitle>{t("print.data")}</CardTitle>
               <CardDescription>
-                JSON (one object per record) or CSV (a header row and its rows);{" "}
-                {"{{name}}"} in the template is filled from each record's
-                fields.
+                {t("print.data_note", { field: "{{name}}" })}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
@@ -365,7 +373,7 @@ export function PrintScreen({
                   size="sm"
                   onClick={() => fileInput?.click()}
                 >
-                  Load from file…
+                  {t("print.load_from_file")}
                 </Button>
                 <input
                   ref={setFileInput}
@@ -380,12 +388,12 @@ export function PrintScreen({
                 />
                 {loaded && (
                   <span className="text-caption text-muted-foreground">
-                    loaded {loaded}
+                    {t("print.loaded", { file: loaded })}
                   </span>
                 )}
               </div>
               <div className="flex w-24 flex-col gap-1">
-                <Label htmlFor="copies">Copies</Label>
+                <Label htmlFor="copies">{t("print.copies")}</Label>
                 <Input
                   id="copies"
                   inputMode="numeric"
@@ -400,23 +408,20 @@ export function PrintScreen({
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Preview</CardTitle>
-              <CardDescription>
-                Every page of the prepared job — the same path as the print,
-                nothing touches the wire.
-              </CardDescription>
+              <CardTitle>{t("print.preview")}</CardTitle>
+              <CardDescription>{t("print.preview_note")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex gap-2">
                 <Button onClick={preview} disabled={planning || !printer}>
-                  {planning ? "Preparing…" : "Preview"}
+                  {planning ? t("print.preparing") : t("print.preview")}
                 </Button>
                 <Button
                   variant="secondary"
                   onClick={print}
                   disabled={printing || !printer}
                 >
-                  {printing ? "Printing…" : "Print"}
+                  {printing ? t("print.printing") : t("app.print")}
                 </Button>
               </div>
               {planError && (
@@ -429,15 +434,14 @@ export function PrintScreen({
                   <div className="flex flex-wrap items-center gap-2 text-body-sm text-muted-foreground">
                     <Badge variant="outline">{plan.path}</Badge>
                     <span>
-                      {plan.records} record{plan.records === 1 ? "" : "s"} ·{" "}
-                      {plan.pages} page{plan.pages === 1 ? "" : "s"} ·{" "}
-                      {plan.units} unit{plan.units === 1 ? "" : "s"} ·{" "}
-                      {plan.bytes} B
+                      {t("print.records", { count: plan.records })} ·{" "}
+                      {t("print.pages", { count: plan.pages })} ·{" "}
+                      {t("print.units", { count: plan.units })} · {plan.bytes} B
                     </span>
                   </div>
                   {plan.fallback && (
                     <div className="rounded-md bg-warning-soft px-3 py-2 text-body-sm text-warning">
-                      Fell back from the track's preferred path: {plan.fallback}
+                      {t("print.fallback", { path: plan.fallback })}
                     </div>
                   )}
                   {plan.preview && plan.preview.length > 0 && (

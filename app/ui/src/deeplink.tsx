@@ -14,6 +14,7 @@
  */
 import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { useCallback, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { loadTemplates, parseDeeplink } from "@/api";
 import { mergeTemplates, starters, type AppTemplate } from "@/templates";
 
@@ -59,6 +60,7 @@ export function DeepLinkListener({
   // This run's dispatches: the warm listener and the cold-start read
   // race, and the same URL can reach both.
   const seenThisRun = useRef<Set<string>>(new Set());
+  const { t } = useTranslation();
 
   const dispatch = useCallback(
     async (url: string) => {
@@ -72,16 +74,14 @@ export function DeepLinkListener({
       try {
         const link = await parseDeeplink(url);
         if (!link.template) {
-          onError("That print link named no template — nothing was prepared.");
+          onError(t("deeplink.no_template"));
           return;
         }
         const rows = await loadTemplates().catch(() => []);
         const all = mergeTemplates(starters, rows);
-        const template = all.find((t) => t.name === link.template);
+        const template = all.find((tpl) => tpl.name === link.template);
         if (!template) {
-          onError(
-            `That print link named a template called “${link.template}”, and this app does not have it.`,
-          );
+          onError(t("deeplink.unknown_template", { name: link.template }));
           return;
         }
         onPrint({
@@ -90,10 +90,10 @@ export function DeepLinkListener({
           copies: link.copies,
         });
       } catch (e) {
-        onError(`That print link could not be read: ${String(e)}`);
+        onError(t("deeplink.unreadable", { error: String(e) }));
       }
     },
-    [onPrint, onError],
+    [onPrint, onError, t],
   );
 
   useEffect(() => {

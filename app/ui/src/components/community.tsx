@@ -4,6 +4,7 @@
  * feed — what the last sync applied — so the tabs work offline: the
  * list is whatever the app last saw, and a sync button moves it.
  */
+import { useTranslation } from "react-i18next";
 import type { CommunityTemplate } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ export function CommunityList({
   emptyNote: string;
   actions: CommunityRowActions;
 }) {
+  const { t } = useTranslation();
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
@@ -66,7 +68,7 @@ export function CommunityList({
                     </Badge>
                   </CardTitle>
                   <CardDescription>
-                    by {row.owner}
+                    {t("community.by", { owner: row.owner })}
                     {row.readme ? ` — ${row.readme}` : ""}
                   </CardDescription>
                 </div>
@@ -75,7 +77,7 @@ export function CommunityList({
                     variant="secondary"
                     onClick={() => actions.onOpen(row)}
                   >
-                    Open
+                    {t("community.open")}
                   </Button>
                   {row.saved ? (
                     <Button
@@ -83,14 +85,14 @@ export function CommunityList({
                       disabled={!actions.canSave}
                       onClick={() => actions.onUnsave(row)}
                     >
-                      Unsave
+                      {t("community.unsave")}
                     </Button>
                   ) : (
                     <Button
                       disabled={!actions.canSave}
                       onClick={() => actions.onSave(row)}
                     >
-                      Save
+                      {t("community.save")}
                     </Button>
                   )}
                 </div>

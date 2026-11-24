@@ -1,4 +1,5 @@
 import { Download } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { openExternalUrl, useUpdateCheck } from "@/lib/appUpdate";
 
 /**
@@ -7,9 +8,10 @@ import { openExternalUrl, useUpdateCheck } from "@/lib/appUpdate";
  * here.
  */
 export function UpdateBadge() {
+  const { t } = useTranslation();
   const update = useUpdateCheck();
   if (!update.available) return null;
-  const label = `Update to v${update.version} (opens the release page)`;
+  const label = t("update.available", { version: update.version });
   return (
     <a
       href={update.url}

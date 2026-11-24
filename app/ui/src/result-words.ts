@@ -1,18 +1,21 @@
 /**
- * The job result vocabulary (plan §5.7) in the words and tones the UI
- * shows — one map, shared by the print screen's result card and the
- * recent-jobs list.
+ * The tone half of the job result vocabulary (plan §5.7) — one map,
+ * shared by the print screen's result card and the recent-jobs list.
+ * The words live in the i18n catalog (`result.*`); the display word
+ * comes from `t("result." + result)` at the call site.
  */
-export const RESULT_WORDS: Record<
-  string,
-  { word: string; tone: "success" | "warning" | "danger" }
-> = {
-  confirmed: { word: "Confirmed", tone: "success" },
-  sent_unconfirmed: { word: "Sent, not confirmed", tone: "warning" },
-  partially_printed: { word: "Partially printed", tone: "warning" },
-  failed: { word: "Failed", tone: "danger" },
-  wrong_mode_suspected: { word: "Wrong mode suspected", tone: "danger" },
+const RESULT_TONES: Record<string, "success" | "warning" | "danger"> = {
+  confirmed: "success",
+  sent_unconfirmed: "warning",
+  partially_printed: "warning",
+  failed: "danger",
+  wrong_mode_suspected: "danger",
 };
+
+/** The tone of a result word; an unknown result gets the danger tone. */
+export function resultTone(result: string): "success" | "warning" | "danger" {
+  return RESULT_TONES[result] ?? "danger";
+}
 
 /** The tone's soft-background classes, for a result chip. */
 export function toneClass(tone: "success" | "warning" | "danger"): string {

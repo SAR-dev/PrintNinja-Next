@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   communityTemplates,
   loadRecentJobs,
@@ -49,11 +50,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { UpdateBadge } from "@/components/update-badge";
 import { blankTemplate } from "@/scene/editor-model";
 import { DeepLinkListener } from "@/deeplink";
+import i18n from "@/lib/i18n";
 import { DocumentEditorScreen } from "@/screens/document-editor-screen";
 import { EditorScreen } from "@/screens/editor-screen";
 import { PrintScreen } from "@/screens/print-screen";
 import { SettingsScreen } from "@/screens/settings-screen";
-import { RESULT_WORDS, toneClass } from "@/result-words";
+import { resultTone, toneClass } from "@/result-words";
 import {
   blankDocument,
   mergeTemplates,
@@ -119,7 +121,9 @@ function jobTime(at: number): string {
     d.getMonth() === now.getMonth() &&
     d.getDate() === now.getDate();
   const hm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return sameDay ? `today ${hm}` : `${d.toLocaleDateString()} ${hm}`;
+  return sameDay
+    ? i18n.t("recent.today", { time: hm })
+    : i18n.t("recent.day", { date: d.toLocaleDateString(), time: hm });
 }
 
 /** Put the app in the given theme ("dark" or "light"). */
@@ -140,6 +144,7 @@ type View =
 /** The registry's state in one line: online, who is signed in, and
  * how many operations are waiting for the connection. */
 function RegistryChip({ status }: { status: RegistryStatus }) {
+  const { t } = useTranslation();
   return (
     <span className="flex min-w-0 items-center gap-2 text-caption">
       <span
@@ -147,10 +152,12 @@ function RegistryChip({ status }: { status: RegistryStatus }) {
           status.online ? "bg-success" : "bg-muted-foreground/40"
         }`}
       />
-      {status.online ? "Registry online" : "Registry offline"}
+      {status.online ? t("registry.online") : t("registry.offline")}
       <span className="truncate text-muted-foreground">
-        · {status.handle ?? "not signed in"}
-        {status.pending > 0 ? ` · ${status.pending} waiting` : ""}
+        · {status.handle ?? t("registry.not_signed_in")}
+        {status.pending > 0
+          ? ` · ${t("registry.waiting", { count: status.pending })}`
+          : ""}
       </span>
     </span>
   );
@@ -186,55 +193,58 @@ function TemplatesScreen({
   /** A local-storage failure, in plain words, if there is one. */
   storageError: string | null;
 }) {
+  const { t, i18n } = useTranslation();
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-display font-semibold tracking-tight">
-          PrintNinja
+          {t("app.title")}
         </h1>
-        <p className="text-body text-muted-foreground">
-          Pick a template, enter the data, print.
-        </p>
+        <p className="text-body text-muted-foreground">{t("app.tagline")}</p>
       </header>
 
       <div className="flex flex-col gap-4">
-        {templates.map((t) => {
+        {templates.map((tpl) => {
           const published = publications.some(
-            (p) => p.localTemplateId === t.id,
+            (p) => p.localTemplateId === tpl.id,
           );
           return (
-            <Card key={t.id}>
+            <Card key={tpl.id}>
               <CardHeader className="flex-row items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    {t.name}
+                    {tpl.name}
                     <Badge
-                      variant={t.track === "scene" ? "default" : "secondary"}
+                      variant={tpl.track === "scene" ? "default" : "secondary"}
                     >
-                      {t.track === "scene" ? "scene" : "document"}
+                      {tpl.track === "scene"
+                        ? t("app.track_scene")
+                        : t("app.track_document")}
                     </Badge>
-                    {published && <Badge variant="secondary">published</Badge>}
+                    {published && (
+                      <Badge variant="secondary">{t("app.published")}</Badge>
+                    )}
                   </CardTitle>
-                  <CardDescription>{t.description}</CardDescription>
+                  <CardDescription>{tpl.description}</CardDescription>
                 </div>
                 <div className="flex gap-2">
                   {published ? (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onUnpublish(t)}
+                      onClick={() => onUnpublish(tpl)}
                     >
-                      Unpublish
+                      {t("app.unpublish")}
                     </Button>
                   ) : (
-                    <Button variant="secondary" onClick={() => onPublish(t)}>
-                      Publish
+                    <Button variant="secondary" onClick={() => onPublish(tpl)}>
+                      {t("app.publish")}
                     </Button>
                   )}
-                  <Button variant="secondary" onClick={() => onEdit(t)}>
-                    Edit
+                  <Button variant="secondary" onClick={() => onEdit(tpl)}>
+                    {t("app.edit")}
                   </Button>
-                  <Button onClick={() => onPrint(t)}>Print</Button>
+                  <Button onClick={() => onPrint(tpl)}>{t("app.print")}</Button>
                 </div>
               </CardHeader>
             </Card>
@@ -244,13 +254,12 @@ function TemplatesScreen({
 
       {recent.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-title font-semibold">Recent jobs</h2>
+          <h2 className="text-title font-semibold">{t("recent.title")}</h2>
           <div className="flex flex-col gap-2">
             {recent.map((j) => {
-              const entry = RESULT_WORDS[j.result.result] ?? {
-                word: j.result.result,
-                tone: "danger" as const,
-              };
+              const word = i18n.exists(`result.${j.result.result}`)
+                ? t(`result.${j.result.result}`)
+                : j.result.result;
               const busy = reprintingId === j.id;
               const failed =
                 j.result.result === "failed" ||
@@ -265,18 +274,21 @@ function TemplatesScreen({
                       {j.templateName}
                     </span>
                     <span className="text-caption text-muted-foreground">
-                      {jobTime(j.at)} · {j.copies} cop
-                      {j.copies === 1 ? "y" : "ies"} · {j.profile}
+                      {jobTime(j.at)} ·{" "}
+                      {t("recent.copies", { count: j.copies })} · {j.profile}
                     </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <span
-                      className={`rounded-md px-2 py-1 text-caption font-medium ${toneClass(entry.tone)}`}
+                      className={`rounded-md px-2 py-1 text-caption font-medium ${toneClass(resultTone(j.result.result))}`}
                     >
-                      {entry.word}
+                      {word}
                       {j.result.result === "partially_printed" &&
                       j.result.counts
-                        ? ` — ${j.result.counts[0]} of ${j.result.counts[1]}`
+                        ? ` — ${t("recent.partial", {
+                            printed: j.result.counts[0],
+                            total: j.result.counts[1],
+                          })}`
                         : ""}
                     </span>
                     <Button
@@ -285,7 +297,11 @@ function TemplatesScreen({
                       disabled={busy}
                       onClick={() => onReprint(j)}
                     >
-                      {busy ? "Printing…" : failed ? "Retry" : "Reprint"}
+                      {busy
+                        ? t("recent.printing")
+                        : failed
+                          ? t("recent.retry")
+                          : t("recent.reprint")}
                     </Button>
                   </div>
                 </div>
@@ -298,15 +314,15 @@ function TemplatesScreen({
       <div className="flex items-center justify-between gap-4">
         {storageError ? (
           <p className="text-caption text-danger">
-            Local storage: {storageError}
+            {t("app.local_storage_error", { error: storageError })}
           </p>
         ) : (
           <p className="text-caption text-muted-foreground">
-            Templates and recent jobs are saved on this computer.
+            {t("app.local_storage_note")}
           </p>
         )}
         <Button variant="outline" onClick={onNew}>
-          New template
+          {t("app.new_template")}
         </Button>
       </div>
     </main>
@@ -314,6 +330,7 @@ function TemplatesScreen({
 }
 
 function App() {
+  const { t } = useTranslation();
   const [templates, setTemplates] = useState<AppTemplate[]>(starters);
   const [recent, setRecent] = useState<RecentJob[]>([]);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
@@ -399,13 +416,15 @@ function App() {
     setReprintingId(null);
   };
 
-  const upsert = (t: AppTemplate) => {
+  const upsert = (tpl: AppTemplate) => {
     setTemplates((ts) =>
-      ts.some((x) => x.id === t.id)
-        ? ts.map((x) => (x.id === t.id ? t : x))
-        : [...ts, t],
+      ts.some((x) => x.id === tpl.id)
+        ? ts.map((x) => (x.id === tpl.id ? tpl : x))
+        : [...ts, tpl],
     );
-    saveTemplate(toStoredTemplate(t)).catch((e) => setStorageError(String(e)));
+    saveTemplate(toStoredTemplate(tpl)).catch((e) =>
+      setStorageError(String(e)),
+    );
   };
 
   /** What a sync brings back: the status, the mirror, the
@@ -463,15 +482,15 @@ function App() {
 
   /** Publish a local template: the dialog's words, the document from
    * the store. Signed out, the sign-in dialog comes first. */
-  const openPublish = (t: AppTemplate) => {
+  const openPublish = (tpl: AppTemplate) => {
     if (!registry.handle) {
       setSigninOpen(true);
       return;
     }
-    setPublishName(t.name);
+    setPublishName(tpl.name);
     setPublishSlug("");
-    setPublishReadme(t.description);
-    setPublishing(t);
+    setPublishReadme(tpl.description);
+    setPublishing(tpl);
   };
 
   const doPublish = async () => {
@@ -492,9 +511,9 @@ function App() {
     setPublishingBusy(false);
   };
 
-  const unpublish = async (t: AppTemplate) => {
+  const unpublish = async (tpl: AppTemplate) => {
     try {
-      await unpublishTemplate(t.id);
+      await unpublishTemplate(tpl.id);
       await syncRegistry();
     } catch (e) {
       setRegistryError(String(e));
@@ -522,18 +541,19 @@ function App() {
   /** Open a community template: its local copy when it is saved, a
    * fresh template when it is not — saving it stores it locally. */
   const openCommunity = (row: CommunityTemplate) => {
-    let t: AppTemplate;
+    let tpl: AppTemplate;
     try {
       const copy = templates.find(
         (x) => x.id === `saved-${row.owner}-${row.slug}`,
       );
-      t =
+      tpl =
         copy ??
         ({
           id: `user-${Date.now().toString(36)}`,
           name: row.name,
           description:
-            row.readme || `Saved from the community, by ${row.owner}`,
+            row.readme ||
+            t("registry.saved_from_community", { owner: row.owner }),
           track: row.track === "document" ? "document" : "scene",
           template: JSON.parse(row.template) as AppTemplate["template"],
           sample: row.sample,
@@ -543,9 +563,9 @@ function App() {
       return;
     }
     setView(
-      t.track === "scene"
-        ? { name: "edit", template: t }
-        : { name: "document-edit", template: t },
+      tpl.track === "scene"
+        ? { name: "edit", template: tpl }
+        : { name: "document-edit", template: tpl },
     );
   };
 
@@ -567,11 +587,11 @@ function App() {
     setView({ name: "document-edit", template: blankDocument() });
   };
 
-  const editTemplate = (t: AppTemplate) =>
+  const editTemplate = (tpl: AppTemplate) =>
     setView(
-      t.track === "scene"
-        ? { name: "edit", template: t }
-        : { name: "document-edit", template: t },
+      tpl.track === "scene"
+        ? { name: "edit", template: tpl }
+        : { name: "document-edit", template: tpl },
     );
 
   return (
@@ -585,7 +605,7 @@ function App() {
             size="sm"
             onClick={() => setDeepLinkError(null)}
           >
-            Dismiss
+            {t("common.dismiss")}
           </Button>
         </div>
       )}
@@ -613,8 +633,8 @@ function App() {
         <EditorScreen
           initial={view.template}
           onBack={() => setView({ name: "list" })}
-          onSave={(t) => {
-            upsert(t);
+          onSave={(tpl) => {
+            upsert(tpl);
             setView({ name: "list" });
           }}
         />
@@ -624,8 +644,8 @@ function App() {
         <DocumentEditorScreen
           initial={view.template}
           onBack={() => setView({ name: "list" })}
-          onSave={(t) => {
-            upsert(t);
+          onSave={(tpl) => {
+            upsert(tpl);
             setView({ name: "list" });
           }}
         />
@@ -643,7 +663,7 @@ function App() {
                 disabled={registryBusy}
                 onClick={() => void syncRegistry()}
               >
-                {registryBusy ? "Syncing…" : "Sync"}
+                {registryBusy ? t("registry.syncing") : t("registry.sync")}
               </Button>
               {registry.handle ? (
                 <Button
@@ -651,7 +671,7 @@ function App() {
                   size="sm"
                   onClick={() => void signOut()}
                 >
-                  Sign out
+                  {t("registry.sign_out")}
                 </Button>
               ) : (
                 <Button
@@ -659,7 +679,7 @@ function App() {
                   size="sm"
                   onClick={() => setSigninOpen(true)}
                 >
-                  Sign in
+                  {t("registry.sign_in")}
                 </Button>
               )}
               <Button
@@ -667,7 +687,7 @@ function App() {
                 size="sm"
                 onClick={() => setView({ name: "settings" })}
               >
-                Settings
+                {t("settings.title")}
               </Button>
             </div>
           </div>
@@ -682,9 +702,9 @@ function App() {
             className="mx-auto w-full max-w-3xl px-8"
           >
             <TabsList>
-              <TabsTrigger value="mine">Mine</TabsTrigger>
-              <TabsTrigger value="community">Community</TabsTrigger>
-              <TabsTrigger value="saved">Saved</TabsTrigger>
+              <TabsTrigger value="mine">{t("tabs.mine")}</TabsTrigger>
+              <TabsTrigger value="community">{t("tabs.community")}</TabsTrigger>
+              <TabsTrigger value="saved">{t("tabs.saved")}</TabsTrigger>
             </TabsList>
             <TabsContent value="mine">
               <TemplatesScreen
@@ -692,21 +712,21 @@ function App() {
                 recent={recent}
                 reprintingId={reprintingId}
                 publications={myPublications}
-                onPrint={(t) => setView({ name: "print", template: t })}
+                onPrint={(tpl) => setView({ name: "print", template: tpl })}
                 onEdit={editTemplate}
                 onNew={() => setNewOpen(true)}
                 onReprint={(j) => void reprint(j)}
                 onPublish={openPublish}
-                onUnpublish={(t) => void unpublish(t)}
+                onUnpublish={(tpl) => void unpublish(tpl)}
                 storageError={storageError}
               />
             </TabsContent>
             <TabsContent value="community">
               <CommunityList
-                title="Community"
-                note="Published by everyone on the registry, as the last sync saw them."
+                title={t("tabs.community")}
+                note={t("community.note")}
                 rows={community}
-                emptyNote="Nothing published yet, or the last sync has not run. Press Sync."
+                emptyNote={t("community.empty_note")}
                 actions={{
                   onOpen: openCommunity,
                   onSave: (row) => void saveCommunity(row),
@@ -717,10 +737,10 @@ function App() {
             </TabsContent>
             <TabsContent value="saved">
               <CommunityList
-                title="Saved"
-                note="The community templates your account has saved — each one also lives on this computer."
+                title={t("tabs.saved")}
+                note={t("community.saved_note")}
                 rows={community.filter((row) => row.saved)}
-                emptyNote="Nothing saved yet. Save a template from the Community tab."
+                emptyNote={t("community.saved_empty_note")}
                 actions={{
                   onOpen: openCommunity,
                   onSave: (row) => void saveCommunity(row),
@@ -733,15 +753,14 @@ function App() {
           <Dialog open={signinOpen} onOpenChange={setSigninOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Sign in to the registry</DialogTitle>
+                <DialogTitle>{t("registry.sign_in_title")}</DialogTitle>
                 <DialogDescription>
-                  A handle and a password, no email. The account is for
-                  publishing and saving community templates.
+                  {t("registry.sign_in_description")}
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="signin-handle">Handle</Label>
+                  <Label htmlFor="signin-handle">{t("registry.handle")}</Label>
                   <Input
                     id="signin-handle"
                     value={signinHandle}
@@ -750,7 +769,9 @@ function App() {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="signin-password">Password</Label>
+                  <Label htmlFor="signin-password">
+                    {t("registry.password")}
+                  </Label>
                   <PasswordInput
                     id="signin-password"
                     value={signinPassword}
@@ -762,12 +783,12 @@ function App() {
                 </div>
                 <div className="flex items-center justify-between gap-4">
                   <span className="text-body">
-                    New here? Create the account
+                    {t("registry.create_account")}
                   </span>
                   <Switch
                     checked={signinCreate}
                     onCheckedChange={setSigninCreate}
-                    aria-label="New here? Create the account"
+                    aria-label={t("registry.create_account")}
                   />
                 </div>
               </div>
@@ -777,13 +798,13 @@ function App() {
                   onClick={() => void signIn()}
                 >
                   {signingIn
-                    ? "Signing in…"
+                    ? t("registry.signing_in")
                     : signinCreate
-                      ? "Create and sign in"
-                      : "Sign in"}
+                      ? t("registry.create_and_sign_in")
+                      : t("registry.sign_in")}
                 </Button>
                 <Button variant="ghost" onClick={() => setSigninOpen(false)}>
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -797,16 +818,19 @@ function App() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>
-                  Publish {publishing?.name ?? ""} to the community
+                  {t("registry.publish_title", {
+                    name: publishing?.name ?? "",
+                  })}
                 </DialogTitle>
                 <DialogDescription>
-                  The template goes up as {registry.handle}'s. Leave the slug
-                  empty and it is drafted from the name.
+                  {t("registry.publish_description", {
+                    handle: registry.handle ?? "",
+                  })}
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="publish-name">Name</Label>
+                  <Label htmlFor="publish-name">{t("common.name")}</Label>
                   <Input
                     id="publish-name"
                     value={publishName}
@@ -814,16 +838,16 @@ function App() {
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="publish-slug">Slug</Label>
+                  <Label htmlFor="publish-slug">{t("registry.slug")}</Label>
                   <Input
                     id="publish-slug"
                     value={publishSlug}
                     onChange={(e) => setPublishSlug(e.target.value)}
-                    placeholder="drafted from the name when empty"
+                    placeholder={t("registry.slug_placeholder")}
                   />
                 </div>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="publish-readme">Readme</Label>
+                  <Label htmlFor="publish-readme">{t("registry.readme")}</Label>
                   <Textarea
                     id="publish-readme"
                     value={publishReadme}
@@ -837,10 +861,10 @@ function App() {
                   disabled={publishingBusy || publishName.trim() === ""}
                   onClick={() => void doPublish()}
                 >
-                  {publishingBusy ? "Publishing…" : "Publish"}
+                  {publishingBusy ? t("registry.publishing") : t("app.publish")}
                 </Button>
                 <Button variant="ghost" onClick={() => setPublishing(null)}>
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -848,23 +872,20 @@ function App() {
           <Dialog open={newOpen} onOpenChange={setNewOpen}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>New template</DialogTitle>
+                <DialogTitle>{t("app.new_template")}</DialogTitle>
                 <DialogDescription>
-                  Which track does it use? The track is fixed by the template's
-                  format.
+                  {t("app.new_template_description")}
                 </DialogDescription>
               </DialogHeader>
               <div className="flex flex-col gap-2">
-                <Button onClick={newScene}>
-                  Scene — labels, rolls and pages
-                </Button>
+                <Button onClick={newScene}>{t("app.new_scene")}</Button>
                 <Button variant="secondary" onClick={newDocument}>
-                  Document — HTML/CSS
+                  {t("app.new_document")}
                 </Button>
               </div>
               <DialogFooter>
                 <Button variant="ghost" onClick={() => setNewOpen(false)}>
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               </DialogFooter>
             </DialogContent>
