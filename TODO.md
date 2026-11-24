@@ -14,6 +14,9 @@ spec for the items below.
 
 ## Done
 
+- [x] D6 — PC print screen: sticky summary, distinct Preview (Eye) and
+      Print (Printer) buttons, ⋯ M9 (edit template, save default printer,
+      clear data) (commit 8026908)
 - [x] D5 — editor split into components, element rows with icons +
       ⋯ M8 (reorder/delete), add-element icon toolbar, header inline
       name + unsaved dot + ⋯ M7 (size, save) (commit 42a9af4)
@@ -46,9 +49,6 @@ spec for the items below.
 
 ## Remaining findings, in order
 
-- [ ] D6 — print screen (PC): sticky summary, distinct Preview (`Eye`)
-      and Print (`Printer`) buttons, M9 menu (edit template, save as
-      default printer, clear data)
 - [ ] P6 — print screen (phone): sticky bottom action bar (above the
       bottom nav while visible), result banner
 - [ ] P7 — editor (phone): canvas stays visible, property panel in a
