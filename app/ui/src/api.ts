@@ -368,6 +368,38 @@ export interface Publication {
   publishedAt: number;
 }
 
+/** The browser choice shown in the Diagnostics tab. */
+export interface BrowserInfo {
+  mode: "system" | "managed";
+  managed_path: string | null;
+  version: string | null;
+  system: string[];
+}
+
+/** Which browser the document track uses. */
+export const browserInfo = () => invoke<BrowserInfo>("browser_info");
+
+/** Choose the PC's browser or the downloaded Chromium. */
+export const browserSelect = (mode: BrowserInfo["mode"]) =>
+  invoke<void>("browser_select", { mode });
+
+/** Download Chromium for the document track. */
+export const browserDownload = () => invoke<string>("browser_download_cmd");
+
+/** One event from the app's own log (Diagnostics tab). */
+export interface AppLogEntry {
+  at_ms: number;
+  level: string;
+  target: string;
+  message: string;
+}
+
+/** The app's recent events, newest first. */
+export const appLogs = () => invoke<AppLogEntry[]>("app_logs");
+
+/** Forget the recorded events. */
+export const appLogClear = () => invoke<void>("app_log_clear");
+
 /** The registry server the app talks to, as the app resolves it. */
 export const registryUrl = () => invoke<string>("registry_url");
 
@@ -376,7 +408,9 @@ export const registryLogin = (
   handle: string,
   password: string,
   create: boolean,
-) => invoke<string>("registry_login", { handle, password, create });
+  /** A different shared server to use for this sign-in, if any. */
+  url?: string,
+) => invoke<string>("registry_login", { handle, password, create, url });
 
 /** Sign out of the registry; the local queue keeps waiting. */
 export const registryLogout = () => invoke<void>("registry_logout");

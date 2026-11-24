@@ -10,6 +10,7 @@ import {
   publications,
   publishTemplate,
   registryLogin,
+  registryUrl,
   registryLogout,
   registryRefresh,
   registryStatus,
@@ -65,6 +66,9 @@ import {
 
 /** How many jobs the recent list remembers (the store keeps the same). */
 const RECENT_LIMIT = 10;
+
+/** A shared server baked into the web build, if the distributor set one. */
+const DEFAULT_REGISTRY_URL: string = import.meta.env.VITE_REGISTRY_URL ?? "";
 
 /** The setting that remembers the shipped starters the user deleted,
  * as an id list in JSON. A deleted starter would otherwise come back
@@ -172,6 +176,7 @@ function App() {
   const [signinOpen, setSigninOpen] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [signinHandle, setSigninHandle] = useState("");
+  const [signinUrl, setSigninUrl] = useState(DEFAULT_REGISTRY_URL);
   const [signinPassword, setSigninPassword] = useState("");
   const [signinCreate, setSigninCreate] = useState(false);
   const [publishing, setPublishing] = useState<AppTemplate | null>(null);
@@ -297,10 +302,23 @@ function App() {
     }
   };
 
+  /** Open sign-in with the env default (or the current server) prefilled. */
+  const openSignIn = () => {
+    void registryUrl()
+      .then((current) => setSigninUrl(DEFAULT_REGISTRY_URL || current))
+      .catch(() => setSigninUrl(DEFAULT_REGISTRY_URL));
+    setSigninOpen(true);
+  };
+
   const signIn = async () => {
     setSigningIn(true);
     try {
-      await registryLogin(signinHandle.trim(), signinPassword, signinCreate);
+      await registryLogin(
+        signinHandle.trim(),
+        signinPassword,
+        signinCreate,
+        signinUrl.trim() || undefined,
+      );
       setRegistry(await registryStatus());
       setSigninOpen(false);
       setSigninPassword("");
@@ -315,7 +333,7 @@ function App() {
    * the store. Signed out, the sign-in dialog comes first. */
   const openPublish = (tpl: AppTemplate) => {
     if (!registry.handle) {
-      setSigninOpen(true);
+      openSignIn();
       return;
     }
     setPublishName(tpl.name);
@@ -477,7 +495,7 @@ function App() {
             status={registry}
             busy={registryBusy}
             onSync={() => void syncRegistry()}
-            onSignIn={() => setSigninOpen(true)}
+            onSignIn={openSignIn}
             onSignOut={() => void signOut()}
           />
         </>
@@ -617,6 +635,19 @@ function App() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="signin-url">{t("settings.registry_url")}</Label>
+              <Input
+                id="signin-url"
+                value={signinUrl}
+                onChange={(e) => setSigninUrl(e.target.value)}
+                placeholder={DEFAULT_REGISTRY_URL || undefined}
+                autoComplete="url"
+              />
+              <span className="text-caption text-muted-foreground">
+                {t("registry.server_note")}
+              </span>
+            </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="signin-handle">{t("registry.handle")}</Label>
               <Input

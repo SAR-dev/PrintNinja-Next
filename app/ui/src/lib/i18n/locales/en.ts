@@ -68,6 +68,8 @@ const en = {
     signing_in: "Signing in…",
     sign_out: "Sign out",
     sign_in_title: "Sign in to the registry",
+    server_note:
+      "The shared server to sign in to. Change it here or in Settings → Registry.",
     sign_in_description:
       "A handle and a password, no email. The account is for publishing and saving community templates.",
     handle: "Handle",
@@ -204,6 +206,24 @@ const en = {
     tab_network: "Network",
     tab_data: "Data",
     tab_registry: "Registry",
+    tab_diagnostics: "Diagnostics",
+    browser_title: "Browser for documents",
+    browser_note:
+      "HTML templates print to PDF with a headless browser. Use the one on this PC, or download a private Chromium build and use that.",
+    browser_system: "This PC",
+    browser_managed: "Downloaded Chromium",
+    browser_detected: "Detected: {{path}}",
+    browser_managed_path: "Using: {{path}}",
+    browser_version: "Version {{version}}",
+    browser_download: "Download Chromium",
+    browser_downloading: "Downloading…",
+    logs_title: "Application log",
+    logs_note:
+      "Recent app events, newest first. Nothing leaves this computer unless you download it.",
+    logs_refresh: "Refresh",
+    logs_download: "Download",
+    logs_clear: "Clear",
+    logs_empty: "No events recorded yet.",
     appearance: "Appearance",
     appearance_note:
       "The theme of the whole app. It comes back the same on the next start.",

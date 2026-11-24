@@ -51,16 +51,30 @@ pub enum BrowserError {
     Io(String),
 }
 
-/// Find the browser to print with: the `PRINTNINJA_BROWSER`
-/// environment override first, then the system's own locations.
-pub fn find_browser() -> Result<PathBuf, BrowserError> {
-    let override_ = std::env::var("PRINTNINJA_BROWSER")
-        .ok()
-        .filter(|s| !s.trim().is_empty());
+/// Find the browser to print with: an explicit path first (the app
+/// passes a downloaded Chromium here), then the `PRINTNINJA_BROWSER`
+/// environment override, then the system's own locations.
+pub fn find_browser_with(explicit: Option<&Path>) -> Result<PathBuf, BrowserError> {
+    let override_ = match explicit {
+        Some(p) => Some(p.to_string_lossy().into_owned()),
+        None => std::env::var("PRINTNINJA_BROWSER")
+            .ok()
+            .filter(|s| !s.trim().is_empty()),
+    };
     let (found, searched) = resolve(override_.as_deref(), &candidates());
     found.ok_or(BrowserError::NoBrowser {
         searched: searched.join("; "),
     })
+}
+
+/// The environment override, as the app's default choice.
+pub fn find_browser() -> Result<PathBuf, BrowserError> {
+    find_browser_with(None)
+}
+
+/// The installed browsers the app can offer in Settings.
+pub fn system_browsers() -> Vec<PathBuf> {
+    candidates().into_iter().filter(|p| p.is_file()).collect()
 }
 
 /// The system browser locations, in preference order.
@@ -151,7 +165,16 @@ fn resolve(override_path: Option<&str>, candidates: &[PathBuf]) -> (Option<PathB
 /// `work_dir` holds the temporary HTML, PDF and stderr files; they are
 /// removed whether or not the render worked.
 pub fn render_pdf(html: &str, work_dir: &Path) -> Result<Vec<u8>, BrowserError> {
-    let browser = find_browser()?;
+    render_pdf_with(html, work_dir, None)
+}
+
+/// As [`render_pdf`], with a chosen browser path (a managed download).
+pub fn render_pdf_with(
+    html: &str,
+    work_dir: &Path,
+    browser: Option<&Path>,
+) -> Result<Vec<u8>, BrowserError> {
+    let browser = find_browser_with(browser)?;
     fs::create_dir_all(work_dir).map_err(|e| BrowserError::Io(e.to_string()))?;
     let html_path = work_dir.join("job.html");
     let pdf_path = work_dir.join("job.pdf");
@@ -166,7 +189,7 @@ pub fn render_pdf(html: &str, work_dir: &Path) -> Result<Vec<u8>, BrowserError> 
     // stderr goes to a file, not a pipe: a chatty browser must never be
     // able to fill the pipe and hang the render.
     let mut child = Command::new(&browser)
-        .args(print_args(&pdf_path, &file_url(&html_path)))
+        .args(print_args(&pdf_path, &file_url(&html_path), work_dir))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::from(stderr_file))
@@ -221,16 +244,31 @@ pub fn render_pdf(html: &str, work_dir: &Path) -> Result<Vec<u8>, BrowserError> 
     clean(&html_path);
     clean(&pdf_path);
     clean(&stderr_path);
+    let profile = work_dir.join("profile");
+    if profile.exists() {
+        let _ = fs::remove_dir_all(&profile);
+    }
     result
 }
 
 /// The one-shot print-to-pdf command line.
-fn print_args(pdf_path: &Path, html_url: &str) -> Vec<String> {
+fn print_args(pdf_path: &Path, html_url: &str, work_dir: &Path) -> Vec<String> {
+    // A fresh profile per job avoids a running browser taking over the
+    // request (Edge startup boost), and the background services are
+    // switched off so the one-shot print starts and finishes quickly.
+    let profile = work_dir.join("profile");
     let mut args = vec![
         "--headless=new".to_string(),
         "--disable-gpu".to_string(),
         "--no-first-run".to_string(),
         "--no-default-browser-check".to_string(),
+        "--disable-background-networking".to_string(),
+        "--disable-component-update".to_string(),
+        "--disable-default-apps".to_string(),
+        "--disable-extensions".to_string(),
+        "--disable-sync".to_string(),
+        "--mute-audio".to_string(),
+        format!("--user-data-dir={}", profile.display()),
         "--print-to-pdf-no-header".to_string(),
         "--no-pdf-header-footer".to_string(),
     ];
@@ -318,11 +356,13 @@ mod tests {
     #[test]
     fn the_print_args_carry_the_document_and_the_output_path() {
         let pdf = Path::new("/tmp/work/job.pdf");
-        let args = print_args(pdf, "file:///tmp/work/job.html");
+        let args = print_args(pdf, "file:///tmp/work/job.html", Path::new("/tmp/work"));
         assert!(args.contains(&"--headless=new".to_string()));
         assert!(args.contains(&"--no-pdf-header-footer".to_string()));
         assert!(args.iter().any(|a| a.starts_with("--print-to-pdf=")));
         assert_eq!(*args.last().unwrap(), "file:///tmp/work/job.html");
+        assert!(args.iter().any(|a| a == "--disable-background-networking"));
+        assert!(args.iter().any(|a| a.starts_with("--user-data-dir=")));
         // The output path in the flag is the exact file we will read.
         assert!(args
             .iter()
