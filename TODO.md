@@ -14,6 +14,8 @@ spec for the items below.
 
 ## Done
 
+- [x] P4 — account menu M1 in the top bar: one menu replacing
+      RegistryChip + Sync + Sign out/Sign in + UpdateBadge (commit 6b3c0c8)
 - [x] P1 — phone template card actions wrap (commit c449aa2)
 - [x] P2 — stacked phone tab strips size to their triggers (commit 173ef13)
 - [x] P5 — real back arrow in page headers, icon undo/redo in the scene
@@ -30,8 +32,6 @@ spec for the items below.
 
 ## Remaining findings, in order
 
-- [ ] P4 — account menu M1 in the top bar: one menu replacing
-      RegistryChip + Sync + Sign out/Sign in + UpdateBadge
 - [ ] D3 — PC sidebar: group the items, count badges (jobs, community
       saved), Settings pinned to the bottom
 - [ ] D4 — PC top bar: brand + version on the left, a status dot + the
@@ -85,9 +85,19 @@ spec for the items below.
 
 ## Notes
 
+- Tooling on this machine (2026-11-24): `cargo` is not installed, so
+  `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings`
+  cannot run locally — run them in CI or install Rust. The Rust suite
+  itself runs in Docker (`pnpm test:rust`); no native full-suite run.
+- Playwright on a fresh box needs both `pnpm exec playwright install
+  chromium` and `pnpm exec playwright install-deps chromium` (the first
+  `pnpm shots` run failed on a missing `libatk-1.0.so.0`); after that the
+  full matrix passes. The `graphify` CLI is now installed via pip
+  (`python3 -m pip install graphifyy`), so `graphify update .` works.
 - Screenshots: `pnpm shots` from the repo root (app must not be on port
   1420); the fake-bridge seed in `scripts/screenshots.mjs` keeps the
-  working-shop state.
+  working-shop state. The account-menu view was added in P4; `pnpm
+  shots --views account-menu` renders just that view.
 - Keep pre-existing unrelated working-tree changes out of commits
   (e.g. the `app/gen/schemas/*.json` Tauri build artifacts).
 - i18n: every new key goes into both `en.ts` and `ja.ts`
