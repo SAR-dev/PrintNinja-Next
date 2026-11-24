@@ -14,6 +14,8 @@ spec for the items below.
 
 ## Done
 
+- [x] D3 — PC sidebar: grouped items, job and community-saved count
+      badges, Settings pinned above Collapse (commit 32d4531)
 - [x] P4 — account menu M1 in the top bar: one menu replacing
       RegistryChip + Sync + Sign out/Sign in + UpdateBadge (commit 6b3c0c8)
 - [x] P1 — phone template card actions wrap (commit c449aa2)
@@ -32,8 +34,6 @@ spec for the items below.
 
 ## Remaining findings, in order
 
-- [ ] D3 — PC sidebar: group the items, count badges (jobs, community
-      saved), Settings pinned to the bottom
 - [ ] D4 — PC top bar: brand + version on the left, a status dot + the
       account menu on the right
 - [ ] D1 — icon system: `app/ui/src/lib/icons.ts` registry + `IconButton`
