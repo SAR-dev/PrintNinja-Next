@@ -40,6 +40,9 @@ const en = {
     aria: "Primary",
     skip: "Skip to content",
     templates: "Templates",
+    jobs: "Jobs",
+    printers: "Printers",
+    community: "Community",
     settings: "Settings",
     collapse: "Collapse",
     expand: "Expand",
@@ -70,19 +73,16 @@ const en = {
     publishing: "Publishing…",
     saved_from_community: "Saved from the community, by {{owner}}",
   },
-  tabs: {
-    mine: "Mine",
-    community: "Community",
-    saved: "Saved",
-  },
   community: {
     note: "Published by everyone on the registry, as the last sync saw them.",
+    filter_all: "All",
+    filter_saved: "Saved",
     empty_note:
       "Nothing published yet, or the last sync has not run. Press Sync.",
     saved_note:
       "The community templates your account has saved — each one also lives on this computer.",
     saved_empty_note:
-      "Nothing saved yet. Save a template from the Community tab.",
+      "Nothing saved yet. Save a template from the community list.",
     by: "by {{owner}}",
     open: "Open",
     save: "Save",
@@ -90,6 +90,8 @@ const en = {
   },
   recent: {
     title: "Recent jobs",
+    note: "The last ten prints, newest first.",
+    empty: "Nothing yet — the ten last prints appear here.",
     today: "today {{time}}",
     day: "{{date}} {{time}}",
     copies_one: "{{count}} copy",
@@ -177,9 +179,8 @@ const en = {
   },
   settings: {
     title: "Settings",
-    subtitle: "How the app looks and starts, and how each printer is paced.",
+    subtitle: "How the app looks and starts, and its network and registry.",
     tab_general: "General",
-    tab_printers: "Printers",
     tab_network: "Network",
     tab_data: "Data",
     tab_registry: "Registry",

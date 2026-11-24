@@ -1,9 +1,10 @@
 /**
- * The app shell, the old app's design language: a top bar with the
- * brand and the account's indicators, a collapsible sidebar on the
- * left (a strip under the top bar on small screens), and the content
- * scroller the page headers stick to. The view state machine stays
- * in App; the shell only knows which nav item is active.
+ * The app shell: a top bar with the brand and the account's
+ * indicators, a collapsible sidebar on the left on the PC, a bottom
+ * tab bar on the phone (plan P3 — the old strip under the top bar is
+ * gone), and the content scroller the page headers stick to. The view
+ * state machine stays in App; the shell only knows which nav item is
+ * active and whether the view is contextual.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { ChevronRight, Printer } from "lucide-react";
@@ -11,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { getAppVersion } from "@/lib/appUpdate";
 import { NAV_ITEMS, type NavKey } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+import { BottomNav } from "./bottom-nav";
 
 const SIDEBAR_KEY = "printninja-sidebar-collapsed";
 
@@ -22,10 +24,19 @@ interface LayoutProps {
   /** The top bar's right side (registry chip, update badge, sync,
    * sign in/out). */
   topbar?: ReactNode;
+  /** True on contextual screens (print, edit): the phone's bottom
+   * tab bar is off, the parent's destination stays highlighted. */
+  contextual?: boolean;
   children: ReactNode;
 }
 
-export function Layout({ active, onNavigate, topbar, children }: LayoutProps) {
+export function Layout({
+  active,
+  onNavigate,
+  topbar,
+  contextual = false,
+  children,
+}: LayoutProps) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
@@ -81,33 +92,6 @@ export function Layout({ active, onNavigate, topbar, children }: LayoutProps) {
           {topbar}
         </div>
       </header>
-
-      <nav
-        aria-label={t("nav.aria")}
-        className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-card px-2 py-1.5 md:hidden"
-      >
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const isActive = active === item.key;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => onNavigate(item.key)}
-              aria-current={isActive ? "page" : undefined}
-              className={cn(
-                "flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-sm transition-colors",
-                isActive
-                  ? "bg-accent font-medium text-accent-foreground"
-                  : "text-foreground/80 hover:bg-muted hover:text-foreground",
-              )}
-            >
-              <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
-              {t(item.labelKey)}
-            </button>
-          );
-        })}
-      </nav>
 
       <div className="flex min-h-0 flex-1">
         <aside
@@ -183,6 +167,8 @@ export function Layout({ active, onNavigate, topbar, children }: LayoutProps) {
           </div>
         </main>
       </div>
+
+      <BottomNav active={active} onNavigate={onNavigate} hidden={contextual} />
     </div>
   );
 }

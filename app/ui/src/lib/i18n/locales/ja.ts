@@ -43,6 +43,9 @@ const ja: EnStrings = {
     aria: "メインナビゲーション",
     skip: "コンテンツへスキップ",
     templates: "テンプレート",
+    jobs: "ジョブ",
+    printers: "プリンター",
+    community: "コミュニティ",
     settings: "設定",
     collapse: "たたむ",
     expand: "広げる",
@@ -73,19 +76,16 @@ const ja: EnStrings = {
     publishing: "公開中…",
     saved_from_community: "コミュニティから保存 — {{owner}} さん",
   },
-  tabs: {
-    mine: "マイテンプレート",
-    community: "コミュニティ",
-    saved: "保存済み",
-  },
   community: {
     note: "レジストリに公開された全員のテンプレートです（最終同期時点の見た目）。",
+    filter_all: "すべて",
+    filter_saved: "保存済み",
     empty_note:
       "まだ公開されたものがないか、最終同期が実行されていません。同期を押してください。",
     saved_note:
       "このアカウントが保存したコミュニティテンプレートです — 各テンプレートはこのコンピュータにもあります。",
     saved_empty_note:
-      "まだ保存されたものはありません。コミュニティタブから保存してください。",
+      "まだ保存されたものはありません。コミュニティのリストから保存してください。",
     by: "{{owner}} さん",
     open: "開く",
     save: "保存",
@@ -93,6 +93,8 @@ const ja: EnStrings = {
   },
   recent: {
     title: "最近のジョブ",
+    note: "直近の10件の印刷です。新しい順です。",
+    empty: "まだありません — 直近の10件の印刷がここに表示されます。",
     today: "本日 {{time}}",
     day: "{{date}} {{time}}",
     copies_one: "{{count}} 部",
@@ -180,9 +182,8 @@ const ja: EnStrings = {
   },
   settings: {
     title: "設定",
-    subtitle: "外観と起動、各プリンターのペース設定。",
+    subtitle: "外観と起動、ネットワークとレジストリの設定。",
     tab_general: "一般",
-    tab_printers: "プリンター",
     tab_network: "ネットワーク",
     tab_data: "データ",
     tab_registry: "レジストリ",

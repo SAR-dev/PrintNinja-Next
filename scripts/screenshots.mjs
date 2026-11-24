@@ -51,6 +51,8 @@ const wantIndex = !hasFlag("no-index");
 
 const VIEWS = [
   "list",
+  "jobs",
+  "printers",
   "community",
   "saved",
   "print",
@@ -59,7 +61,6 @@ const VIEWS = [
   "edit",
   "document-edit",
   "settings",
-  "settings-printers",
   "new-template",
   "publish-dialog",
   "signin-dialog",
@@ -82,6 +83,8 @@ const L = {
     settings: "Settings",
     signIn: "Sign in",
     signOut: "Sign out",
+    jobs: "Jobs",
+    recentTitle: "Recent jobs",
     tabCommunity: "Community",
     tabSaved: "Saved",
     tabPrinters: "Printers",
@@ -99,6 +102,8 @@ const L = {
     settings: "設定",
     signIn: "サインイン",
     signOut: "サインアウト",
+    jobs: "ジョブ",
+    recentTitle: "最近のジョブ",
     tabCommunity: "コミュニティ",
     tabSaved: "保存済み",
     tabPrinters: "プリンター",
@@ -354,13 +359,41 @@ async function navigate(page, view, l) {
   switch (view) {
     case "list":
       break;
+    case "jobs":
+      await page
+        .getByRole("button", { name: l.jobs, exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: l.recentTitle, level: 1 })
+        .waitFor();
+      break;
+    case "printers":
+      await page
+        .getByRole("button", { name: l.tabPrinters, exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: l.savedPrinters, level: 2 })
+        .waitFor();
+      break;
     case "community":
-      await page.getByRole("tab", { name: l.tabCommunity }).click();
-      await page.getByRole("heading", { name: l.tabCommunity }).waitFor();
+      await page
+        .getByRole("button", { name: l.tabCommunity, exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: l.tabCommunity, level: 1 })
+        .waitFor();
       break;
     case "saved":
-      await page.getByRole("tab", { name: l.tabSaved }).click();
-      await page.getByRole("heading", { name: l.tabSaved }).waitFor();
+      await page
+        .getByRole("button", { name: l.tabCommunity, exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: l.tabCommunity, level: 1 })
+        .waitFor();
+      await page
+        .getByRole("button", { name: l.tabSaved, exact: true })
+        .click();
+      await page.getByRole("heading", { name: l.tabSaved, level: 2 }).waitFor();
       break;
     case "print":
     case "print-preview":
@@ -403,16 +436,6 @@ async function navigate(page, view, l) {
         .getByRole("button", { name: l.settings, exact: true })
         .click();
       await page.getByRole("heading", { name: l.settings, level: 1 }).waitFor();
-      break;
-    case "settings-printers":
-      await page
-        .getByRole("button", { name: l.settings, exact: true })
-        .click();
-      await page.getByRole("heading", { name: l.settings, level: 1 }).waitFor();
-      await page.getByRole("tab", { name: l.tabPrinters, exact: true }).click();
-      await page
-        .getByRole("heading", { name: l.savedPrinters, level: 2 })
-        .waitFor();
       break;
     case "new-template":
       await page.getByRole("button", { name: l.newTemplate }).click();

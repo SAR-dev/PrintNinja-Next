@@ -603,6 +603,13 @@ Unreleased.
 
 ### Changed
 
+- App: the phone gets a bottom tab bar with the five destinations
+  (Templates, Jobs, Printers, Community, Settings) instead of the tab
+  strip under the top bar, and Jobs, Printers and Community become
+  top-level destinations — Jobs is the last ten prints with reprint,
+  Printers is the saved-printer settings moved out of Settings, and
+  Community has All and Saved filter chips where the list view's tabs
+  were
 - CI: the registry image is published to GHCR only on `v*` release tags
   (`server-publish-release`) — the `server-publish` job that pushed
   `latest` and a `sha-<short>` tag on every push to `main` is removed,

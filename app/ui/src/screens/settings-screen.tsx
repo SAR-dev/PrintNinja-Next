@@ -1,19 +1,16 @@
 /**
  * Settings (plan phase 7): appearance (light/dark), start-with-
  * computer, the LAN switch with device pairing (plan phase 8, LAN
- * increment), the printers the user has saved and their per-printer
- * delivery overrides, and the community registry's address. The
- * screen is split into pages — General, Printers, Network, Data and
- * Registry — so each concern has its own room instead of one long
- * scroll. A delivery field left empty uses the profile's own value,
- * shown as the placeholder.
+ * increment), and the community registry's address. The screen is
+ * split into pages — General, Network, Data and Registry — so each
+ * concern has its own room instead of one long scroll. The printers
+ * the user has saved have their own destination now (plan P3).
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   beginPairing,
   isAutostart,
-  listPrinters,
   loadSettings,
   pairedDevices,
   registryUrl,
@@ -21,10 +18,8 @@ import {
   saveSetting,
   setAutostart,
   type PairedDevice,
-  type ProfileInfo,
 } from "@/api";
 import { PageHeader } from "@/components/page-header";
-import { PrintersCard } from "@/components/printers-card";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -39,9 +34,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { setLanguage } from "@/lib/i18n";
 
-export function SettingsScreen({ onBack }: { onBack: () => void }) {
+export function SettingsScreen() {
   const { t, i18n } = useTranslation();
-  const [printers, setPrinters] = useState<ProfileInfo[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [autostart, setAutostartState] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,9 +55,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const blockPrivateOn = settings["data.block_private_ips"] !== "false";
 
   useEffect(() => {
-    listPrinters()
-      .then(setPrinters)
-      .catch((e) => setError(String(e)));
     loadSettings()
       .then((rows) => {
         setSettings(rows);
@@ -149,7 +140,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       <PageHeader
         title={t("settings.title")}
         description={t("settings.subtitle")}
-        back={{ onClick: onBack, label: t("common.back") }}
       />
 
       {error && (
@@ -161,9 +151,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       <Tabs defaultValue="general">
         <TabsList className="flex-wrap">
           <TabsTrigger value="general">{t("settings.tab_general")}</TabsTrigger>
-          <TabsTrigger value="printers">
-            {t("settings.tab_printers")}
-          </TabsTrigger>
           <TabsTrigger value="network">{t("settings.tab_network")}</TabsTrigger>
           <TabsTrigger value="data">{t("settings.tab_data")}</TabsTrigger>
           <TabsTrigger value="registry">
@@ -230,15 +217,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               />
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="printers" className="flex flex-col gap-6">
-          <PrintersCard
-            printers={printers}
-            settings={settings}
-            save={save}
-            setError={setError}
-          />
         </TabsContent>
 
         <TabsContent value="network" className="flex flex-col gap-6">

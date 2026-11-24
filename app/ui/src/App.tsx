@@ -26,18 +26,8 @@ import {
   unpublishTemplate,
   unsaveCommunityTemplate,
 } from "@/api";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { CommunityList } from "@/components/community";
 import { Layout } from "@/components/layout";
-import { PageHeader } from "@/components/page-header";
-import { JobResultBadge, StatusBadge } from "@/components/status-badge";
+import { StatusBadge } from "@/components/status-badge";
 import {
   Dialog,
   DialogContent,
@@ -46,20 +36,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { UpdateBadge } from "@/components/update-badge";
 import { blankTemplate } from "@/scene/editor-model";
 import { DeepLinkListener } from "@/deeplink";
-import i18n from "@/lib/i18n";
+import type { NavKey } from "@/lib/nav";
 import { DocumentEditorScreen } from "@/screens/document-editor-screen";
 import { EditorScreen } from "@/screens/editor-screen";
+import { CommunityScreen } from "@/screens/community-screen";
+import { JobsScreen } from "@/screens/jobs-screen";
 import { PrintScreen } from "@/screens/print-screen";
+import { PrintersScreen } from "@/screens/printers-screen";
 import { SettingsScreen } from "@/screens/settings-screen";
+import { TemplatesScreen } from "@/screens/templates-screen";
 import {
   blankDocument,
   mergeTemplates,
@@ -87,9 +81,6 @@ function deletedIds(s: Record<string, string>): string[] {
     return [];
   }
 }
-
-/** The list view's tabs. */
-type Tab = "mine" | "community" | "saved";
 
 /** The stored row for a template: the template as JSON text. */
 function toStoredTemplate(t: AppTemplate): StoredTemplate {
@@ -134,19 +125,6 @@ function fromStoredJob(row: StoredJob): RecentJob {
   };
 }
 
-function jobTime(at: number): string {
-  const d = new Date(at);
-  const now = new Date();
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-  const hm = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return sameDay
-    ? i18n.t("recent.today", { time: hm })
-    : i18n.t("recent.day", { date: d.toLocaleDateString(), time: hm });
-}
-
 /** Put the app in the given theme ("dark" or "light"). */
 function applyTheme(theme: string) {
   document.documentElement.dataset.theme = theme === "dark" ? "dark" : "";
@@ -159,12 +137,13 @@ type PrintPrefill = {
   dataUrl?: string;
 };
 
+/** The destinations are the nav items; the contextual views (print,
+ * edit) carry their parent's key so it stays highlighted. */
 type View =
-  | { name: "list" }
+  | { name: NavKey }
   | { name: "print"; template: AppTemplate; prefill?: PrintPrefill }
-  | { name: "edit"; template: AppTemplate }
-  | { name: "document-edit"; template: AppTemplate }
-  | { name: "settings" };
+  | { name: "edit"; template: AppTemplate; from?: NavKey }
+  | { name: "document-edit"; template: AppTemplate; from?: NavKey };
 
 /** The registry's state in the top bar: its reach, who is signed
  * in, and how many operations are waiting for the connection. */
@@ -183,180 +162,19 @@ function RegistryChip({ status }: { status: RegistryStatus }) {
   );
 }
 
-function TemplatesScreen({
-  templates,
-  recent,
-  reprintingId,
-  publications,
-  onPrint,
-  onEdit,
-  onReprint,
-  onPublish,
-  onUnpublish,
-  onDelete,
-  storageError,
-}: {
-  templates: AppTemplate[];
-  recent: RecentJob[];
-  /** The job whose reprint is running, if any. */
-  reprintingId: string | null;
-  /** This device's publications, keyed by their local template. */
-  publications: Publication[];
-  onPrint: (t: AppTemplate) => void;
-  onEdit: (t: AppTemplate) => void;
-  onReprint: (job: RecentJob) => void;
-  /** Publish a local template; the App opens the sign-in dialog when
-   * the account is not signed in. */
-  onPublish: (t: AppTemplate) => void;
-  onUnpublish: (t: AppTemplate) => void;
-  onDelete: (t: AppTemplate) => void;
-  /** A local-storage failure, in plain words, if there is one. */
-  storageError: string | null;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4">
-        {templates.map((tpl) => {
-          const published = publications.some(
-            (p) => p.localTemplateId === tpl.id,
-          );
-          return (
-            <Card key={tpl.id}>
-              <CardHeader className="flex-row items-center justify-between max-md:flex-col max-md:items-stretch">
-                <div className="min-w-0">
-                  <CardTitle className="flex flex-wrap items-center gap-2">
-                    {tpl.name}
-                    <Badge
-                      variant={tpl.track === "scene" ? "default" : "secondary"}
-                    >
-                      {tpl.track === "scene"
-                        ? t("app.track_scene")
-                        : t("app.track_document")}
-                    </Badge>
-                    {published && (
-                      <Badge variant="secondary">{t("app.published")}</Badge>
-                    )}
-                  </CardTitle>
-                  <CardDescription>{tpl.description}</CardDescription>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2 max-md:justify-start">
-                  {published ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onUnpublish(tpl)}
-                    >
-                      {t("app.unpublish")}
-                    </Button>
-                  ) : (
-                    <Button variant="secondary" onClick={() => onPublish(tpl)}>
-                      {t("app.publish")}
-                    </Button>
-                  )}
-                  <Button variant="secondary" onClick={() => onEdit(tpl)}>
-                    {t("app.edit")}
-                  </Button>
-                  <Button onClick={() => onPrint(tpl)}>{t("app.print")}</Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={published}
-                    title={published ? t("app.delete_blocked") : undefined}
-                    onClick={() => onDelete(tpl)}
-                  >
-                    {t("common.delete")}
-                  </Button>
-                </div>
-              </CardHeader>
-            </Card>
-          );
-        })}
-      </div>
-
-      {recent.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-title font-semibold">{t("recent.title")}</h2>
-          <div className="flex flex-col gap-2">
-            {recent.map((j) => {
-              const busy = reprintingId === j.id;
-              const failed =
-                j.result.result === "failed" ||
-                j.result.result === "wrong_mode_suspected";
-              return (
-                <div
-                  key={j.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3"
-                >
-                  <div className="flex min-w-0 flex-col">
-                    <span className="truncate text-body font-medium">
-                      {j.templateName}
-                    </span>
-                    <span className="text-caption text-muted-foreground">
-                      {jobTime(j.at)} ·{" "}
-                      {t("recent.copies", { count: j.copies })} · {j.profile}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <JobResultBadge result={j.result.result} />
-                    {j.result.result === "partially_printed" &&
-                      j.result.counts && (
-                        <span className="text-caption text-muted-foreground">
-                          {t("recent.partial", {
-                            printed: j.result.counts[0],
-                            total: j.result.counts[1],
-                          })}
-                        </span>
-                      )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => onReprint(j)}
-                    >
-                      {busy
-                        ? t("recent.printing")
-                        : failed
-                          ? t("recent.retry")
-                          : t("recent.reprint")}
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      <div>
-        {storageError ? (
-          <p className="text-caption text-danger">
-            {t("app.local_storage_error", { error: storageError })}
-          </p>
-        ) : (
-          <p className="text-caption text-muted-foreground">
-            {t("app.local_storage_note")}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function App() {
   const { t } = useTranslation();
   const [templates, setTemplates] = useState<AppTemplate[]>(starters);
   const [recent, setRecent] = useState<RecentJob[]>([]);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
   const [storageError, setStorageError] = useState<string | null>(null);
-  const [view, setView] = useState<View>({ name: "list" });
+  const [view, setView] = useState<View>({ name: "templates" });
   const [newOpen, setNewOpen] = useState(false);
   /** A deep link that could not be honoured, in plain words. */
   const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
 
-  // The community registry (plan phase 9): the tab, the mirror's rows,
+  // The community registry (plan phase 9): the destination's rows,
   // this device's publications, and the sign-in and publish dialogs.
-  const [tab, setTab] = useState<Tab>("mine");
   const [registry, setRegistry] = useState<RegistryStatus>({
     handle: null,
     online: false,
@@ -597,8 +415,8 @@ function App() {
     }
     setView(
       tpl.track === "scene"
-        ? { name: "edit", template: tpl }
-        : { name: "document-edit", template: tpl },
+        ? { name: "edit", template: tpl, from: "community" }
+        : { name: "document-edit", template: tpl, from: "community" },
     );
   };
 
@@ -627,12 +445,22 @@ function App() {
         : { name: "document-edit", template: tpl },
     );
 
+  const contextual =
+    view.name === "print" ||
+    view.name === "edit" ||
+    view.name === "document-edit";
+  const active: NavKey =
+    view.name === "edit" || view.name === "document-edit"
+      ? view.from ?? "templates"
+      : view.name === "print"
+        ? "templates"
+        : view.name;
+
   return (
     <Layout
-      active={view.name === "settings" ? "settings" : "templates"}
-      onNavigate={(key) =>
-        setView(key === "settings" ? { name: "settings" } : { name: "list" })
-      }
+      active={active}
+      contextual={contextual}
+      onNavigate={(key) => setView({ name: key } as View)}
       topbar={
         <>
           <RegistryChip status={registry} />
@@ -688,243 +516,207 @@ function App() {
         }
         onError={setDeepLinkError}
       />
+      {registryError && (
+        <div className="mx-auto w-full max-w-3xl">
+          <p className="rounded-lg border border-danger bg-danger-soft px-4 py-3 text-body-sm text-danger">
+            {registryError}
+          </p>
+        </div>
+      )}
       {view.name === "print" ? (
         <PrintScreen
           starter={view.template}
           prefill={view.prefill}
-          onBack={() => setView({ name: "list" })}
+          onBack={() => setView({ name: "templates" })}
           onJob={recordJob}
         />
       ) : view.name === "edit" ? (
         <EditorScreen
           initial={view.template}
-          onBack={() => setView({ name: "list" })}
+          onBack={() => setView({ name: view.from ?? "templates" })}
           onSave={(tpl) => {
             upsert(tpl);
-            setView({ name: "list" });
+            setView({ name: view.from ?? "templates" });
           }}
         />
-      ) : view.name === "settings" ? (
-        <SettingsScreen onBack={() => setView({ name: "list" })} />
       ) : view.name === "document-edit" ? (
         <DocumentEditorScreen
           initial={view.template}
-          onBack={() => setView({ name: "list" })}
+          onBack={() => setView({ name: view.from ?? "templates" })}
           onSave={(tpl) => {
             upsert(tpl);
-            setView({ name: "list" });
+            setView({ name: view.from ?? "templates" });
           }}
         />
+      ) : view.name === "jobs" ? (
+        <JobsScreen
+          recent={recent}
+          reprintingId={reprintingId}
+          onReprint={(j) => void reprint(j)}
+        />
+      ) : view.name === "printers" ? (
+        <PrintersScreen />
+      ) : view.name === "community" ? (
+        <CommunityScreen
+          rows={community}
+          actions={{
+            onOpen: openCommunity,
+            onSave: (row) => void saveCommunity(row),
+            onUnsave: (row) => void unsaveCommunity(row),
+            canSave: !!registry.handle,
+          }}
+        />
+      ) : view.name === "settings" ? (
+        <SettingsScreen />
       ) : (
-        <>
-          {registryError && (
-            <div className="mx-auto w-full max-w-3xl">
-              <p className="rounded-lg border border-danger bg-danger-soft px-4 py-3 text-body-sm text-danger">
-                {registryError}
-              </p>
-            </div>
-          )}
-          <PageHeader title={t("app.title")} description={t("app.tagline")}>
-            <Button onClick={() => setNewOpen(true)}>
-              {t("app.new_template")}
-            </Button>
-          </PageHeader>
-          <Tabs
-            value={tab}
-            onValueChange={(v) => setTab(v as Tab)}
-            className="mx-auto flex w-full max-w-3xl flex-col gap-4"
-          >
-            <TabsList>
-              <TabsTrigger value="mine">{t("tabs.mine")}</TabsTrigger>
-              <TabsTrigger value="community">{t("tabs.community")}</TabsTrigger>
-              <TabsTrigger value="saved">{t("tabs.saved")}</TabsTrigger>
-            </TabsList>
-            <TabsContent value="mine">
-              <TemplatesScreen
-                templates={templates}
-                recent={recent}
-                reprintingId={reprintingId}
-                publications={myPublications}
-                onPrint={(tpl) => setView({ name: "print", template: tpl })}
-                onEdit={editTemplate}
-                onReprint={(j) => void reprint(j)}
-                onPublish={openPublish}
-                onUnpublish={(tpl) => void unpublish(tpl)}
-                onDelete={(tpl) => void deleteTpl(tpl)}
-                storageError={storageError}
-              />
-            </TabsContent>
-            <TabsContent value="community">
-              <CommunityList
-                title={t("tabs.community")}
-                note={t("community.note")}
-                rows={community}
-                emptyNote={t("community.empty_note")}
-                actions={{
-                  onOpen: openCommunity,
-                  onSave: (row) => void saveCommunity(row),
-                  onUnsave: (row) => void unsaveCommunity(row),
-                  canSave: !!registry.handle,
-                }}
-              />
-            </TabsContent>
-            <TabsContent value="saved">
-              <CommunityList
-                title={t("tabs.saved")}
-                note={t("community.saved_note")}
-                rows={community.filter((row) => row.saved)}
-                emptyNote={t("community.saved_empty_note")}
-                actions={{
-                  onOpen: openCommunity,
-                  onSave: (row) => void saveCommunity(row),
-                  onUnsave: (row) => void unsaveCommunity(row),
-                  canSave: !!registry.handle,
-                }}
-              />
-            </TabsContent>
-          </Tabs>
-          <Dialog open={signinOpen} onOpenChange={setSigninOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t("registry.sign_in_title")}</DialogTitle>
-                <DialogDescription>
-                  {t("registry.sign_in_description")}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="signin-handle">{t("registry.handle")}</Label>
-                  <Input
-                    id="signin-handle"
-                    value={signinHandle}
-                    onChange={(e) => setSigninHandle(e.target.value)}
-                    autoComplete="username"
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="signin-password">
-                    {t("registry.password")}
-                  </Label>
-                  <PasswordInput
-                    id="signin-password"
-                    value={signinPassword}
-                    onChange={(e) => setSigninPassword(e.target.value)}
-                    autoComplete={
-                      signinCreate ? "new-password" : "current-password"
-                    }
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-body">
-                    {t("registry.create_account")}
-                  </span>
-                  <Switch
-                    checked={signinCreate}
-                    onCheckedChange={setSigninCreate}
-                    aria-label={t("registry.create_account")}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  disabled={signingIn || signinHandle.trim() === ""}
-                  onClick={() => void signIn()}
-                >
-                  {signingIn
-                    ? t("registry.signing_in")
-                    : signinCreate
-                      ? t("registry.create_and_sign_in")
-                      : t("registry.sign_in")}
-                </Button>
-                <Button variant="ghost" onClick={() => setSigninOpen(false)}>
-                  {t("common.cancel")}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <Dialog
-            open={publishing !== null}
-            onOpenChange={(open) => {
-              if (!open) setPublishing(null);
-            }}
-          >
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {t("registry.publish_title", {
-                    name: publishing?.name ?? "",
-                  })}
-                </DialogTitle>
-                <DialogDescription>
-                  {t("registry.publish_description", {
-                    handle: registry.handle ?? "",
-                  })}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="publish-name">{t("common.name")}</Label>
-                  <Input
-                    id="publish-name"
-                    value={publishName}
-                    onChange={(e) => setPublishName(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="publish-slug">{t("registry.slug")}</Label>
-                  <Input
-                    id="publish-slug"
-                    value={publishSlug}
-                    onChange={(e) => setPublishSlug(e.target.value)}
-                    placeholder={t("registry.slug_placeholder")}
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="publish-readme">{t("registry.readme")}</Label>
-                  <Textarea
-                    id="publish-readme"
-                    value={publishReadme}
-                    onChange={(e) => setPublishReadme(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  disabled={publishingBusy || publishName.trim() === ""}
-                  onClick={() => void doPublish()}
-                >
-                  {publishingBusy ? t("registry.publishing") : t("app.publish")}
-                </Button>
-                <Button variant="ghost" onClick={() => setPublishing(null)}>
-                  {t("common.cancel")}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <Dialog open={newOpen} onOpenChange={setNewOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{t("app.new_template")}</DialogTitle>
-                <DialogDescription>
-                  {t("app.new_template_description")}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col gap-2">
-                <Button onClick={newScene}>{t("app.new_scene")}</Button>
-                <Button variant="secondary" onClick={newDocument}>
-                  {t("app.new_document")}
-                </Button>
-              </div>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setNewOpen(false)}>
-                  {t("common.cancel")}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </>
+        <TemplatesScreen
+          templates={templates}
+          publications={myPublications}
+          storageError={storageError}
+          onNew={() => setNewOpen(true)}
+          onPrint={(tpl) => setView({ name: "print", template: tpl })}
+          onEdit={editTemplate}
+          onPublish={openPublish}
+          onUnpublish={(tpl) => void unpublish(tpl)}
+          onDelete={(tpl) => void deleteTpl(tpl)}
+        />
       )}
+      <Dialog open={signinOpen} onOpenChange={setSigninOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("registry.sign_in_title")}</DialogTitle>
+            <DialogDescription>
+              {t("registry.sign_in_description")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="signin-handle">{t("registry.handle")}</Label>
+              <Input
+                id="signin-handle"
+                value={signinHandle}
+                onChange={(e) => setSigninHandle(e.target.value)}
+                autoComplete="username"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="signin-password">{t("registry.password")}</Label>
+              <PasswordInput
+                id="signin-password"
+                value={signinPassword}
+                onChange={(e) => setSigninPassword(e.target.value)}
+                autoComplete={
+                  signinCreate ? "new-password" : "current-password"
+                }
+              />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-body">{t("registry.create_account")}</span>
+              <Switch
+                checked={signinCreate}
+                onCheckedChange={setSigninCreate}
+                aria-label={t("registry.create_account")}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={signingIn || signinHandle.trim() === ""}
+              onClick={() => void signIn()}
+            >
+              {signingIn
+                ? t("registry.signing_in")
+                : signinCreate
+                  ? t("registry.create_and_sign_in")
+                  : t("registry.sign_in")}
+            </Button>
+            <Button variant="ghost" onClick={() => setSigninOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={publishing !== null}
+        onOpenChange={(open) => {
+          if (!open) setPublishing(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t("registry.publish_title", {
+                name: publishing?.name ?? "",
+              })}
+            </DialogTitle>
+            <DialogDescription>
+              {t("registry.publish_description", {
+                handle: registry.handle ?? "",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="publish-name">{t("common.name")}</Label>
+              <Input
+                id="publish-name"
+                value={publishName}
+                onChange={(e) => setPublishName(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="publish-slug">{t("registry.slug")}</Label>
+              <Input
+                id="publish-slug"
+                value={publishSlug}
+                onChange={(e) => setPublishSlug(e.target.value)}
+                placeholder={t("registry.slug_placeholder")}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="publish-readme">{t("registry.readme")}</Label>
+              <Textarea
+                id="publish-readme"
+                value={publishReadme}
+                onChange={(e) => setPublishReadme(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={publishingBusy || publishName.trim() === ""}
+              onClick={() => void doPublish()}
+            >
+              {publishingBusy ? t("registry.publishing") : t("app.publish")}
+            </Button>
+            <Button variant="ghost" onClick={() => setPublishing(null)}>
+              {t("common.cancel")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("app.new_template")}</DialogTitle>
+            <DialogDescription>
+              {t("app.new_template_description")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Button onClick={newScene}>{t("app.new_scene")}</Button>
+            <Button variant="secondary" onClick={newDocument}>
+              {t("app.new_document")}
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setNewOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

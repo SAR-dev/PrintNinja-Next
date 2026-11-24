@@ -1,10 +1,22 @@
 /**
- * The sidebar's navigation: one item per top-level view. The
- * contextual views (print, edit) keep their parent's item active.
+ * The top-level destinations, one item each. The contextual views
+ * (print, edit) keep their parent's item active.
  */
-import { Library, Settings, type LucideIcon } from "lucide-react";
+import {
+  Globe,
+  History,
+  Library,
+  Printer,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 
-export type NavKey = "templates" | "settings";
+export type NavKey =
+  | "templates"
+  | "jobs"
+  | "printers"
+  | "community"
+  | "settings";
 
 export interface NavItem {
   key: NavKey;
@@ -15,5 +27,8 @@ export interface NavItem {
 
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: "templates", icon: Library, labelKey: "nav.templates" },
+  { key: "jobs", icon: History, labelKey: "nav.jobs" },
+  { key: "printers", icon: Printer, labelKey: "nav.printers" },
+  { key: "community", icon: Globe, labelKey: "nav.community" },
   { key: "settings", icon: Settings, labelKey: "nav.settings" },
 ];
