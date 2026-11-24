@@ -3,7 +3,7 @@
 > **Who this is for:** anyone who tried something that did not work, and wants to know whether it is a bug or simply not built yet.
 > **What you will know after reading:** what PrintNinja (next) cannot do today, what you will see when you try, and what to do instead.
 
-These are not bugs. They are things the plan looks at and says "not yet" (or, in one case, "not ever"). The phase numbers refer to [`docs/planned/REFACTORING-PLAN.md`](./planned/REFACTORING-PLAN.md).
+These are not bugs. They are things the roadmap looks at and says "not yet" (or, in one case, "not ever"). The phase numbers refer to [`docs/ROADMAP.md`](ROADMAP.md).
 
 **Jump to:** [💻 Platforms](#-platforms) · [🖨️ Printers](#️-printers) · [🌍 Registry and accounts](#-registry-and-accounts) · [📱 The app itself](#-the-app-itself)
 

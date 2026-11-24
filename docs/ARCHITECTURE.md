@@ -10,8 +10,8 @@
 PrintNinja (next) is a local-first app that turns **templates** into
 **printer jobs** for thermal, receipt, label and page printers — plus a
 small **community registry server** for sharing templates. 🖨️ It is the
-greenfield rewrite of PrintNinja, built phase by phase under
-[`planned/REFACTORING-PLAN.md`](planned/REFACTORING-PLAN.md). The top
+greenfield rewrite of PrintNinja; the remaining work is tracked in
+[`ROADMAP.md`](ROADMAP.md). The top
 priority is reliability: a job either prints, or the user gets a specific
 reason why it did not. "Sent" must never mean "the printer silently threw
 it away".
@@ -228,7 +228,7 @@ place.
 
 | You want to… | Read |
 | --- | --- |
-| Know *why* the architecture is shaped this way | [`planned/REFACTORING-PLAN.md`](planned/REFACTORING-PLAN.md) |
+| Know *why* the architecture is shaped this way | this document (§ Design decisions, where present) and [`ROADMAP.md`](ROADMAP.md) for what is still to come |
 | Run, build or change the codebase | [`DEVELOPMENT.md`](DEVELOPMENT.md) |
 | Run or self-host the registry | [`REGISTRY.md`](REGISTRY.md) |
 | Cut a release | [`RELEASE.md`](RELEASE.md) |

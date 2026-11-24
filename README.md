@@ -8,7 +8,7 @@
 
 A local-first app that turns templates into printer jobs for thermal, receipt, label and page printers — with a community registry for sharing templates.
 
-🚧 **Status: pre-release** — the greenfield rewrite of [PrintNinja](https://github.com/SAR-dev/PrintNinja), built phase by phase under [`docs/planned/REFACTORING-PLAN.md`](docs/planned/REFACTORING-PLAN.md). Windows 🪟 and Linux 🐧 for now, Android 🤖 is next.
+🚧 **Status: pre-release** — the greenfield rewrite of [PrintNinja](https://github.com/SAR-dev/PrintNinja). Windows 🪟 and Linux 🐧 for now, Android 🤖 is next; the remaining work is tracked in [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 [🚀 How a print works](#-how-a-print-works) ·
 [✨ What you get](#-what-you-get) ·

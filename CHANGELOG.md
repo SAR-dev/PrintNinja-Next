@@ -485,3 +485,12 @@ Unreleased.
 - Version bumped to 0.0.1 in every carrier: Tauri refuses `0.0.0` for
   Android packages, and the `android-check` build was rejected with
   "the default value 0.0.0 is not allowed"
+- Docs: the old `docs/planned/REFACTORING-PLAN.md` is replaced by
+  `docs/ROADMAP.md`, a checklist of the remaining work (phase 10
+  hardening and hardware verification, phase 11 Android, and the
+  pre-release prerequisites); all cross-references updated
+- CI: esbuild's build script is now approved in
+  `pnpm-workspace.yaml` (`allowBuilds`, via `pnpm approve-builds`) —
+  pnpm 12 fails `pnpm install --frozen-lockfile` in CI whenever a
+  dependency's build scripts are only ignored, which broke
+  `android-check`

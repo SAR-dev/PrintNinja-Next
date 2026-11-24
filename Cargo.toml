@@ -1,6 +1,6 @@
 # PrintNinja (next) — Rust workspace.
 #
-# Layout per docs/planned/REFACTORING-PLAN.md §5.11:
+# Layout (see docs/ARCHITECTURE.md):
 #   core/{scene,browser,render,planner,profiles,encoders,transport,job}
 #   app/                Tauri shell (Windows, Linux; Android in phase 11)
 #   tests/golden        golden-file harness + committed golden byte files

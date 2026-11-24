@@ -93,9 +93,9 @@ Before committing a Rust or app change:
 - The app-level Android work (transport adapters, background print
   service) is **phase 11**; CI already compiles and bundles the app.
 
-## The plan
+## The roadmap
 
-`docs/planned/REFACTORING-PLAN.md` is the governing plan: two template
-tracks (`scene` / `html`, html = `page` media only), profiles as data,
-honest job result states, phase 0–11. Check the plan's open items before
-hardware or platform work.
+`docs/ROADMAP.md` is the remaining-work checklist: phase 10 (hardening,
+hardware verification, first release candidate) and phase 11 (Android).
+The architecture rationale lives in `docs/ARCHITECTURE.md`. Check the
+roadmap before hardware or platform work.
