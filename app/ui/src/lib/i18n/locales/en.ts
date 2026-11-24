@@ -252,6 +252,13 @@ const en = {
     saved_printers_note:
       "Printers you added from a scan or by hand. Pick one on the print screen to fill in the profile and the transport.",
     remove_printer: "Remove",
+    test_print: "Test print",
+    test_text: "Print text label",
+    test_page: "Print test page",
+    test_printing: "Printing…",
+    test_done: "The test print went through.",
+    test_failed: "The test print failed.",
+    test_error: "The test print failed: {{error}}",
     scanning: "Scanning…",
     scan_system: "Scan system",
     scan_network: "Scan network",

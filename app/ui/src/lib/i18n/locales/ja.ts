@@ -256,6 +256,13 @@ const ja: EnStrings = {
     saved_printers_note:
       "スキャンまたは手動で追加したプリンターです。印刷画面で選ぶと、プロファイルと送受信経路が埋められます。",
     remove_printer: "削除",
+    test_print: "テスト印刷",
+    test_text: "文字ラベルを印刷",
+    test_page: "テストページを印刷",
+    test_printing: "印刷中…",
+    test_done: "テスト印刷は成功しました。",
+    test_failed: "テスト印刷は失敗しました。",
+    test_error: "テスト印刷に失敗しました: {{error}}",
     scanning: "スキャン中…",
     scan_system: "システムをスキャン",
     scan_network: "ネットワークをスキャン",

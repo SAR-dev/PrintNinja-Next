@@ -10,6 +10,9 @@ Unreleased.
 
 ### Added
 
+- App: a Test print menu on each saved printer (text label or A4 page)
+  that sends a one-record job through the saved profile and transport
+  and shows the honest result
 - App: a PC top-bar search field that filters the Templates list (no
   command palette), and a ⋯ menu on each recent job (M4: reprint,
   retry, open template, copy reason)

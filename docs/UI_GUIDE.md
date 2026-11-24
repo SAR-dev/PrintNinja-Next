@@ -82,8 +82,10 @@ and **Copy reason** (enabled when the result has one). Reprint re-sends the
 exact same job — same template, data and transport.
 
 **Printers** — *Printers you added from a scan or by hand.* Scan system, scan
-network or add manually; each found row has **Use**, each saved row
-**Remove**. Below, one card per printer sets **Chunk size (bytes)**, **Pause
+network or add manually; each found row has **Use**, each saved row has a
+**Test print** menu (**Print text label** or **Print test page**) and
+**Remove**. A test sends one tiny job through that printer's saved profile
+and transport, then shows the honest result under the row. Below, one card per printer sets **Chunk size (bytes)**, **Pause
 between chunks (ms)** and **Close delay (ms)**, with **Reset to the profile's
 values** when any override is set.
 

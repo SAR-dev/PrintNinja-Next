@@ -57,6 +57,8 @@ const VIEWS = [
   "jobs",
   "job-menu",
   "printers",
+  "test-print",
+  "test-print-done",
   "community",
   "saved",
   "print",
@@ -87,6 +89,8 @@ const L = {
   en: {
     print: "Print",
     edit: "Edit",
+    testPrint: "Test print",
+    testText: "Print text label",
     search: "Search templates",
     searchResultsOne: "1 matching",
     openTemplate: "Open template",
@@ -118,6 +122,8 @@ const L = {
   ja: {
     print: "印刷",
     edit: "編集",
+    testPrint: "テスト印刷",
+    testText: "文字ラベルを印刷",
     more: "その他の操作",
     duplicate: "複製",
     moveUp: "上へ移動",
@@ -407,6 +413,17 @@ async function navigate(page, view, l) {
       await page
         .getByRole("heading", { name: l.recentTitle, level: 1 })
         .waitFor();
+      break;
+    case "test-print":
+      await navigate(page, "printers", l);
+      await page.getByRole("button", { name: l.testPrint, exact: true }).first().click();
+      await page.getByRole("menuitem", { name: l.testText, exact: true }).first().waitFor();
+      break;
+    case "test-print-done":
+      await navigate(page, "printers", l);
+      await page.getByRole("button", { name: l.testPrint, exact: true }).first().click();
+      await page.getByRole("menuitem", { name: l.testText, exact: true }).first().click();
+      await page.locator('[data-status]').first().waitFor();
       break;
     case "printers":
       await page

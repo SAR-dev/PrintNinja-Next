@@ -27,9 +27,6 @@ Points that cannot be finished until a decision is made sit in the
 - [ ] **TLS transports**: `ipps://` / `https://` endpoints (the
       discovery already marks them and warns the user until this
       lands).
-- [ ] **Test print** — one-click "print a test page" (page or text)
-      from the saved-printer card, so a newly added printer is proven
-      before the first real job (the old app's `test_printer`).
 - [ ] **Capability probe on add** — when a printer is found or typed
       in, offer a detect that queries the (not yet saved) device and
       suggests the language and profile instead of the user picking by

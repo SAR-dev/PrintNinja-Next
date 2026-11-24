@@ -9,8 +9,11 @@
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import {
   listSavedPrinters,
+  printJob,
+  type JobReport,
   removePrinter,
   savePrinter,
   scanNetworkPrinters,
@@ -21,6 +24,8 @@ import {
   type SystemPrinter,
   type Transport,
 } from "@/api";
+import { JobResultBadge } from "@/components/status-badge";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -101,6 +106,34 @@ const transportOf = (d: Draft): Transport => {
   }
 };
 
+/** A tiny scene template that proves a saved printer works. The page
+ *  version stays on the scene/PDF path, so it needs no browser. */
+function testTemplate(kind: "text" | "page") {
+  const page = kind === "page";
+  return {
+    format: "scene" as const,
+    media: page
+      ? { kind: "page" as const, width_mm: 210, height_mm: 297 }
+      : { kind: "label" as const, width_mm: 40, height_mm: 50 },
+    fields: [],
+    elements: [
+      {
+        type: "text" as const,
+        at: { x_mm: page ? 20 : 3, y_mm: page ? 20 : 5 },
+        size: { w_mm: page ? 170 : 34, h_mm: page ? 20 : 6 },
+        content: page ? "PrintNinja test page" : "PrintNinja test",
+        style: { size_mm: page ? 8 : 3.5 },
+      },
+      {
+        type: "line" as const,
+        at: { x_mm: page ? 20 : 3, y_mm: page ? 45 : 14 },
+        length_mm: page ? 170 : 34,
+        thickness_mm: 0.2,
+      },
+    ],
+  };
+}
+
 export function PrintersCard({
   printers,
   settings,
@@ -122,6 +155,8 @@ export function PrintersCard({
   const [draft, setDraft] = useState<Draft | null>(null);
   /** A plain-words note about the draft, when one applies. */
   const [draftHint, setDraftHint] = useState<string | null>(null);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, JobReport>>({});
 
   useEffect(() => {
     listSavedPrinters()
@@ -156,6 +191,37 @@ export function PrintersCard({
     void removePrinter(name)
       .then(refreshSaved)
       .catch((e) => setError(String(e)));
+  };
+
+  /** Print a tiny job with this printer's saved profile and transport. */
+  const testPrint = (
+    name: string,
+    model: string,
+    transport: string,
+    kind: "text" | "page",
+  ) => {
+    setTesting(name);
+    void printJob(
+      JSON.stringify(testTemplate(kind)),
+      model,
+      '[{"name":"test"}]',
+      1,
+      JSON.parse(transport),
+    )
+      .then((report) => {
+        setTestResults((r) => ({ ...r, [name]: report }));
+        if (
+          report.result === "failed" ||
+          report.result === "wrong_mode_suspected"
+        )
+          toast.error(report.reason ?? t("settings.test_failed"));
+        else toast.success(t("settings.test_done"));
+      })
+      .catch((e) => {
+        setError(t("settings.test_error", { error: String(e) }));
+        toast.error(String(e));
+      })
+      .finally(() => setTesting(null));
   };
 
   /** A system queue fills the form: its name is the spooler's name. */
@@ -244,22 +310,58 @@ export function PrintersCard({
               {saved.map((p) => (
                 <div
                   key={p.name}
-                  className="flex items-center justify-between gap-4"
+                  className="flex flex-col gap-1 rounded-md border bg-background px-3 py-2"
                 >
-                  <span className="text-body">
-                    {p.name}
-                    <span className="text-caption text-muted-foreground">
-                      {" "}
-                      · {p.model}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-body">
+                      {p.name}
+                      <span className="text-caption text-muted-foreground">
+                        {" "}
+                        · {p.model}
+                      </span>
                     </span>
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => drop(p.name)}
-                  >
-                    {t("settings.remove_printer")}
-                  </Button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      {testing === p.name && (
+                        <span className="text-caption text-muted-foreground">
+                          {t("settings.test_printing")}
+                        </span>
+                      )}
+                      <ActionMenu
+                        label={t("settings.test_print")}
+                        items={[
+                          {
+                            label: t("settings.test_text"),
+                            icon: "print",
+                            onSelect: () =>
+                              testPrint(p.name, p.model, p.transport, "text"),
+                          },
+                          {
+                            label: t("settings.test_page"),
+                            icon: "preview",
+                            onSelect: () =>
+                              testPrint(p.name, p.model, p.transport, "page"),
+                          },
+                        ]}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => drop(p.name)}
+                      >
+                        {t("settings.remove_printer")}
+                      </Button>
+                    </div>
+                  </div>
+                  {testResults[p.name] && (
+                    <div className="flex items-center gap-2">
+                      <JobResultBadge result={testResults[p.name].result} />
+                      {testResults[p.name].reason && (
+                        <span className="text-caption text-muted-foreground">
+                          {testResults[p.name].reason}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
