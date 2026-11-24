@@ -1,7 +1,7 @@
 {
   "name": "printninja-next",
   "private": true,
-  "version": "0.0.1",
+  "version": "2026.1124.0",
   "scripts": {
     "dev": "pnpm --dir app/ui dev",
     "build": "pnpm --dir app/ui build",
