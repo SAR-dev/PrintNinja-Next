@@ -9,6 +9,7 @@
 
 mod api;
 mod app_log;
+mod browser_download;
 mod deeplink;
 mod discovery;
 mod fetcher;
@@ -35,9 +36,28 @@ use tauri::{AppHandle, Manager, State};
 #[cfg(not(target_os = "android"))]
 use tauri_plugin_autostart::ManagerExt;
 
+/// Settings keys for the browser choice (Diagnostics tab).
+pub const BROWSER_MODE_KEY: &str = "browser.mode";
+pub const BROWSER_PATH_KEY: &str = "browser.path";
+
+/// The browser path to hand the renderer: only a downloaded Chromium
+/// overrides auto-detection when the user picked "managed" and the
+/// file still exists.
+pub(crate) fn browser_override(settings: &BTreeMap<String, String>) -> Option<PathBuf> {
+    if settings.get(BROWSER_MODE_KEY).map(String::as_str) != Some("managed") {
+        return None;
+    }
+    settings
+        .get(BROWSER_PATH_KEY)
+        .map(|p| PathBuf::from(p.trim()))
+        .filter(|p| p.is_file())
+}
+
+pub use browser_download::BrowserInfo;
 pub use pipeline::{
-    delivery_key, factory, load_profiles, prepare_units, print_units, profile_infos, report_of,
-    JobReport, PipelineError, PrepareReport, ProfileInfo, Transport, Units,
+    delivery_key, factory, load_profiles, prepare_units, prepare_units_with_browser, print_units,
+    profile_infos, report_of, JobReport, PipelineError, PrepareReport, ProfileInfo, Transport,
+    Units,
 };
 pub use registry::RegistryStatus;
 pub use store::{CommunityTemplate, PairedDevice, Publication, Store, StoredJob, StoredTemplate};
@@ -212,8 +232,10 @@ async fn plan_job(
     let (profile, template, records) =
         load_inputs(&state.profiles, &store, &template, &profile, &data)?;
     let (profile, template, records) = (profile.clone(), template.clone(), records.clone());
+    let browser = browser_override(&store.load_settings().unwrap_or_default());
     let result = tauri::async_runtime::spawn_blocking(move || {
-        prepare_units(&template, &profile, &records, copies).map(|units| units.report)
+        prepare_units_with_browser(&template, &profile, &records, copies, browser.as_deref())
+            .map(|units| units.report)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -249,8 +271,10 @@ async fn print_job(
         load_inputs(&state.profiles, &store, &template, &profile, &data)?;
     let (profile, template, records) = (profile.clone(), template.clone(), records.clone());
     let profile_model = profile.profile.model.clone();
+    let browser = browser_override(&store.load_settings().unwrap_or_default());
     let report = tauri::async_runtime::spawn_blocking(move || {
-        let units = prepare_units(&template, &profile, &records, copies)?;
+        let units =
+            prepare_units_with_browser(&template, &profile, &records, copies, browser.as_deref())?;
         let factory = factory(&transport, units.document_format);
         let result: JobResult = print_units(&units.spec, &profile, factory);
         Ok::<_, PipelineError>(report_of(result))
@@ -323,6 +347,48 @@ fn load_recent_jobs(state: State<'_, Arc<Store>>) -> Result<Vec<StoredJob>, Stri
 #[tauri::command]
 fn remember_job(state: State<'_, Arc<Store>>, job: StoredJob) -> Result<(), String> {
     state.remember_job(&job)
+}
+
+/// The browser choice shown in the Diagnostics tab.
+#[tauri::command]
+fn browser_info(state: State<'_, Arc<Store>>) -> Result<BrowserInfo, String> {
+    Ok(browser_download::info(&state.load_settings()?))
+}
+
+/// Choose the PC's browser or a previously downloaded Chromium.
+#[tauri::command]
+fn browser_select(state: State<'_, Arc<Store>>, mode: String) -> Result<(), String> {
+    if mode != "system" && mode != "managed" {
+        return Err("unknown browser choice".into());
+    }
+    if mode == "managed" {
+        let settings = state.load_settings()?;
+        let path = settings
+            .get(BROWSER_PATH_KEY)
+            .map(|p| PathBuf::from(p.trim()))
+            .filter(|p| p.is_file())
+            .ok_or("download Chromium before selecting it")?;
+        app_log::push(
+            "info",
+            "browser",
+            format!("using managed browser {}", path.display()),
+        );
+    } else {
+        app_log::push("info", "browser", "using the PC's browser");
+    }
+    state.save_setting(BROWSER_MODE_KEY, &mode)
+}
+
+/// Download Chromium for the document track, on explicit request.
+#[tauri::command]
+async fn browser_download_cmd(
+    state: State<'_, Arc<Store>>,
+    app: AppHandle,
+) -> Result<String, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let path = browser_download::download(&data_dir, &state).await?;
+    app_log::push("info", "browser", format!("downloaded Chromium at {path}"));
+    Ok(path)
 }
 
 /// The app's own recent events, for the Diagnostics settings tab.
@@ -761,6 +827,9 @@ pub fn run() {
             remember_job,
             load_settings,
             save_setting,
+            browser_info,
+            browser_select,
+            browser_download_cmd,
             app_logs,
             app_log_clear,
             is_autostart,

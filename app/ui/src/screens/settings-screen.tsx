@@ -11,6 +11,10 @@ import { useTranslation } from "react-i18next";
 import {
   appLogClear,
   appLogs,
+  browserDownload,
+  browserInfo,
+  browserSelect,
+  type BrowserInfo,
   type AppLogEntry,
   beginPairing,
   isAutostart,
@@ -55,6 +59,9 @@ export function SettingsScreen() {
   const [registryDefault, setRegistryDefault] = useState("");
   const [logs, setLogs] = useState<AppLogEntry[]>([]);
   const [logError, setLogError] = useState<string | null>(null);
+  const [browser, setBrowser] = useState<BrowserInfo | null>(null);
+  const [browserBusy, setBrowserBusy] = useState(false);
+  const [browserError, setBrowserError] = useState<string | null>(null);
 
   const lanOn = settings["api.lan"] === "true";
   // Absent means on: the guarded fetcher is the default.
@@ -108,6 +115,29 @@ export function SettingsScreen() {
   };
 
   useEffect(refreshLogs, []);
+
+  const refreshBrowser = () => {
+    void browserInfo()
+      .then(setBrowser)
+      .catch((e) => setBrowserError(String(e)));
+  };
+
+  useEffect(refreshBrowser, []);
+
+  const chooseBrowser = (mode: BrowserInfo["mode"]) => {
+    void browserSelect(mode)
+      .then(refreshBrowser)
+      .catch((e) => setBrowserError(String(e)));
+  };
+
+  const downloadBrowser = () => {
+    setBrowserBusy(true);
+    setBrowserError(null);
+    void browserDownload()
+      .then(refreshBrowser)
+      .catch((e) => setBrowserError(String(e)))
+      .finally(() => setBrowserBusy(false));
+  };
 
   const downloadLogs = () => {
     const text = logs
@@ -409,6 +439,54 @@ export function SettingsScreen() {
           <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:!inline">
             {t("settings.tab_diagnostics")}
           </h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("settings.browser_title")}</CardTitle>
+              <CardDescription>{t("settings.browser_note")}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <Segmented
+                label={t("settings.browser_title")}
+                value={browser?.mode ?? "system"}
+                onChange={chooseBrowser}
+                options={[
+                  { value: "system", label: t("settings.browser_system") },
+                  { value: "managed", label: t("settings.browser_managed") },
+                ]}
+              />
+              <p className="text-caption text-muted-foreground">
+                {browser?.system[0]
+                  ? t("settings.browser_detected", { path: browser.system[0] })
+                  : ""}
+              </p>
+              {browser?.managed_path && (
+                <p className="text-caption text-muted-foreground">
+                  {t("settings.browser_managed_path", {
+                    path: browser.managed_path,
+                  })}
+                  {browser.version
+                    ? ` — ${t("settings.browser_version", { version: browser.version })}`
+                    : ""}
+                </p>
+              )}
+              {browserError && (
+                <p className="text-caption text-danger">{browserError}</p>
+              )}
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={browserBusy}
+                  onClick={downloadBrowser}
+                >
+                  {browserBusy
+                    ? t("settings.browser_downloading")
+                    : t("settings.browser_download")}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>{t("settings.logs_title")}</CardTitle>

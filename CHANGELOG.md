@@ -10,6 +10,9 @@ Unreleased.
 
 ### Added
 
+- App: a browser choice in Diagnostics — keep the PC's own browser or
+  download a managed Chromium build for the document track; the PDF
+  render now uses a fresh profile and background services off
 - App: an in-memory application log with a Diagnostics tab in Settings
   to view, refresh, download and clear recent events
 - App: a PC top-bar search field that filters the Templates list (no

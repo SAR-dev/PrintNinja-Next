@@ -150,6 +150,9 @@ const state = {
   online: seed.registryStatus?.online ?? true,
   community: (seed.community ?? []).map((r) => ({ ...r })),
   publications: (seed.publications ?? []).map((p) => ({ ...p })),
+  browserMode: "system",
+  browserPath: null as string | null,
+  browserVersion: null as string | null,
   logs: [
     {
       at_ms: Date.UTC(2026, 10, 24, 12, 0, 0),
@@ -394,6 +397,21 @@ async function invoke(
       return plan(a);
     case "print_job":
       return { result: "confirmed", counts: null, reason: null };
+    case "browser_info":
+      return {
+        mode: state.browserMode,
+        managed_path: state.browserPath,
+        version: state.browserVersion,
+        system: ["/usr/bin/chromium"],
+      };
+    case "browser_select":
+      state.browserMode = String(a.mode);
+      return undefined;
+    case "browser_download_cmd":
+      state.browserPath = "/home/user/.local/share/PrintNinja/browser/chrome";
+      state.browserVersion = "141.0.0.0";
+      state.browserMode = "managed";
+      return state.browserPath;
     case "app_logs":
       return state.logs;
     case "app_log_clear":

@@ -56,8 +56,7 @@ use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
 use crate::pairing::{self, PairingWindow};
 use crate::pipeline::{
-    factory, prepare_units, print_units, profile_infos, report_of, with_delivery_overrides,
-    JobReport, Transport,
+    factory, print_units, profile_infos, report_of, with_delivery_overrides, JobReport, Transport,
 };
 use crate::store::{ApiJob, PairedDevice, Store};
 
@@ -484,7 +483,14 @@ fn run_api_job_blocking(state: &ApiState, job: &ApiJob) -> JobReport {
         Ok(records) => records,
         Err(e) => return failed(&e.to_string()),
     };
-    let units = match prepare_units(&template, &profile, &records, job.copies) {
+    let browser = crate::browser_override(&settings);
+    let units = match crate::prepare_units_with_browser(
+        &template,
+        &profile,
+        &records,
+        job.copies,
+        browser.as_deref(),
+    ) {
         Ok(units) => units,
         Err(e) => return failed(&e.to_string()),
     };

@@ -291,6 +291,18 @@ pub fn prepare_units(
     records: &Records,
     copies: u32,
 ) -> Result<Units, PipelineError> {
+    prepare_units_with_browser(template, profile, records, copies, None)
+}
+
+/// As [`prepare_units`], with a chosen browser path for the document
+/// track (the managed Chromium from Settings) instead of auto-detect.
+pub fn prepare_units_with_browser(
+    template: &Template,
+    profile: &Profile,
+    records: &Records,
+    copies: u32,
+    browser: Option<&std::path::Path>,
+) -> Result<Units, PipelineError> {
     template
         .validate()
         .map_err(|e| PipelineError::Template(e.to_string()))?;
@@ -333,7 +345,7 @@ pub fn prepare_units(
             let mut units = Vec::new();
             for record in &records.0 {
                 let doc = substitute(html, record);
-                let pdf = pn_browser::render_pdf(&doc, &scratch_dir())
+                let pdf = pn_browser::render_pdf_with(&doc, &scratch_dir(), browser)
                     .map_err(|e| PipelineError::Document(e.to_string()))?;
                 units.push(pdf);
             }

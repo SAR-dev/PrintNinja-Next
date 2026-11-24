@@ -208,6 +208,16 @@ const ja: EnStrings = {
     tab_data: "データ",
     tab_registry: "レジストリ",
     tab_diagnostics: "診断",
+    browser_title: "ドキュメント用ブラウザ",
+    browser_note:
+      "HTML テンプレートはヘッドレスブラウザで PDF に変換されます。この PC のブラウザを使うか、専用の Chromium をダウンロードして使えます。",
+    browser_system: "この PC",
+    browser_managed: "ダウンロードした Chromium",
+    browser_detected: "検出: {{path}}",
+    browser_managed_path: "使用中: {{path}}",
+    browser_version: "バージョン {{version}}",
+    browser_download: "Chromium をダウンロード",
+    browser_downloading: "ダウンロード中…",
     logs_title: "アプリのログ",
     logs_note:
       "最近のアプリの出来事です。新しいものから表示します。ダウンロードしない限りこのコンピュータの外には出ません。",
