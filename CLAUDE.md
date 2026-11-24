@@ -34,6 +34,65 @@ Rules:
   (`pnpm -C app/ui install && pnpm -C app/ui build`) or every Rust
   build/test of the app crate fails.
 
+## The verification loop (house style)
+
+Before committing a Rust or app change:
+
+1. `cargo fmt --check`
+2. `cargo clippy --all-targets -- -D warnings`
+3. `pnpm test:rust` (the Docker gate above — never a native full suite)
+4. For UI changes: `pnpm --dir app/ui lint` (biome) and
+   `pnpm --dir app/ui build`
+5. Add a bullet to the Unreleased section of `CHANGELOG.md`
+6. Commit (one-line message, see Commits) and push
+
+## Versioning
+
+- The version lives in **five carriers**: `package.json`,
+  `app/ui/package.json`, `app/tauri.conf.json`, the workspace version in
+  `Cargo.toml`, and **all 12 member entries in `Cargo.lock`**. Never edit
+  them by hand — run `pnpm version:set <version>` (it syncs all five).
+- Release versions are date-based (`YYYY.MMDD.N`). For those, the script
+  additionally writes `bundle.windows.wix.version` and
+  `bundle.android.versionCode` into `app/tauri.conf.json`; for any other
+  version it removes both.
+- Tauri's Android build **rejects version `0.0.0`** — the repo version
+  must be at least `0.0.1` or the `android-check` job fails on every PR.
+- **Commit manifests and lockfiles together.** Committing
+  `package.json`/`Cargo.toml` without the matching `pnpm-lock.yaml`/
+  `Cargo.lock` breaks `pnpm install --frozen-lockfile` and the CI Android
+  build.
+
+## Screenshots
+
+- `pnpm shots` renders every screen against the fake Tauri bridge
+  (`e2e/support/fakeAgent/`) in both languages, both themes and both
+  viewports (desktop window + Pixel-7-sized phone), writing PNGs plus a
+  contact sheet (`index.html`) per platform into `screenshots/`
+  (**gitignored — never commit it**). First run needs
+  `pnpm exec playwright install chromium`.
+- CI runs the matrix as the **non-blocking** `screenshot-matrix` job and
+  uploads the shots as the `screenshots` artifact. Two android cases fail
+  today (a recent-jobs row overlaps the list's footer button on narrow
+  screens — an app layout issue the phase 11 redesign settles). When the
+  shots are all green again, remove the job's `continue-on-error`.
+- The curated README images are committed under `assets/`. Refresh them
+  from a fresh `screenshots/` run when the UI changes.
+
+## Android
+
+- Android builds are **CI-only** on this machine: `android-check` (debug
+  APK on every PR) and `android-build` (signed APK + AAB on `v*` tags).
+  Both pin the generated project to the newest *stable* Android platform
+  (currently 36) via `scripts/patch-android-sdk.mjs` — the Tauri template
+  asks for 37, which the stable SDK repository does not carry yet. Bump
+  the platform in the job and the script together.
+- `android-build` signs with the repo secrets
+  `ANDROID_KEYSTORE_BASE64` + `ANDROID_KEYSTORE_PASSWORD` and fails rather
+  than ship a throwaway key when they are missing.
+- The app-level Android work (transport adapters, background print
+  service) is **phase 11**; CI already compiles and bundles the app.
+
 ## The plan
 
 `docs/planned/REFACTORING-PLAN.md` is the governing plan: two template
