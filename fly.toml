@@ -1,0 +1,41 @@
+# Fly.io deployment for the registry server (pn-server).
+#
+#   fly launch --no-deploy --copy-config --name <your-app-name>
+#   fly volumes create data --region nrt --size 1
+#   fly deploy
+#
+# One machine only: the database is a SQLite file on a single volume, so
+# never scale this app past one machine.
+
+app = "printninja-server"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "server/Dockerfile"
+
+[env]
+  PN_SERVER_BIND = "0.0.0.0:8787"
+  PN_SERVER_DB = "/data/printninja-server.db"
+  PN_SERVER_MIGRATIONS_DIR = "/app/migrations"
+
+[mounts]
+  source = "data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/v1/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

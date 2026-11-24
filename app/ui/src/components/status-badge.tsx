@@ -6,21 +6,8 @@
  * failed, wrong_mode_suspected). Unknown values render as a bare
  * neutral chip, never a crash.
  */
-import {
-  Ban,
-  CheckCircle2,
-  CircleHelp,
-  Clock,
-  Globe,
-  Loader2,
-  Send,
-  TriangleAlert,
-  Wifi,
-  WifiOff,
-  XCircle,
-  type LucideIcon,
-} from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { icons, type IconName } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 export type StatusTone = "success" | "warning" | "danger" | "info" | "neutral";
@@ -35,7 +22,7 @@ export const TONE_CLASS: Record<StatusTone, string> = {
 
 interface StatusDef {
   tone: StatusTone;
-  icon: LucideIcon;
+  icon: IconName;
   label: string;
   spin?: boolean;
 }
@@ -43,13 +30,23 @@ interface StatusDef {
 /** The app's named statuses: the registry's reach, a job's life,
  * a sync in flight, a template's publication. */
 export const STATUS = {
-  online: { tone: "success", icon: Wifi, label: "Online", spin: false },
-  offline: { tone: "danger", icon: WifiOff, label: "Offline", spin: false },
-  queued: { tone: "warning", icon: Clock, label: "Queued", spin: false },
-  running: { tone: "info", icon: Loader2, label: "Printing", spin: true },
-  cancelled: { tone: "neutral", icon: Ban, label: "Cancelled", spin: false },
-  syncing: { tone: "info", icon: Loader2, label: "Syncing", spin: true },
-  published: { tone: "success", icon: Globe, label: "Published", spin: false },
+  online: { tone: "success", icon: "online", label: "Online", spin: false },
+  offline: { tone: "danger", icon: "offline", label: "Offline", spin: false },
+  queued: { tone: "warning", icon: "queued", label: "Queued", spin: false },
+  running: { tone: "info", icon: "running", label: "Printing", spin: true },
+  cancelled: {
+    tone: "neutral",
+    icon: "cancelled",
+    label: "Cancelled",
+    spin: false,
+  },
+  syncing: { tone: "info", icon: "syncing", label: "Syncing", spin: true },
+  published: {
+    tone: "success",
+    icon: "published",
+    label: "Published",
+    spin: false,
+  },
 } as const satisfies Record<string, StatusDef>;
 
 export type StatusKey = keyof typeof STATUS;
@@ -60,12 +57,12 @@ export function isStatusKey(value: string): value is StatusKey {
 
 /** The pipeline's job results (plan §5.7) with their tone and icon. */
 export const RESULT = {
-  confirmed: { tone: "success", icon: CheckCircle2 },
-  sent_unconfirmed: { tone: "warning", icon: Send },
-  partially_printed: { tone: "warning", icon: TriangleAlert },
-  failed: { tone: "danger", icon: XCircle },
-  wrong_mode_suspected: { tone: "danger", icon: CircleHelp },
-} as const satisfies Record<string, { tone: StatusTone; icon: LucideIcon }>;
+  confirmed: { tone: "success", icon: "confirmed" },
+  sent_unconfirmed: { tone: "warning", icon: "sent_unconfirmed" },
+  partially_printed: { tone: "warning", icon: "partially_printed" },
+  failed: { tone: "danger", icon: "failed" },
+  wrong_mode_suspected: { tone: "danger", icon: "wrong_mode_suspected" },
+} as const satisfies Record<string, { tone: StatusTone; icon: IconName }>;
 
 export type ResultKey = keyof typeof RESULT;
 
@@ -83,7 +80,7 @@ interface BadgeBaseProps {
 
 function BadgeBase({
   tone,
-  icon: Icon,
+  icon: name,
   label,
   compact,
   spin,
@@ -91,10 +88,11 @@ function BadgeBase({
   className,
 }: BadgeBaseProps & {
   tone: StatusTone;
-  icon: LucideIcon;
+  icon: IconName;
   spin?: boolean;
   data: string;
 }) {
+  const Icon = icons[name];
   return (
     <span
       data-status={data}

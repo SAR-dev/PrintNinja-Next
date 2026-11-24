@@ -94,10 +94,38 @@ shown to the user in the words of `app/ui/src/result-words.ts`:
 Retry is honest too: it is only offered for failures that happened before
 any byte was flushed, so a retry can never print a job twice.
 
+### The scene format
+
+A scene template is `{ format: "scene", media, fields, elements }`: the
+media in millimetres (a `label`, a `roll` with a label height, or `page`
+paper), the data fields, and the elements, in draw order. The element
+types:
+
+| Type | What it is |
+| --- | --- |
+| `text` | A sized box of text with `{{bindings}}`, size, alignment, faux bold/italic |
+| `line` | A horizontal or vertical stroke, with a thickness |
+| `rect` | An outline (or filled) rectangle |
+| `frame` | A bordered box holding other elements at coordinates **relative to its top-left** |
+| `barcode` / `qr` | A symbology from the shared `pn-encoders` module functions, with the value as a binding |
+| `image` | A local file, scaled to a box |
+| `group` | **Repeating rows**: its items, bound to a list field, once per item, flowing down the page (`page: "flow"`) |
+
+Rules that make the format safe to expand: a frame nests to **four
+levels**, never holds a group, and a child that would leave the frame
+fails validation with a named error; a frame child cannot pick its own
+page (it takes the frame's); and every `{{name}}` must be a declared
+field. At expansion a frame **flattens** into its border rect plus its
+children offset by the frame's position, so the renderers and all
+encoders see only the flat element list — a frame costs nothing at print
+time. Unknown element types fail with a "needs a newer PrintNinja"
+error instead of a parse failure.
+
 ## The app
 
 `app/` is the `printninja` crate — a Tauri 2 shell (Windows and Linux;
-Android is a later phase). `app/src/lib.rs` is deliberately thin: it
+Android is on the roadmap, `docs/ROADMAP.md`). `app/src/lib.rs` is
+deliberately thin: it
 holds the loaded printer profiles, exposes the pipeline through a small
 set of Tauri commands (`list_printers`, `plan_job`, `print_job`, printer
 discovery and saved printers, template and settings persistence,
@@ -199,7 +227,7 @@ restarts.
 
 ## The community registry
 
-`server/` is `pn-server` — the community registry (plan phase 9). It
+`server/` is `pn-server` — the community registry. It
 stores **published templates** (the template document plus a name, slug
 and readme), **accounts**, **per-account saves** and a **change feed**
 (with tombstones) that the app syncs against. It validates every template
@@ -223,8 +251,8 @@ renders or prints: it stores, validates and serves.
   `db reset` rebuilds from scratch — terminal commands, the way you would
   expect from any other project.
 - **Self-hostable**: `server/Dockerfile` bakes the binary and migrations
-  into an image with the database on a `/data` volume. CI pushes it to
-  **GHCR** on every push to `main` (`server-publish`), and
+  into an image with the database on a `/data` volume. CI publishes it to
+  **GHCR** on `v*` release tags (`server-publish-release`), and
   [`REGISTRY.md`](REGISTRY.md) is the user guide for running your own.
 
 ## The test pyramid
@@ -264,8 +292,9 @@ renders or prints: it stores, validates and serves.
   `chromium-render` (a real system Chrome proves the document track; the
   Docker container deliberately has no browser), a `rust-check` gate job,
   and the registry jobs `server-check`, `server-image`, `server-e2e`
-  (the full HTTP lifecycle via `server/e2e.py` against the container) and
-  `server-publish` (GHCR, main pushes only).
+  (the full HTTP lifecycle via `server/e2e.py` against the container);
+  the registry image is published to GHCR only on release tags
+  (`server-publish-release`).
 
 ## Platforms
 
@@ -273,7 +302,7 @@ renders or prints: it stores, validates and serves.
 | --- | --- |
 | 🪟 Windows | Shipped — MSI bundle, code-signed on release (`docs/RELEASE.md`). |
 | 🐧 Linux | Shipped — deb and AppImage bundles. |
-| 📱 Android | The next phase (phase 11): shared renderer, planner, profiles and encoders, Android transport adapters and a background print service. Not built yet. |
+| 📱 Android | On the roadmap: shared renderer, planner, profiles and encoders, Android transport adapters and a background print service. Not built yet. |
 | 🍎 macOS | **Never** — a permanent decision, not a deferred one. |
 
 The renderer, planner, profiles and encoders are identical on every

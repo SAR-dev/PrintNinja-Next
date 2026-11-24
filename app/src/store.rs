@@ -250,6 +250,22 @@ impl Store {
         Ok(())
     }
 
+    /// Delete one template by id: its row goes, and with it the
+    /// local's link to the registry (the registry's own copy is
+    /// unpublish's business). False when no such template.
+    pub fn delete_template(&self, id: &str) -> Result<bool, String> {
+        let conn = self.lock();
+        let n = conn
+            .execute("DELETE FROM templates WHERE id = ?1", params![id])
+            .map_err(|e| e.to_string())?;
+        conn.execute(
+            "DELETE FROM publications WHERE local_template_id = ?1",
+            params![id],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(n > 0)
+    }
+
     /// The recent jobs, newest first, the kept limit at most.
     pub fn load_recent_jobs(&self) -> Result<Vec<StoredJob>, String> {
         let conn = self.lock();
@@ -995,6 +1011,18 @@ mod tests {
         let rows = s.load_templates().unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].name, "renamed");
+    }
+
+    #[test]
+    fn a_deleted_template_is_gone_with_its_publication() {
+        let s = store();
+        s.save_template(&template("a")).unwrap();
+        s.upsert_publication(&publication("a")).unwrap();
+
+        assert!(s.delete_template("a").unwrap());
+        assert!(s.load_templates().unwrap().is_empty());
+        assert!(s.publication_for_local("a").unwrap().is_none());
+        assert!(!s.delete_template("a").unwrap());
     }
 
     #[test]

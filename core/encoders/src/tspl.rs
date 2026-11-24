@@ -151,14 +151,24 @@ fn emit(el: &Placed, font: &str, ctx: &NativeCtx, out: &mut String) {
             let (w, h) = if *vertical { (th, len) } else { (len, th) };
             out.push_str(&format!("BAR {x},{y},{w},{h}\r\n"));
         }
-        PlacedKind::Rect { w_mm, h_mm, fill } => {
+        PlacedKind::Rect {
+            w_mm,
+            h_mm,
+            fill,
+            thickness_mm,
+        } => {
             let w = dots_for_mm(*w_mm, ctx.dpi).max(1);
             let h = dots_for_mm(*h_mm, ctx.dpi).max(1);
             if *fill {
                 out.push_str(&format!("BAR {x},{y},{w},{h}\r\n"));
             } else {
-                // The frame thickness the raster uses (0.5 mm).
-                let t = dots_for_mm(0.5, ctx.dpi).max(1);
+                // A plain rect has no thickness of its own: the 0.5 mm
+                // the raster uses. A frame's border carries its own.
+                let mm = match thickness_mm {
+                    Some(t) => *t,
+                    None => 0.5,
+                };
+                let t = dots_for_mm(mm, ctx.dpi).max(1);
                 out.push_str(&format!("BOX {x},{y},{w},{h},{t}\r\n"));
             }
         }

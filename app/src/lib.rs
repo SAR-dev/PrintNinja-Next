@@ -283,6 +283,14 @@ fn save_template(state: State<'_, Arc<Store>>, template: StoredTemplate) -> Resu
     state.save_template(&template)
 }
 
+/// Delete one template by id. The registry's own copy, when the
+/// template was published, is unpublish's business — the local's
+/// link to it goes with the row.
+#[tauri::command]
+fn delete_template(state: State<'_, Arc<Store>>, id: String) -> Result<bool, String> {
+    state.delete_template(&id)
+}
+
 /// The recent jobs, newest first (the kept limit at most).
 #[tauri::command]
 fn load_recent_jobs(state: State<'_, Arc<Store>>) -> Result<Vec<StoredJob>, String> {
@@ -698,6 +706,7 @@ pub fn run() {
             fetch_data,
             load_templates,
             save_template,
+            delete_template,
             load_recent_jobs,
             remember_job,
             load_settings,

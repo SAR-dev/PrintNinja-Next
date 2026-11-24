@@ -62,8 +62,19 @@ fn paint(placed: &Placed, r: &mut Renderer) {
             *thickness_mm,
             *vertical,
         ),
-        PlacedKind::Rect { w_mm, h_mm, fill } => {
-            let thickness = if *fill { 0.0 } else { FRAME_THICKNESS_MM };
+        PlacedKind::Rect {
+            w_mm,
+            h_mm,
+            fill,
+            thickness_mm,
+        } => {
+            // A plain scene rect carries no thickness; a frame's border
+            // does, and it is drawn at the border the template asked for.
+            let outlined = match thickness_mm {
+                Some(t) => *t,
+                None => FRAME_THICKNESS_MM,
+            };
+            let thickness = if *fill { 0.0 } else { outlined };
             r.draw_rect(placed.x_mm, placed.y_mm, *w_mm, *h_mm, thickness, *fill);
         }
         // The raster renderer has no bitmap resource support yet.
@@ -100,6 +111,7 @@ mod tests {
                         w_mm: 40.0,
                         h_mm: 20.0,
                         fill: false,
+                        thickness_mm: None,
                     },
                 },
                 Placed {

@@ -10,7 +10,7 @@ push to a feature branch runs nothing, so run the same checks yourself (see
 | Trigger | Jobs |
 |---|---|
 | Pull request | all push jobs, including `android-check` (PR-only) and `screenshot-matrix` (non-blocking) |
-| Push to `main` | the push jobs except `android-check` (PR-only), including `server-publish` |
+| Push to `main` | the push jobs except `android-check` (PR-only) |
 | Pushed `v*` tag | the push jobs **plus** the tag jobs (`version-check`, `windows-build`, `linux-build`, `android-build`, `github-release`, `server-publish-release`) |
 
 ## Push jobs
@@ -28,7 +28,6 @@ push to a feature branch runs nothing, so run the same checks yourself (see
 | `server-check` | ubuntu-latest | The registry (`pn-server`): fmt, clippy, tests |
 | `server-image` | ubuntu-latest | Proves the registry Docker image (`server/Dockerfile`) builds |
 | `server-e2e` | ubuntu-latest | The registry image through a full HTTP lifecycle |
-| `server-publish` | ubuntu-latest | Pushes the registry image to GHCR (main pushes only) |
 
 ### The app jobs need the frontend first
 
@@ -100,11 +99,8 @@ image, runs it on a localhost port with a throwaway volume, waits on
 app uses: account, login, publish, gallery, fetch, save, change feed with
 tombstone, unpublish, logout. No runner state survives.
 
-`server-publish` runs on every push to `main` (and needs
-`server-image` + `server-e2e` to have passed) and pushes the image to
-GHCR as `ghcr.io/<owner>/printninja-server` tagged by short commit sha and
-`latest`. It uses the automatic `GITHUB_TOKEN` with the job's
-`packages: write` permission.
+Pushes to `main` never publish anything: the registry image goes to GHCR
+only on a `v*` release tag, via `server-publish-release` (below).
 
 ## Tag jobs (release pipeline)
 
@@ -117,7 +113,7 @@ Pushing a `v*` tag starts the release. `version-check` gates the rest.
 | `linux-build` | ubuntu-24.04 | Builds the deb and AppImage (`--bundles deb appimage`) |
 | `android-build` | ubuntu-latest | The release APK + AAB (arm64-v8a), signed with the shared keystore |
 | `github-release` | ubuntu-latest | Collects the installer artifacts into a **draft** GitHub release |
-| `server-publish-release` | ubuntu-latest | Tags the registry image with the release version on GHCR |
+| `server-publish-release` | ubuntu-latest | Publishes the registry image to GHCR, tagged with the release version and `latest` — the only place the image is published |
 
 `github-release` reuses an existing draft and overwrites same-name assets
 (`gh release upload --clobber`), so re-running the pipeline after a failed

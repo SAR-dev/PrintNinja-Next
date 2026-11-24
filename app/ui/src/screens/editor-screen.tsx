@@ -4,18 +4,27 @@
  * repeating-group settings. The preview is prepared with the same path
  * as the print (plan §3.4) — on the chosen printer, at its own dpi.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { icons } from "@/lib/icons";
 import {
   listPrinters,
   planJob,
   type PrepareReport,
   type ProfileInfo,
 } from "@/api";
+import { AddElement, ElementList } from "@/components/editor/element-list";
+import {
+  NumField,
+  PlacementSelect,
+  SwitchRow,
+} from "@/components/editor/fields";
 import { JobPreview } from "@/components/job-preview";
 import { PageHeader } from "@/components/page-header";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import {
   Card,
   CardContent,
@@ -32,12 +41,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   allBindings,
+  boundsMm,
+  clampToBounds,
   defaultElement,
-  ELEMENT_TYPES,
   elementLabel,
   elementsOf,
   getAt,
@@ -55,10 +64,33 @@ import type {
   BarcodeKind,
   Element,
   Media,
-  Placement,
   Template,
 } from "@/scene/schema";
 import type { AppTemplate } from "@/templates";
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+/**
+ * Where an element at `path` goes when moved to (x_mm, y_mm): when it
+ * sits in a frame, clamped so it stays inside the frame's size — the
+ * scene validation rejects a child that leaves its frame.
+ */
+function frameClamped(
+  t: Template,
+  path: Path,
+  el: Element,
+  x_mm: number,
+  y_mm: number,
+): { x_mm: number; y_mm: number } {
+  const parent = getAt(t, path.slice(0, -1));
+  if (parent?.type !== "frame")
+    return { x_mm: round1(x_mm), y_mm: round1(y_mm) };
+  const [, , bw, bh] = boundsMm(el);
+  return clampToBounds(round1(x_mm), round1(y_mm), bw, bh, {
+    w: parent.size.w_mm,
+    h: parent.size.h_mm,
+  });
+}
 
 export function EditorScreen({
   initial,
@@ -82,6 +114,15 @@ export function EditorScreen({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
 
+  // On the phone the properties are a bottom sheet: keep the canvas
+  // in view when an element is picked from the list further down.
+  useEffect(() => {
+    if (!selection || !window.matchMedia("(max-width: 767px)").matches) return;
+    document
+      .querySelector('[data-slot="app-main"]')
+      ?.scrollTo({ top: 0, behavior: "instant" });
+  }, [selection]);
+
   useEffect(() => {
     listPrinters()
       .then((ps) => {
@@ -93,6 +134,13 @@ export function EditorScreen({
 
   const bindings = useMemo(() => allBindings(template), [template]);
   const selected = selection ? (getAt(template, selection.path) ?? null) : null;
+  /** The group or frame the selected element sits in, when not at the
+   * root — its name goes in the panel header and its coordinates are
+   * relative to it. */
+  const selectedParent =
+    selection && selection.path.length > 1
+      ? (getAt(template, selection.path.slice(0, -1)) ?? null)
+      : null;
 
   /** The first record of the sample data, for the canvas's live
    *  barcode/QR substitution (plan step 2). `null` when the sample
@@ -103,26 +151,178 @@ export function EditorScreen({
   );
   const dpi = printers.find((p) => p.model === printer)?.dpi ?? null;
 
-  const setMedia = (media: Media) => setTemplate((t) => ({ ...t, media }));
+  /** The dot in the header: the loaded template has changed. */
+  const dirty = useMemo(() => {
+    const saved = JSON.stringify(withSyncedFields(initial.template));
+    const current = JSON.stringify(withSyncedFields(template));
+    return saved !== current || name.trim() !== initial.name;
+  }, [initial, name, template]);
+
+  // -- undo/redo: one step per action, bursts of the same key (a drag,
+  // typing in one field) coalesced within 800 ms.
+  const [past, setPast] = useState<Template[]>([]);
+  const [future, setFuture] = useState<Template[]>([]);
+  const lastPush = useRef<{ key: string; at: number } | null>(null);
+  const pushHistory = (key: string) => {
+    const now = Date.now();
+    const last = lastPush.current;
+    if (last && last.key === key && now - last.at < 800) return;
+    lastPush.current = { key, at: now };
+    setPast((p) => [...p.slice(-99), template]);
+    setFuture([]);
+  };
+  const commit = (fn: (t: Template) => Template, key: string) => {
+    pushHistory(key);
+    setTemplate(fn);
+  };
+  const undo = () => {
+    if (past.length === 0) return;
+    lastPush.current = null;
+    setFuture((f) => [template, ...f]);
+    setTemplate(past[past.length - 1]);
+    setPast((p) => p.slice(0, -1));
+  };
+  const redo = () => {
+    if (future.length === 0) return;
+    lastPush.current = null;
+    setPast((p) => [...p, template]);
+    setTemplate(future[0]);
+    setFuture((f) => f.slice(1));
+  };
+
+  /** Move an element one place among its siblings (draw order). */
+  const moveSibling = (path: Path, delta: number) => {
+    const index = path[path.length - 1];
+    const parent = path.slice(0, -1);
+    const target = index + delta;
+    if (target < 0 || target >= elementsOf(template, parent).length) return;
+    commit(
+      (t) => {
+        const el = getAt(t, path);
+        return el ? insertAt(removeAt(t, path), [...parent, target], el) : t;
+      },
+      `move:${path.join("/")}`,
+    );
+    if (selection && samePath(selection.path, path))
+      setSelection({ path: [...parent, target] });
+  };
+
+  const setMedia = (media: Media) => commit((t) => ({ ...t, media }), "media");
   const moveElement = (path: Path, x_mm: number, y_mm: number) =>
     setTemplate((t) =>
-      updateAt(t, path, (el) => ({ ...el, at: { ...el.at, x_mm, y_mm } })),
+      updateAt(t, path, (el) => {
+        const at = frameClamped(t, path, el, x_mm, y_mm);
+        return { ...el, at };
+      }),
     );
-  const updateSelected = (fn: (el: Element) => Element) => {
+  const startDrag = (path: Path) => pushHistory(`drag:${path.join("/")}`);
+  const resizeElement = (
+    path: Path,
+    x_mm: number,
+    y_mm: number,
+    w_mm: number,
+    h_mm: number,
+  ) =>
+    commit(
+      (t) =>
+        updateAt(t, path, (el) => {
+          if (!("size" in el)) return el;
+          const parent = getAt(t, path.slice(0, -1));
+          let x = x_mm;
+          let y = y_mm;
+          let w = w_mm;
+          let h = h_mm;
+          if (parent?.type === "frame") {
+            x = Math.max(0, x);
+            y = Math.max(0, y);
+            w = Math.min(w, parent.size.w_mm - x);
+            h = Math.min(h, parent.size.h_mm - y);
+          }
+          return {
+            ...el,
+            at: { x_mm: round1(x), y_mm: round1(y) },
+            size: { ...el.size, w_mm: round1(w), h_mm: round1(h) },
+          };
+        }),
+      `resize:${path.join("/")}`,
+    );
+  /** The selected element's position, for the arrow-key nudge. */
+  const nudge = (dx: number, dy: number) => {
     if (!selection) return;
     const path = selection.path;
-    setTemplate((t) => updateAt(t, path, fn));
+    commit(
+      (t) =>
+        updateAt(t, path, (el) => {
+          const at = frameClamped(
+            t,
+            path,
+            el,
+            el.at.x_mm + dx,
+            el.at.y_mm + dy,
+          );
+          return { ...el, at };
+        }),
+      `nudge:${path.join("/")}`,
+    );
+  };
+  const updateSelected = (fn: (el: Element) => Element) => {
+    if (!selection) return;
+    const key = `sel:${selection.path.join("/")}`;
+    commit((t) => updateAt(t, selection.path, fn), key);
   };
   const addElement = (container: Path, type: string) => {
     const path = [...container, elementsOf(template, container).length];
     const newEl = defaultElement(type);
-    setTemplate((t) => insertAt(t, path, newEl));
+    commit((t) => insertAt(t, path, newEl), `add:${container.join("/")}`);
     setSelection({ path });
   };
   const deleteElement = (path: Path) => {
-    setTemplate((t) => removeAt(t, path));
+    commit((t) => removeAt(t, path), `del:${path.join("/")}`);
     setSelection(null);
   };
+
+  // Ctrl/Cmd+Z / Shift+Z (or Ctrl+Y) undo/redo; Delete removes the
+  // selection; the arrow keys nudge it 0.1 mm (Shift: 1 mm).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (mod && (e.key === "y" || e.key === "Y") && !e.shiftKey) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      // Never steal keys from a text input.
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("input, textarea, select")
+      )
+        return;
+      if (!selection) return;
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        deleteElement(selection.path);
+        return;
+      }
+      const step = e.shiftKey ? 1 : 0.1;
+      let dx = 0;
+      let dy = 0;
+      if (e.key === "ArrowLeft") dx = -step;
+      else if (e.key === "ArrowRight") dx = step;
+      else if (e.key === "ArrowUp") dy = -step;
+      else if (e.key === "ArrowDown") dy = step;
+      else return;
+      e.preventDefault();
+      nudge(dx, dy);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   const previewJob = async () => {
     setPreparing(true);
@@ -156,6 +356,16 @@ export function EditorScreen({
     });
 
   const media = template.media;
+  const sizeLabel =
+    media.kind === "roll"
+      ? t("editor.template_size", {
+          w: media.width_mm,
+          h: media.label_height_mm,
+        })
+      : t("editor.template_size", {
+          w: media.width_mm,
+          h: media.height_mm,
+        });
   const changeMediaKind = (kind: Media["kind"]) => {
     if (kind === "roll")
       setMedia({ kind, width_mm: media.width_mm, label_height_mm: 30 });
@@ -165,25 +375,69 @@ export function EditorScreen({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <PageHeader title={t("editor.title")}>
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          {t("editor.back")}
-        </Button>
+      <PageHeader
+        title={t("editor.title")}
+        titleControl={
+          <div className="flex min-w-0 items-center gap-2">
+            <Input
+              id="t-name"
+              aria-label={t("common.name")}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="max-w-64"
+            />
+            {dirty && (
+              <span
+                role="img"
+                aria-label={t("editor.unsaved")}
+                title={t("editor.unsaved")}
+                className="h-2 w-2 shrink-0 rounded-full bg-warning"
+              />
+            )}
+          </div>
+        }
+        back={{ onClick: onBack, label: t("common.back") }}
+      >
         <Badge>scene</Badge>
-        <Button onClick={save}>{t("editor.save_template")}</Button>
+        <IconButton
+          icon="undo"
+          label={t("editor.undo")}
+          variant="ghost"
+          onClick={undo}
+          disabled={past.length === 0}
+        />
+        <IconButton
+          icon="redo"
+          label={t("editor.redo")}
+          variant="ghost"
+          onClick={redo}
+          disabled={future.length === 0}
+        />
+        <Button onClick={save}>
+          <icons.save aria-hidden="true" className="h-4 w-4" />
+          {t("editor.save_template")}
+        </Button>
         <Button variant="secondary" onClick={previewJob} disabled={preparing}>
           {preparing ? t("editor.previewing") : t("editor.preview")}
         </Button>
-      </PageHeader>
-
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="t-name">{t("common.name")}</Label>
-        <Input
-          id="t-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+        <ActionMenu
+          items={[
+            {
+              label: sizeLabel,
+              icon: "rect",
+              disabled: true,
+              onSelect: () => undefined,
+            },
+            {
+              label: t("editor.save_template"),
+              icon: "save",
+              onSelect: save,
+              separator: true,
+            },
+          ]}
+          label={t("common.more")}
         />
-      </div>
+      </PageHeader>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-w-0 flex-col gap-6">
@@ -198,6 +452,8 @@ export function EditorScreen({
                 selection={selection}
                 onSelect={setSelection}
                 onMove={moveElement}
+                onDragStart={startDrag}
+                onResize={resizeElement}
                 record={sampleRecord}
                 showSample={showSample}
                 dpi={dpi}
@@ -286,17 +542,32 @@ export function EditorScreen({
                 basePath={[]}
                 selection={selection}
                 onSelect={setSelection}
+                onMove={moveSibling}
                 onDelete={deleteElement}
               />
-              <AddElement onAdd={(type) => addElement([], type)} />
+              <AddElement onAdd={(type) => addElement([], type)} where="root" />
             </CardContent>
           </Card>
 
           {selected && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("editor.selected_element")}</CardTitle>
-                <CardDescription>{elementLabel(selected)}</CardDescription>
+            <Card className="max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:max-h-[60dvh] max-md:overflow-y-auto max-md:rounded-b-none max-md:border-b-0 max-md:shadow-2xl">
+              <CardHeader className="max-md:pt-5">
+                <div className="mx-auto mb-1 h-1 w-10 rounded-full bg-muted md:hidden" />
+                <CardTitle className="flex items-center justify-between gap-2">
+                  {t("editor.selected_element")}
+                  <IconButton
+                    icon="close"
+                    label={t("common.close")}
+                    variant="ghost"
+                    className="md:hidden"
+                    onClick={() => setSelection(null)}
+                  />
+                </CardTitle>
+                <CardDescription>
+                  {selectedParent
+                    ? `${elementLabel(selectedParent)} — ${elementLabel(selected)}`
+                    : elementLabel(selected)}
+                </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <div className="grid grid-cols-2 gap-3">
@@ -323,15 +594,23 @@ export function EditorScreen({
                     }
                   />
                 </div>
-
-                {selected.type !== "group" && (
-                  <PlacementSelect
-                    value={selected.page ?? "every"}
-                    onChange={(p) =>
-                      updateSelected((el) => ({ ...el, page: p }))
-                    }
-                  />
+                {selectedParent && (
+                  <span className="-mt-2 text-caption text-muted-foreground">
+                    {t("editor.coords_relative")}
+                  </span>
                 )}
+
+                {/* A frame decides which page its children appear on,
+                    so a child in a frame cannot choose one. */}
+                {selected.type !== "group" &&
+                  selectedParent?.type !== "frame" && (
+                    <PlacementSelect
+                      value={selected.page ?? "every"}
+                      onChange={(p) =>
+                        updateSelected((el) => ({ ...el, page: p }))
+                      }
+                    />
+                  )}
 
                 {selected.type === "text" && (
                   <div className="flex flex-col gap-3">
@@ -718,7 +997,53 @@ export function EditorScreen({
                     </div>
                     <AddElement
                       onAdd={(type) => addElement(selection.path, type)}
-                      group
+                      where="row"
+                    />
+                  </div>
+                )}
+
+                {selected.type === "frame" && selection && (
+                  <div className="flex flex-col gap-3">
+                    <div className="grid grid-cols-3 gap-3">
+                      <NumField
+                        id="f-w"
+                        label={t("editor.width_mm")}
+                        value={selected.size.w_mm}
+                        onChange={(v) =>
+                          updateSelected((el) =>
+                            el.type === "frame"
+                              ? { ...el, size: { ...el.size, w_mm: v } }
+                              : el,
+                          )
+                        }
+                      />
+                      <NumField
+                        id="f-h"
+                        label={t("editor.height_mm")}
+                        value={selected.size.h_mm}
+                        onChange={(v) =>
+                          updateSelected((el) =>
+                            el.type === "frame"
+                              ? { ...el, size: { ...el.size, h_mm: v } }
+                              : el,
+                          )
+                        }
+                      />
+                      <NumField
+                        id="f-border"
+                        label={t("editor.border_mm")}
+                        step={0.05}
+                        value={selected.border_mm}
+                        onChange={(v) =>
+                          updateSelected((el) =>
+                            el.type === "frame" ? { ...el, border_mm: v } : el,
+                          )
+                        }
+                      />
+                    </div>
+                    <AddElement
+                      onAdd={(type) => addElement(selection.path, type)}
+                      where="frame"
                     />
                   </div>
                 )}
@@ -798,200 +1123,6 @@ export function EditorScreen({
 
 /** The element tree: select and delete. A group's items sit indented
  *  under it; the draw order is the list order. */
-function ElementList({
-  elements,
-  basePath,
-  selection,
-  onSelect,
-  onDelete,
-}: {
-  elements: Element[];
-  basePath: Path;
-  selection: Selection | null;
-  onSelect: (s: Selection | null) => void;
-  onDelete: (path: Path) => void;
-}) {
-  const { t } = useTranslation();
-  const rows: { el: Element; path: Path; depth: number }[] = [];
-  const collect = (els: Element[], base: Path, depth: number) => {
-    els.forEach((el, i) => {
-      const path = [...base, i];
-      rows.push({ el, path, depth });
-      if (el.type === "group") collect(el.items, path, depth + 1);
-    });
-  };
-  collect(elements, basePath, basePath.length);
-  return (
-    <div className="flex flex-col gap-1">
-      {rows.length === 0 && (
-        <span className="text-body-sm text-muted-foreground">
-          {t("editor.element_empty")}
-        </span>
-      )}
-      {rows.map(({ el, path, depth }) => {
-        const isSel = selection ? samePath(selection.path, path) : false;
-        return (
-          <div
-            key={path.join("/")}
-            style={{ marginLeft: (depth - 1) * 16 }}
-            className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${
-              isSel ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
-            }`}
-          >
-            <button
-              type="button"
-              className="min-w-0 flex-1 truncate text-left text-body-sm"
-              onClick={() => onSelect(isSel ? null : { path })}
-            >
-              {elementLabel(el)}
-            </button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="shrink-0 px-2 text-muted-foreground"
-              onClick={() => onDelete(path)}
-            >
-              {t("common.delete")}
-            </Button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function AddElement({
-  onAdd,
-  group = false,
-}: {
-  onAdd: (type: string) => void;
-  group?: boolean;
-}) {
-  const { t } = useTranslation();
-  const types = group
-    ? ["text", "line", "rect", "barcode", "qr", "image"]
-    : ELEMENT_TYPES;
-  return (
-    <Select onValueChange={(v) => onAdd(v)}>
-      <SelectTrigger>
-        <SelectValue
-          placeholder={group ? t("editor.add_to_row") : t("editor.add_element")}
-        />
-      </SelectTrigger>
-      <SelectContent>
-        {types.map((type) => (
-          <SelectItem key={type} value={type}>
-            {type}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-/** Where a root element sits in a multi-page output. Groups must flow. */
-function PlacementSelect({
-  value,
-  onChange,
-}: {
-  value: Placement;
-  onChange: (p: Placement) => void;
-}) {
-  const { t } = useTranslation();
-  const isOnly = typeof value === "object";
-  return (
-    <div className="flex items-end gap-2">
-      <div className="flex flex-1 flex-col gap-1">
-        <Label>{t("editor.page")}</Label>
-        <Select
-          value={isOnly ? "only" : value}
-          onValueChange={(v) =>
-            onChange(v === "only" ? { only: 2 } : (v as Placement))
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="every">{t("editor.page_every")}</SelectItem>
-            <SelectItem value="first">{t("editor.page_first")}</SelectItem>
-            <SelectItem value="last">{t("editor.page_last")}</SelectItem>
-            <SelectItem value="only">{t("editor.page_only")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      {isOnly && (
-        <div className="flex w-20 flex-col gap-1">
-          <Label>{t("editor.page_number")}</Label>
-          <Input
-            type="number"
-            min={1}
-            value={value.only}
-            onChange={(e) => {
-              const n = e.target.valueAsNumber;
-              if (Number.isFinite(n))
-                onChange({ only: Math.max(1, Math.round(n)) });
-            }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function NumField({
-  id,
-  label,
-  value,
-  onChange,
-  step = 0.1,
-}: {
-  id: string;
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  step?: number;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        type="number"
-        inputMode="decimal"
-        step={step}
-        min={0}
-        value={value}
-        onChange={(e) => {
-          const v = e.target.valueAsNumber;
-          if (Number.isFinite(v)) onChange(v);
-        }}
-      />
-    </div>
-  );
-}
-
-function SwitchRow({
-  label,
-  checked,
-  onCheckedChange,
-}: {
-  label: string;
-  checked: boolean;
-  onCheckedChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Switch
-        checked={checked}
-        onCheckedChange={onCheckedChange}
-        aria-label={label}
-      />
-      <Label className="cursor-pointer text-body-sm">{label}</Label>
-    </div>
-  );
-}
-
 /**
  * The editor previews one record: the first of the sample data, when
  * the sample parses, else the sample as is (a single record object).

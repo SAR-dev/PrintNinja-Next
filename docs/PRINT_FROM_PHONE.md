@@ -147,7 +147,7 @@ The **server side is built and tested** — every route above is in the app.
 What is *not* in the repository is a phone-side app: there is no dedicated
 phone UI to type the code and fire the job yet. Today, the phone side is
 whatever you point at the API — a small script, `curl` from a terminal, a
-kiosk page. A real Android app for PrintNinja is on the plan (phase 11),
+kiosk page. A real Android app for PrintNinja is on the roadmap,
 not built. So: the door, the lock, and the pairing are ready; the phone's
 shoes are still being made.
 

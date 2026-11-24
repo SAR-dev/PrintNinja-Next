@@ -60,7 +60,9 @@ const TabsList = React.forwardRef<
         // grows so its 44px triggers are not clipped (h-10 still wins on fine pointers).
         "inline-flex h-10 max-w-full items-center justify-start overflow-x-auto rounded-md bg-muted p-1 text-muted-foreground [@media(pointer:coarse)]:min-h-[3.25rem] sm:justify-center",
         phoneStacked &&
-          "max-md:flex max-md:flex-col max-md:w-full max-md:gap-1 max-md:rounded-[1rem]",
+          // h-auto on max-md: a stacked column sizes to its triggers — the
+          // fixed h-10 box used to clip the lower tabs on a phone.
+          "max-md:flex max-md:h-auto max-md:flex-col max-md:w-full max-md:gap-1 max-md:rounded-[1rem]",
         className,
       )}
       {...props}

@@ -90,6 +90,11 @@ pub enum PlacedKind {
         w_mm: f32,
         h_mm: f32,
         fill: bool,
+        /// An outlined rect's own thickness (a frame's border). `None`
+        /// for a plain `rect` element, which the renderer draws at its
+        /// established 0.5 mm.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        thickness_mm: Option<f32>,
     },
 }
 
@@ -188,7 +193,8 @@ fn fixed_placement(el: &Element) -> Option<Placement> {
         | Element::Barcode { page, .. }
         | Element::Qr { page, .. }
         | Element::Line { page, .. }
-        | Element::Rect { page, .. } => Some(*page),
+        | Element::Rect { page, .. }
+        | Element::Frame { page, .. } => Some(*page),
     }
 }
 
@@ -200,7 +206,8 @@ fn other_at(el: &Element) -> At {
         | Element::Barcode { at, .. }
         | Element::Qr { at, .. }
         | Element::Line { at, .. }
-        | Element::Rect { at, .. } => *at,
+        | Element::Rect { at, .. }
+        | Element::Frame { at, .. } => *at,
         Element::Group { .. } => At {
             x_mm: 0.0,
             y_mm: 0.0,
@@ -279,7 +286,25 @@ fn expand_one(
                             x_mm: at.x_mm + at_it.x_mm,
                             y_mm: y + at_it.y_mm,
                         };
-                        pg.elements.push(placed_at(it, at, row));
+                        match it {
+                            // A frame in a group item flattens on every
+                            // row, like its other items.
+                            Element::Frame { .. } => place_frame(it, at, row, pg),
+                            _ => pg.elements.push(placed_at(it, at, row)),
+                        }
+                    }
+                }
+            }
+            Element::Frame { .. } => {
+                // Like any fixed element: the frame's `page` decides the
+                // pages, and each gets the border plus the children.
+                let Some(page) = fixed_placement(el) else {
+                    continue;
+                };
+                let at = other_at(el);
+                for pg in &mut pages {
+                    if page.on_page((pg.index + 1) as u32, total as u32) {
+                        place_frame(el, at, record, pg);
                     }
                 }
             }
@@ -300,6 +325,46 @@ fn expand_one(
         record: record_index,
         pages,
     })
+}
+
+/// Flatten a frame at `at` onto `pg`: its border (when `border_mm` is
+/// not 0) as an outlined rect, then its children — a nested frame
+/// recurses, everything else places — with the frame's origin added to
+/// each child's position. A child's own `page` is ignored here: the
+/// frame decides (the validator rejects a conflicting value).
+fn place_frame(el: &Element, at: At, record: &Record, pg: &mut Page) {
+    let Element::Frame {
+        size,
+        border_mm,
+        children,
+        ..
+    } = el
+    else {
+        unreachable!("place_frame called on a non-frame")
+    };
+    if *border_mm > 0.0 {
+        pg.elements.push(Placed {
+            x_mm: at.x_mm,
+            y_mm: at.y_mm,
+            kind: PlacedKind::Rect {
+                w_mm: size.w_mm,
+                h_mm: size.h_mm,
+                fill: false,
+                thickness_mm: Some(*border_mm),
+            },
+        });
+    }
+    for child in children {
+        let child_at = At {
+            x_mm: at.x_mm + other_at(child).x_mm,
+            y_mm: at.y_mm + other_at(child).y_mm,
+        };
+        match child {
+            Element::Frame { .. } => place_frame(child, child_at, record, pg),
+            Element::Group { .. } => unreachable!("a group cannot sit in a frame (validated)"),
+            other => pg.elements.push(placed_at(other, child_at, record)),
+        }
+    }
 }
 
 /// One row of a group: the page it lands on and its top edge on the
@@ -431,7 +496,11 @@ fn placed_at(el: &Element, at: At, record: &Record) -> Placed {
             w_mm: size.w_mm,
             h_mm: size.h_mm,
             fill: *fill,
+            // A plain rect has no thickness of its own; the renderer
+            // and encoders draw the outline at their established 0.5 mm.
+            thickness_mm: None,
         },
+        Element::Frame { .. } => unreachable!("a frame is flattened, not placed"),
         Element::Group { .. } => unreachable!("a group is expanded, not placed"),
     };
     Placed {
@@ -518,6 +587,24 @@ mod tests {
             items,
             page: Placement::Flow,
         }
+    }
+
+    fn frame(at: At, w: f32, h: f32, border: f32, children: Vec<Element>) -> Element {
+        Element::Frame {
+            at,
+            size: Size { w_mm: w, h_mm: h },
+            border_mm: border,
+            children,
+            page: Placement::default(),
+        }
+    }
+
+    /// The kind of the placed element at `x`, `y` on a page.
+    fn kind_at(page: &Page, x: f32, y: f32) -> Option<&PlacedKind> {
+        page.elements
+            .iter()
+            .find(|p| (p.x_mm - x).abs() < EPS && (p.y_mm - y).abs() < EPS)
+            .map(|p| &p.kind)
     }
 
     /// `n` receipt rows `L1..Ln` at `1.00..n.00`, as one JSON record.
@@ -682,6 +769,250 @@ mod tests {
         assert_eq!(substitute_bindings("a {{x} b} {{ok}}", rec), "a {{x} b} 1");
     }
 
+    // A frame flattens: its border becomes a rect, its children shift
+    // to the frame's origin, and a nested frame offsets again.
+
+    #[test]
+    fn a_frame_flattens_to_a_border_and_offset_children() {
+        let t = Template {
+            format: Format::Scene,
+            html: None,
+            media: label(58.0, 40.0),
+            fields: vec![],
+            elements: vec![frame(
+                At {
+                    x_mm: 10.0,
+                    y_mm: 20.0,
+                },
+                30.0,
+                20.0,
+                0.5,
+                vec![text(2.0, 3.0, 10.0, 4.0, "inside")],
+            )],
+            fonts: vec![],
+        };
+        let job = expand(&t, &json(r#"[ {} ]"#)).unwrap();
+        let page = &job.outputs[0].pages[0];
+        assert_eq!(page.elements.len(), 2);
+        // The border is a rect at the frame's origin, with the
+        // border the template asked for.
+        match kind_at(page, 10.0, 20.0) {
+            Some(PlacedKind::Rect {
+                w_mm,
+                h_mm,
+                fill,
+                thickness_mm,
+            }) => {
+                assert_eq!(*w_mm, 30.0);
+                assert_eq!(*h_mm, 20.0);
+                assert!(!fill);
+                assert_eq!(*thickness_mm, Some(0.5));
+            }
+            other => panic!("expected the frame's border rect, got {other:?}"),
+        }
+        // The child sits at the frame's origin plus its own offset.
+        assert_eq!(text_at(page, 12.0, 23.0), Some("inside"));
+    }
+
+    #[test]
+    fn a_nested_frame_offsets_through_every_level() {
+        let t = Template {
+            format: Format::Scene,
+            html: None,
+            media: label(58.0, 40.0),
+            fields: vec![],
+            elements: vec![frame(
+                At {
+                    x_mm: 10.0,
+                    y_mm: 20.0,
+                },
+                30.0,
+                20.0,
+                1.0,
+                vec![frame(
+                    At {
+                        x_mm: 5.0,
+                        y_mm: 5.0,
+                    },
+                    15.0,
+                    10.0,
+                    0.25,
+                    vec![text(1.0, 2.0, 8.0, 3.0, "deep")],
+                )],
+            )],
+            fonts: vec![],
+        };
+        let job = expand(&t, &json(r#"[ {} ]"#)).unwrap();
+        let page = &job.outputs[0].pages[0];
+        assert_eq!(page.elements.len(), 3);
+        assert!(
+            matches!(
+                kind_at(page, 10.0, 20.0),
+                Some(PlacedKind::Rect {
+                    thickness_mm: Some(1.0),
+                    ..
+                })
+            ),
+            "the outer border, at the outer frame's origin"
+        );
+        assert!(
+            matches!(
+                kind_at(page, 15.0, 25.0),
+                Some(PlacedKind::Rect {
+                    thickness_mm: Some(0.25),
+                    ..
+                })
+            ),
+            "the inner border, offset by the outer frame"
+        );
+        assert_eq!(
+            text_at(page, 16.0, 27.0),
+            Some("deep"),
+            "the text, offset through both frames"
+        );
+    }
+
+    #[test]
+    fn a_frame_with_no_border_places_only_its_children() {
+        let t = Template {
+            format: Format::Scene,
+            html: None,
+            media: label(58.0, 40.0),
+            fields: vec![],
+            elements: vec![frame(
+                At {
+                    x_mm: 10.0,
+                    y_mm: 20.0,
+                },
+                30.0,
+                20.0,
+                0.0,
+                vec![text(2.0, 3.0, 10.0, 4.0, "inside")],
+            )],
+            fonts: vec![],
+        };
+        let job = expand(&t, &json(r#"[ {} ]"#)).unwrap();
+        let page = &job.outputs[0].pages[0];
+        assert_eq!(page.elements.len(), 1, "no border rect for a 0 border");
+        assert_eq!(text_at(page, 12.0, 23.0), Some("inside"));
+    }
+
+    #[test]
+    fn a_frame_inside_a_group_item_flattens_on_every_row() {
+        let t = Template {
+            format: Format::Scene,
+            html: None,
+            media: label(58.0, 60.0),
+            fields: vec![],
+            elements: vec![group_cfg(
+                "lines",
+                At {
+                    x_mm: 4.0,
+                    y_mm: 30.0,
+                },
+                50.0,
+                1.0,
+                vec![frame(
+                    At {
+                        x_mm: 0.0,
+                        y_mm: 0.0,
+                    },
+                    20.0,
+                    10.0,
+                    0.5,
+                    vec![text(1.0, 1.0, 18.0, 3.0, "{{item}}")],
+                )],
+            )],
+            fonts: vec![],
+        };
+        let job = expand(
+            &t,
+            &json(r#"[ { "lines": [ { "item": "A" }, { "item": "B" } ] } ]"#),
+        )
+        .unwrap();
+        let page = &job.outputs[0].pages[0];
+        assert_eq!(page.elements.len(), 4, "border + text, on each row");
+        // Row 0: the frame's border and its text, at the group origin.
+        assert!(matches!(
+            kind_at(page, 4.0, 30.0),
+            Some(PlacedKind::Rect {
+                thickness_mm: Some(0.5),
+                ..
+            })
+        ));
+        assert_eq!(text_at(page, 5.0, 31.0), Some("A"));
+        // Row 1: the whole frame again, shifted by the row stride
+        // (10 mm of frame + 1 mm of gap).
+        assert!(matches!(
+            kind_at(page, 4.0, 41.0),
+            Some(PlacedKind::Rect {
+                thickness_mm: Some(0.5),
+                ..
+            })
+        ));
+        assert_eq!(text_at(page, 5.0, 42.0), Some("B"));
+    }
+
+    #[test]
+    fn a_frame_sits_only_on_the_pages_its_page_says() {
+        let mut t = Template {
+            format: Format::Scene,
+            html: None,
+            media: Media::Page {
+                width_mm: 100.0,
+                height_mm: 80.0,
+            },
+            fields: vec![],
+            elements: vec![group_cfg(
+                "lines",
+                At {
+                    x_mm: 10.0,
+                    y_mm: 20.0,
+                },
+                80.0,
+                2.0,
+                vec![text(0.0, 0.0, 80.0, 4.0, "{{item}}")],
+            )],
+            fonts: vec![],
+        };
+        let mut stamped = frame(
+            At {
+                x_mm: 5.0,
+                y_mm: 5.0,
+            },
+            20.0,
+            10.0,
+            0.3,
+            vec![text(1.0, 1.0, 18.0, 3.0, "STAMP")],
+        );
+        let Element::Frame { page, .. } = &mut stamped else {
+            panic!("stamped is a frame");
+        };
+        *page = Placement::First;
+        t.elements.push(stamped);
+        // Ten rows per page, the way the document golden does.
+        let job = expand(&t, &receipt_record(12, "0.00")).unwrap();
+        assert_eq!(job.outputs[0].pages.len(), 2);
+        let first = &job.outputs[0].pages[0];
+        let second = &job.outputs[0].pages[1];
+        assert!(
+            matches!(
+                kind_at(first, 5.0, 5.0),
+                Some(PlacedKind::Rect {
+                    thickness_mm: Some(0.3),
+                    ..
+                })
+            ),
+            "the stamp on page 1"
+        );
+        assert_eq!(text_at(first, 6.0, 6.0), Some("STAMP"));
+        assert!(kind_at(second, 5.0, 5.0).is_none(), "no stamp on page 2");
+        assert!(second
+            .elements
+            .iter()
+            .all(|p| !matches!(p.kind, PlacedKind::Rect { .. })));
+    }
+
     // The four shapes the phase-4 exit asks one schema to describe —
     // a single-page label, a batch of N labels with per-label data, an
     // N-page document, and a variable-length receipt — expanded to
@@ -726,6 +1057,54 @@ mod tests {
         let job = expand(&t, &data).unwrap();
         golden_harness::assert_matches_golden(
             "scene/expand/label-batch.json",
+            serde_json::to_string(&job).unwrap().as_bytes(),
+        );
+    }
+
+    /// A framed label: the flattening — border rects and offset
+    /// children — is part of the wire contract, so its pages are
+    /// pinned too.
+    #[test]
+    fn a_framed_label_expands_to_the_pinned_golden_pages() {
+        let t = Template {
+            format: Format::Scene,
+            html: None,
+            media: label(58.0, 40.0),
+            fields: vec![Field {
+                name: "customer".to_string(),
+                kind: FieldKind::String,
+            }],
+            elements: vec![
+                text(4.0, 5.0, 50.0, 4.0, "For {{customer}}"),
+                frame(
+                    At {
+                        x_mm: 4.0,
+                        y_mm: 14.0,
+                    },
+                    50.0,
+                    20.0,
+                    0.5,
+                    vec![
+                        text(2.0, 2.0, 44.0, 4.0, "Amount {{customer}}"),
+                        frame(
+                            At {
+                                x_mm: 2.0,
+                                y_mm: 8.0,
+                            },
+                            24.0,
+                            10.0,
+                            0.25,
+                            vec![text(2.0, 2.0, 20.0, 4.0, "Net")],
+                        ),
+                    ],
+                ),
+            ],
+            fonts: vec![],
+        };
+        let data = json(r#"[ { "customer": "Ada" } ]"#);
+        let job = expand(&t, &data).unwrap();
+        golden_harness::assert_matches_golden(
+            "scene/expand/framed-label.json",
             serde_json::to_string(&job).unwrap().as_bytes(),
         );
     }

@@ -120,6 +120,8 @@ export function PrintersCard({
   );
   const [scanning, setScanning] = useState<"system" | "network" | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  /** A plain-words note about the draft, when one applies. */
+  const [draftHint, setDraftHint] = useState<string | null>(null);
 
   useEffect(() => {
     listSavedPrinters()
@@ -158,6 +160,7 @@ export function PrintersCard({
 
   /** A system queue fills the form: its name is the spooler's name. */
   const useSystem = (p: SystemPrinter) => {
+    setDraftHint(null);
     setDraft({
       ...emptyDraft(printers[0]?.model ?? ""),
       name: p.name,
@@ -165,9 +168,15 @@ export function PrintersCard({
     });
   };
 
-  /** A found printer fills the form: the service type is the kind. */
+  /**
+   * A found printer fills the form: the service type is the kind.
+   * A TLS-only (_ipps) hit is prefilled with its true https://
+   * address, with a note that the transport cannot use it yet.
+   */
   const useNetwork = (p: DiscoveredPrinter) => {
     const ipp = p.kind === "ipp";
+    const tls = ipp && p.secure;
+    setDraftHint(tls ? t("settings.ipp_tls_hint") : null);
     setDraft({
       ...emptyDraft(printers[0]?.model ?? ""),
       name: p.name,
@@ -175,7 +184,9 @@ export function PrintersCard({
       host: p.host,
       port: String(p.port),
       ippAddress: ipp
-        ? `http://${p.host}:${p.port}${p.resourcePath ? "/" + p.resourcePath : ""}`
+        ? `${tls ? "https" : "http"}://${p.host}:${p.port}${
+            p.resourcePath ? "/" + p.resourcePath : ""
+          }`
         : "",
     });
   };
@@ -191,6 +202,7 @@ export function PrintersCard({
     })
       .then(() => {
         setDraft(null);
+        setDraftHint(null);
         return refreshSaved();
       })
       .catch((e) => setError(String(e)));
@@ -277,7 +289,10 @@ export function PrintersCard({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setDraft(emptyDraft(printers[0]?.model ?? ""))}
+              onClick={() => {
+                setDraftHint(null);
+                setDraft(emptyDraft(printers[0]?.model ?? ""));
+              }}
               disabled={draft !== null}
             >
               {t("settings.add_manually")}
@@ -345,6 +360,9 @@ export function PrintersCard({
                       {" "}
                       · {p.host}:{p.port}
                     </span>
+                    {p.secure && (
+                      <span className="text-caption text-warning"> · TLS</span>
+                    )}
                   </span>
                   <Button
                     variant="ghost"
@@ -360,6 +378,9 @@ export function PrintersCard({
 
           {draft && (
             <div className="flex flex-col gap-3 rounded-lg border p-3">
+              {draftHint && (
+                <p className="text-caption text-warning">{draftHint}</p>
+              )}
               <div className="flex flex-col gap-1">
                 <Label htmlFor="sp-name">{t("settings.printer_name")}</Label>
                 <Input
@@ -480,7 +501,13 @@ export function PrintersCard({
                 <Button onClick={saveDraft}>
                   {t("settings.save_printer")}
                 </Button>
-                <Button variant="ghost" onClick={() => setDraft(null)}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setDraft(null);
+                    setDraftHint(null);
+                  }}
+                >
                   {t("common.cancel")}
                 </Button>
               </div>

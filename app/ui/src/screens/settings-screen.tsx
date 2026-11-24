@@ -1,19 +1,16 @@
 /**
  * Settings (plan phase 7): appearance (light/dark), start-with-
  * computer, the LAN switch with device pairing (plan phase 8, LAN
- * increment), the printers the user has saved and their per-printer
- * delivery overrides, and the community registry's address. The
- * screen is split into pages — General, Printers, Network, Data and
- * Registry — so each concern has its own room instead of one long
- * scroll. A delivery field left empty uses the profile's own value,
- * shown as the placeholder.
+ * increment), and the community registry's address. The screen is
+ * split into pages — General, Network, Data and Registry — so each
+ * concern has its own room instead of one long scroll. The printers
+ * the user has saved have their own destination now (plan P3).
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   beginPairing,
   isAutostart,
-  listPrinters,
   loadSettings,
   pairedDevices,
   registryUrl,
@@ -21,10 +18,8 @@ import {
   saveSetting,
   setAutostart,
   type PairedDevice,
-  type ProfileInfo,
 } from "@/api";
 import { PageHeader } from "@/components/page-header";
-import { PrintersCard } from "@/components/printers-card";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -35,13 +30,13 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { setLanguage } from "@/lib/i18n";
 
-export function SettingsScreen({ onBack }: { onBack: () => void }) {
+export function SettingsScreen() {
   const { t, i18n } = useTranslation();
-  const [printers, setPrinters] = useState<ProfileInfo[]>([]);
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [autostart, setAutostartState] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,9 +56,6 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const blockPrivateOn = settings["data.block_private_ips"] !== "false";
 
   useEffect(() => {
-    listPrinters()
-      .then(setPrinters)
-      .catch((e) => setError(String(e)));
     loadSettings()
       .then((rows) => {
         setSettings(rows);
@@ -149,11 +141,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       <PageHeader
         title={t("settings.title")}
         description={t("settings.subtitle")}
-      >
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          {t("common.back")}
-        </Button>
-      </PageHeader>
+      />
 
       {error && (
         <p className="rounded-lg border border-danger bg-danger-soft px-4 py-3 text-body-sm text-danger">
@@ -162,11 +150,8 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       )}
 
       <Tabs defaultValue="general">
-        <TabsList className="flex-wrap">
+        <TabsList className="flex-wrap max-md:hidden">
           <TabsTrigger value="general">{t("settings.tab_general")}</TabsTrigger>
-          <TabsTrigger value="printers">
-            {t("settings.tab_printers")}
-          </TabsTrigger>
           <TabsTrigger value="network">{t("settings.tab_network")}</TabsTrigger>
           <TabsTrigger value="data">{t("settings.tab_data")}</TabsTrigger>
           <TabsTrigger value="registry">
@@ -174,25 +159,29 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="flex flex-col gap-6">
+        <TabsContent
+          value="general"
+          forceMount
+          className="flex flex-col gap-6 max-md:block"
+        >
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+            {t("settings.tab_general")}
+          </h2>
           <Card>
             <CardHeader>
               <CardTitle>{t("settings.appearance")}</CardTitle>
               <CardDescription>{t("settings.appearance_note")}</CardDescription>
             </CardHeader>
-            <CardContent className="flex gap-2">
-              <Button
-                variant={theme === "light" ? "default" : "outline"}
-                onClick={() => pickTheme("light")}
-              >
-                {t("settings.light")}
-              </Button>
-              <Button
-                variant={theme === "dark" ? "default" : "outline"}
-                onClick={() => pickTheme("dark")}
-              >
-                {t("settings.dark")}
-              </Button>
+            <CardContent>
+              <Segmented
+                label={t("settings.appearance")}
+                value={theme}
+                onChange={pickTheme}
+                options={[
+                  { value: "light", label: t("settings.light") },
+                  { value: "dark", label: t("settings.dark") },
+                ]}
+              />
             </CardContent>
           </Card>
 
@@ -201,19 +190,16 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               <CardTitle>{t("settings.language")}</CardTitle>
               <CardDescription>{t("settings.language_note")}</CardDescription>
             </CardHeader>
-            <CardContent className="flex gap-2">
-              <Button
-                variant={i18n.language === "en" ? "default" : "outline"}
-                onClick={() => setLanguage("en")}
-              >
-                {t("settings.language_english")}
-              </Button>
-              <Button
-                variant={i18n.language === "ja" ? "default" : "outline"}
-                onClick={() => setLanguage("ja")}
-              >
-                {t("settings.language_japanese")}
-              </Button>
+            <CardContent>
+              <Segmented
+                label={t("settings.language")}
+                value={i18n.language.startsWith("ja") ? "ja" : "en"}
+                onChange={(v) => setLanguage(v)}
+                options={[
+                  { value: "en", label: t("settings.language_english") },
+                  { value: "ja", label: t("settings.language_japanese") },
+                ]}
+              />
             </CardContent>
           </Card>
 
@@ -235,16 +221,14 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           </Card>
         </TabsContent>
 
-        <TabsContent value="printers" className="flex flex-col gap-6">
-          <PrintersCard
-            printers={printers}
-            settings={settings}
-            save={save}
-            setError={setError}
-          />
-        </TabsContent>
-
-        <TabsContent value="network" className="flex flex-col gap-6">
+        <TabsContent
+          value="network"
+          forceMount
+          className="flex flex-col gap-6 max-md:block"
+        >
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+            {t("settings.tab_network")}
+          </h2>
           <Card>
             <CardHeader>
               <CardTitle>{t("settings.network")}</CardTitle>
@@ -312,7 +296,14 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           </Card>
         </TabsContent>
 
-        <TabsContent value="data" className="flex flex-col gap-6">
+        <TabsContent
+          value="data"
+          forceMount
+          className="flex flex-col gap-6 max-md:block"
+        >
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+            {t("settings.tab_data")}
+          </h2>
           <Card>
             <CardHeader>
               <CardTitle>{t("settings.data")}</CardTitle>
@@ -338,7 +329,14 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           </Card>
         </TabsContent>
 
-        <TabsContent value="registry" className="flex flex-col gap-6">
+        <TabsContent
+          value="registry"
+          forceMount
+          className="flex flex-col gap-6 max-md:block"
+        >
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+            {t("settings.tab_registry")}
+          </h2>
           <Card>
             <CardHeader>
               <CardTitle>{t("settings.registry")}</CardTitle>

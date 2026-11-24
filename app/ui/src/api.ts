@@ -197,6 +197,8 @@ export interface DiscoveredPrinter {
   port: number;
   /** The transport the found service is: "ipp" or "raw_tcp". */
   kind: string;
+  /** The service is the TLS variant (_ipps._tcp): the address is https://. */
+  secure?: boolean;
   /** An IPP resource path, when the advertisement carried one. */
   resourcePath?: string;
 }
@@ -240,6 +242,13 @@ export const loadTemplates = () => invoke<StoredTemplate[]>("load_templates");
 /** Save or replace one template. */
 export const saveTemplate = (template: StoredTemplate) =>
   invoke<void>("save_template", { template });
+
+/**
+ * Delete one template by id — the local row; a published template's
+ * registry copy is unpublish's business.
+ */
+export const deleteTemplate = (id: string) =>
+  invoke<boolean>("delete_template", { id });
 
 /** The recent jobs, newest first. */
 export const loadRecentJobs = () => invoke<StoredJob[]>("load_recent_jobs");

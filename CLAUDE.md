@@ -76,8 +76,10 @@ Before committing a Rust or app change:
   pnpm project too (`pnpm --dir app/ui install --frozen-lockfile`) — the
   script boots `app/ui`'s vite straight from its `node_modules`, which a
   root-only install never creates.
-- The curated README images are committed under `assets/`. Refresh them
-  from a fresh `screenshots/` run when the UI changes.
+- The curated README images are committed under `assets/` (English
+  shots only). Refresh them with `pnpm shots:assets` after a fresh
+  `pnpm shots` run when the UI changes — the script copies the curated
+  set and drops any `assets/*.png` it no longer uses.
 
 ## Android
 
@@ -91,11 +93,12 @@ Before committing a Rust or app change:
   `ANDROID_KEYSTORE_BASE64` + `ANDROID_KEYSTORE_PASSWORD` and fails rather
   than ship a throwaway key when they are missing.
 - The app-level Android work (transport adapters, background print
-  service) is **phase 11**; CI already compiles and bundles the app.
+  service) is still to build; CI already compiles and bundles the app.
 
 ## The roadmap
 
-`docs/ROADMAP.md` is the remaining-work checklist: phase 10 (hardening,
-hardware verification, first release candidate) and phase 11 (Android).
+`docs/ROADMAP.md` is the remaining-work checklist, in priority order:
+hardening, hardware verification, the first release candidate, and the
+Android app.
 The architecture rationale lives in `docs/ARCHITECTURE.md`. Check the
 roadmap before hardware or platform work.

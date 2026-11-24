@@ -22,8 +22,13 @@ A template plus some data becomes bytes for one printer. In order:
   of the job.
 - **Sample** — the data field's starting records: what the preview shows
   and what tests and the registry publish alongside the template.
-- **Scene track** — the declarative track: boxes, text, barcodes placed
-  in millimetres. The encoders turn it into the printer's language.
+- **Scene track** — the declarative track: text, bars, rectangles,
+  frames and repeating groups placed in millimetres. The encoders turn
+  it into the printer's language.
+- **Frame** — a bordered box in the scene track that holds other
+  elements at coordinates relative to its top-left, nestable to four
+  levels. At expansion it flattens into its border rect and its offset
+  children, so preview and every encoder pick it up unchanged.
 - **Document track** — plain HTML documents. They do not go through the
   encoders at all: a headless browser prints them to a PDF, and the PDF
   goes to the printer through the OS print path.
@@ -162,6 +167,6 @@ A template plus some data becomes bytes for one printer. In order:
 - **versionCode** — Android's build number, which must always go up:
   `YYMMDD*100+N` (for example `26112403`), written to
   `bundle.android.versionCode` in advance by the same scripts.
-- **Release candidate (RC)** — the first cut of a release, made in
-  phase 10 together with the hardware verification, before the release
-  is published.
+- **Release candidate (RC)** — the first cut of a release, made
+  together with the hardware verification, before the release is
+  published.

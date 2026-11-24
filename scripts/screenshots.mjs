@@ -47,21 +47,31 @@ const themes = list("themes", "dark,light").filter((t) =>
 const jobsN = Number(flag("jobs", "4")) || 4;
 const outDir = flag("out", join(root, "screenshots"));
 const chromiumPath = flag("chromium", null);
+const phoneWidth = Number(flag("width", "0")) || null;
+const overflowCheck = hasFlag("check-overflow");
 const wantIndex = !hasFlag("no-index");
 
 const VIEWS = [
   "list",
+  "search",
+  "jobs",
+  "job-menu",
+  "printers",
   "community",
   "saved",
   "print",
   "print-preview",
   "print-done",
+  "print-menu",
   "edit",
+  "element-menu",
+  "editor-properties",
   "document-edit",
   "settings",
-  "settings-printers",
   "new-template",
   "publish-dialog",
+  "template-menu",
+  "account-menu",
   "signin-dialog",
 ];
 const views = list("views", VIEWS.join(",")).filter((v) =>
@@ -77,11 +87,25 @@ const L = {
   en: {
     print: "Print",
     edit: "Edit",
+    search: "Search templates",
+    searchResultsOne: "1 matching",
+    openTemplate: "Open template",
+    more: "More actions",
+    duplicate: "Duplicate",
+    moveUp: "Move up",
+    editTemplate: "Edit template",
+    elementsTitle: "Elements",
+    elText: "Text",
+    selectedTitle: "Selected element",
     publish: "Publish",
     newTemplate: "New template",
     settings: "Settings",
+    accountMenu: "Account menu",
+    sync: "Sync",
     signIn: "Sign in",
     signOut: "Sign out",
+    jobs: "Jobs",
+    recentTitle: "Recent jobs",
     tabCommunity: "Community",
     tabSaved: "Saved",
     tabPrinters: "Printers",
@@ -94,11 +118,22 @@ const L = {
   ja: {
     print: "印刷",
     edit: "編集",
+    more: "その他の操作",
+    duplicate: "複製",
+    moveUp: "上へ移動",
+    editTemplate: "テンプレートを編集",
+    elementsTitle: "要素",
+    elText: "テキスト",
+    selectedTitle: "選択中の要素",
     publish: "公開",
     newTemplate: "新しいテンプレート",
     settings: "設定",
+    accountMenu: "アカウントメニュー",
+    sync: "同期",
     signIn: "サインイン",
     signOut: "サインアウト",
+    jobs: "ジョブ",
+    recentTitle: "最近のジョブ",
     tabCommunity: "コミュニティ",
     tabSaved: "保存済み",
     tabPrinters: "プリンター",
@@ -334,7 +369,7 @@ const PLATFORMS = {
     deviceScaleFactor: 1,
   },
   android: {
-    viewport: { width: 412, height: 915 },
+    viewport: { width: phoneWidth ?? 412, height: 915 },
     deviceScaleFactor: 2.625,
     isMobile: true,
     hasTouch: true,
@@ -354,13 +389,49 @@ async function navigate(page, view, l) {
   switch (view) {
     case "list":
       break;
+    case "search":
+      // The field is PC-only; the phone just shows the plain list.
+      if ((page.viewportSize()?.width ?? 0) >= 768) {
+        await page.locator('input[type="search"]').fill("Parts");
+        await page.locator('[data-slot="search-results"]').waitFor();
+      }
+      break;
+    case "job-menu":
+      await navigate(page, "jobs", l);
+      await page.getByRole("button", { name: l.more, exact: true }).first().click();
+      await page.getByRole("menuitem", { name: l.openTemplate, exact: true }).first().waitFor();
+      break;
+    case "jobs":
+      // The sidebar button carries a job count after its name.
+      await page.getByRole("button", { name: l.jobs }).click();
+      await page
+        .getByRole("heading", { name: l.recentTitle, level: 1 })
+        .waitFor();
+      break;
+    case "printers":
+      await page
+        .getByRole("button", { name: l.tabPrinters, exact: true })
+        .click();
+      await page
+        .getByRole("heading", { name: l.savedPrinters, level: 2 })
+        .waitFor();
+      break;
     case "community":
-      await page.getByRole("tab", { name: l.tabCommunity }).click();
-      await page.getByRole("heading", { name: l.tabCommunity }).waitFor();
+      // The sidebar button carries the saved-template count after its name.
+      await page.getByRole("button", { name: l.tabCommunity }).click();
+      await page
+        .getByRole("heading", { name: l.tabCommunity, level: 1 })
+        .waitFor();
       break;
     case "saved":
-      await page.getByRole("tab", { name: l.tabSaved }).click();
-      await page.getByRole("heading", { name: l.tabSaved }).waitFor();
+      await page.getByRole("button", { name: l.tabCommunity }).click();
+      await page
+        .getByRole("heading", { name: l.tabCommunity, level: 1 })
+        .waitFor();
+      await page
+        .getByRole("button", { name: l.tabSaved, exact: true })
+        .click();
+      await page.getByRole("heading", { name: l.tabSaved, level: 2 }).waitFor();
       break;
     case "print":
     case "print-preview":
@@ -371,14 +442,23 @@ async function navigate(page, view, l) {
         .click();
       await page.getByRole("heading", { name: "Parts label" }).waitFor();
       if (view === "print-preview") {
-        await page.getByRole("button", { name: l.preview, exact: true }).click();
+        // On the phone the sticky action bar repeats these buttons.
+        await page.getByRole("button", { name: l.preview, exact: true }).last().click();
         await page.getByText("raster", { exact: true }).waitFor();
       } else if (view === "print-done") {
         await page
           .getByRole("button", { name: l.print, exact: true })
+          .last()
           .click();
         await page.getByText(l.confirmed, { exact: true }).waitFor();
       }
+      break;
+    case "print-menu":
+      await navigate(page, "print", l);
+      await page
+        .getByRole("button", { name: l.more, exact: true })
+        .click();
+      await page.getByRole("menuitem", { name: l.editTemplate, exact: true }).waitFor();
       break;
     case "edit":
       await card
@@ -386,6 +466,27 @@ async function navigate(page, view, l) {
         .getByRole("button", { name: l.edit, exact: true })
         .click();
       await page.getByRole("heading", { name: l.editorTitle, level: 1 }).waitFor();
+      break;
+    case "element-menu":
+      await navigate(page, "edit", l);
+      const elementsCard = page
+        .locator('[data-slot="card"]')
+        .filter({ has: page.getByRole("heading", { name: l.elementsTitle }) });
+      await elementsCard
+        .getByRole("button", { name: l.more, exact: true })
+        .first()
+        .click();
+      await page.getByRole("menuitem", { name: l.moveUp, exact: true }).waitFor();
+      break;
+    case "editor-properties":
+      await navigate(page, "edit", l);
+      await page
+        .locator('[data-slot="card"]')
+        .filter({ has: page.getByRole("heading", { name: l.elementsTitle }) })
+        .getByRole("button", { name: l.elText })
+        .first()
+        .click();
+      await page.getByText(l.selectedTitle, { exact: true }).waitFor();
       break;
     case "document-edit":
       // The card title's heading also carries the track badge, so the
@@ -404,30 +505,41 @@ async function navigate(page, view, l) {
         .click();
       await page.getByRole("heading", { name: l.settings, level: 1 }).waitFor();
       break;
-    case "settings-printers":
-      await page
-        .getByRole("button", { name: l.settings, exact: true })
-        .click();
-      await page.getByRole("heading", { name: l.settings, level: 1 }).waitFor();
-      await page.getByRole("tab", { name: l.tabPrinters, exact: true }).click();
-      await page
-        .getByRole("heading", { name: l.savedPrinters, level: 2 })
-        .waitFor();
-      break;
     case "new-template":
       await page.getByRole("button", { name: l.newTemplate }).click();
       await page.getByRole("dialog").waitFor();
       break;
+    case "template-menu":
+      await card.first().getByRole("button", { name: l.more, exact: true }).click();
+      await page.getByRole("menuitem", { name: l.duplicate, exact: true }).waitFor();
+      break;
     case "publish-dialog":
-      await card
-        .first()
-        .getByRole("button", { name: l.publish, exact: true })
-        .click();
+      // Publish moved into the card's overflow menu (D2/M2).
+      await card.first().getByRole("button", { name: l.more, exact: true }).click();
+      await page.getByRole("menuitem", { name: l.publish, exact: true }).click();
       await page.locator("#publish-slug").waitFor();
       break;
+    case "account-menu":
+      await page
+        .getByRole("button", { name: l.accountMenu })
+        .click();
+      await page.getByRole("menuitem", { name: l.sync, exact: true }).waitFor();
+      break;
     case "signin-dialog":
-      await page.getByRole("button", { name: l.signOut, exact: true }).click();
-      const signIn = page.getByRole("button", { name: l.signIn, exact: true });
+      // Sign in/out and Sync now live in the one account menu (M1).
+      await page
+        .getByRole("button", { name: l.accountMenu })
+        .click();
+      await page
+        .getByRole("menuitem", { name: l.signOut, exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: l.accountMenu })
+        .click();
+      const signIn = page.getByRole("menuitem", {
+        name: l.signIn,
+        exact: true,
+      });
       await signIn.waitFor();
       await signIn.click();
       await page.locator("#signin-handle").waitFor();
@@ -543,6 +655,12 @@ async function runJob(browser, job, fakeAgent) {
     await settle(page);
     await navigate(page, job.view, L[job.lang]);
     await settle(page);
+    if (overflowCheck) {
+      const over = await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      );
+      if (over > 1) throw new Error(`horizontal overflow: ${over}px`);
+    }
     await freeze(page);
     mkdirSync(dirname(job.path), { recursive: true });
     await page.screenshot({ path: job.path, fullPage: true });
@@ -639,6 +757,16 @@ async function main() {
   let failures = 0;
   try {
     await vite.ready;
+    // Vite prints "ready in" a tick before it accepts connections; the
+    // first workers would race it. Wait for a real answer.
+    for (;;) {
+      try {
+        if ((await fetch(URL)).ok) break;
+      } catch {
+        /* not listening yet */
+      }
+      await new Promise((res) => setTimeout(res, 100));
+    }
     browser = await chromium.launch({
       ...(chromiumPath ? { executablePath: chromiumPath } : {}),
     });

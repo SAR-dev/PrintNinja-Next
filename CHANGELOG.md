@@ -10,6 +10,14 @@ Unreleased.
 
 ### Added
 
+- App: a PC top-bar search field that filters the Templates list (no
+  command palette), and a ⋯ menu on each recent job (M4: reprint,
+  retry, open template, copy reason)
+- App: one icon registry (`lib/icons.ts`) plus an `IconButton` with a
+  required aria-label, a tooltip and a fixed `h-control w-control`
+  target — screens name icons semantically instead of importing
+  lucide-react directly, and the primary buttons carry icons
+
 - Phase 0 skeleton: Rust workspace (`core/{scene,render,planner,profiles,encoders,transport,job}`, `app`, `tests/golden`)
 - CI: web-check, rust-lint, rust-test-linux (Docker container), rust-test-windows,
   chromium-render (the document track through a real system Chrome), and rust-check
@@ -569,9 +577,100 @@ Unreleased.
   `docs/UI_GUIDE.md` describes the five settings tabs and the
   saved-printer picker on the print screen; `docs/FEATURES.md` lists the
   saved printers and `docs/GLOSSARY.md` gains the "saved printer" term
+- Templates: a local template can now be deleted from the list. A
+  published one stays until unpublish — the button is held off with a
+  note that the registry keeps its copy — and a deleted shipped starter
+  stays deleted across restarts
+- Scene templates: the frame element — a bordered box (border in
+  millimetres) that holds other elements at coordinates relative to the
+  frame's top-left, nestable to four levels. A frame flattens at
+  expansion into its border rect and its offset children, so preview,
+  the goldens and all three native encoders pick it up unchanged. A
+  child that leaves the frame, picks its own page, or is a repeating
+  group; a negative or non-numeric border; and a fifth nesting level
+  each get their own named validation error, and a template that uses an
+  element type this build does not know fails with a plain "needs a
+  newer PrintNinja" instead of a raw parse error
+- Scene editor: frames can now be created and edited — a "Frame" option
+  in the add-element list (never offered inside a frame, and a group is
+  never offered inside one), a frame's children selected and dragged on
+  the canvas at coordinates relative to the frame's top-left (the
+  properties panel says so, and shows the parent's name in the header),
+  and a frame's own width, height and border-thickness properties. A
+  frame's children take the frame's page, so the page picker is hidden
+  for them
+- Scene editor: undo/redo (Ctrl/Cmd+Z, Shift+Z or Ctrl+Y, with buttons
+  in the header; bursts of the same action coalesce into one step),
+  resize handles on the selected element — eight, corners and edges,
+  0.1 mm steps, and a frame's children can be moved, nudged or resized
+  only as far as the frame's edges allow — plus Delete to remove the
+  selection and arrow keys to nudge it 0.1 mm (Shift: 1 mm)
+- `pnpm shots:assets` — refreshes the curated README images under
+  `assets/` from the latest `pnpm shots` run (the English shots only)
+  and drops any png the curated set no longer uses
 
 ### Changed
 
+- App: Ctrl/Cmd+K focuses the top-bar search, Escape clears it, and
+  duplicating a template confirms with a toast; interactions use
+  120–200 ms transitions and the screenshot script can check 360 px
+  (`pnpm shots --platforms android --width 360 --check-overflow`)
+- Docs: `docs/UI_GUIDE.md` rewritten for the five destinations, the
+  account menu and the phone layouts; `docs/ROADMAP.md` and
+  `docs/LIMITATIONS.md` reconciled with what now exists
+- App: the phone's Settings is one grouped list under headings (no
+  tab strip), and theme and language use a selected-state segmented
+  control instead of pairs of buttons
+- App: on the phone, selecting an editor element brings the canvas
+  back into view and opens its properties as a bottom sheet; the add
+  actions are an icon toolbar (as on the PC)
+- App: the phone print screen keeps Preview and Print in a sticky
+  action bar at the bottom, and the result is a status banner with an
+  icon and the printer's outcome
+- App: the PC print screen has a sticky job summary with a distinct
+  Preview (Eye) and primary Print (Printer) action, plus a ⋯ menu
+  (M9: edit template, save as default printer, clear data)
+- App: the scene editor is split into editor components, its element
+  rows have type icons and a ⋯ menu (move up/down, delete), adding an
+  element uses an icon toolbar, and the header holds an inline name,
+  an unsaved dot and a ⋯ menu with the template size and Save
+- App: template cards now lead with Print, use an icon-only Edit and
+  put Publish/Unpublish, Duplicate and Delete in a ⋯ menu (also opened
+  by right-click on the PC); New template is a split button on the PC
+  and a small FAB above the bottom nav on the phone
+- App: the PC sidebar groups Templates/Jobs under Workspace and
+  Printers/Community under Resources, shows job and saved-template
+  counts, and pins Settings below the groups next to Collapse
+- App: the top bar's registry status chip, Sync and Sign in/out buttons
+  and the update badge are one account menu — a status dot and handle
+  in the trigger, with Sync, Sign in/out and the release link inside
+- App: the phone gets a bottom tab bar with the five destinations
+  (Templates, Jobs, Printers, Community, Settings) instead of the tab
+  strip under the top bar, and Jobs, Printers and Community become
+  top-level destinations — Jobs is the last ten prints with reprint,
+  Printers is the saved-printer settings moved out of Settings, and
+  Community has All and Saved filter chips where the list view's tabs
+  were
+- CI: the registry image is published to GHCR only on `v*` release tags
+  (`server-publish-release`) — the `server-publish` job that pushed
+  `latest` and a `sha-<short>` tag on every push to `main` is removed,
+  so a merge no longer publishes a package
+- Docs: the scene editor and the frame element are now written up in
+  `docs/FEATURES.md`, `docs/ARCHITECTURE.md` (a new "The scene format"
+  section: the element types, the frame's four-level nesting, its
+  flattening at expansion), `docs/GLOSSARY.md` and `docs/UI_GUIDE.md`
+  (resize handles, the sample-data switch, undo/redo, Delete and the
+  arrow-key nudge)
+- README: the screenshot grid shows the scene editor instead of the
+  Japanese template list, refreshed from the new screenshot run
+
+- CI: the `server-publish` docker build adds `--provenance=false`,
+  matching the release job's build
+- Docs: `docs/ROADMAP.md` is now a priority-ordered checklist without
+  phase numbers — a point is deleted once it is implemented (the
+  header says so), points that wait on a decision sit in a "Needs
+  confirmation" section, and the phase numbers are stripped from the
+  other docs and the README as well
 - Docs: `docs/CI.md`, the CI workflow comments and `docs/ROADMAP.md`
   match the `screenshot-matrix` job as it is today — blocking, all shots
   green (the old note said it was still non-blocking) — and
@@ -598,6 +697,25 @@ Unreleased.
 
 ### Fixed
 
+- Sub-screens have a real back affordance: an arrow button before the page
+  title on the print, editor and settings screens, replacing the text link
+  that sat inside the title row; the scene editor's undo and redo are
+  icon buttons instead of the tiny text glyphs
+- Phone tab strips: a stacked (non-segmented) tab row now sizes to its
+  triggers — the fixed strip height squeezed three stacked tabs into a
+  one-tab-tall box, so on a phone only the active tab was visible
+- Phone template cards: the title and the action buttons no longer share
+  one clipped line — below the desktop width the header stacks and the
+  actions wrap, so Print and Delete are always fully reachable
+- The print screen's result card no longer shows the raw error string
+  when a print job fails before the pipeline reports — the failure is
+  wrapped in the locale's plain words ("The print could not be run: …"),
+  the way the data-URL fetch failure already was
 - Network scan: a discovered service that advertises only public IP
   addresses is now kept by its mDNS hostname — the name it is reachable
   by on the LAN — instead of being handed one of those public IPs
+- Network scan: a TLS-only printer (`_ipps._tcp`) is now marked `· TLS`
+  in the scan list, and using it prefills the form with the address's
+  real `https://` scheme plus a plain-words note that TLS is not
+  supported yet — instead of an `http://` address the printer would
+  refuse

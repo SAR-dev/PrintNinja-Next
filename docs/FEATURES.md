@@ -9,12 +9,12 @@
 
 Two tracks, one app — a template's `format` field picks the track, and a template never mixes them:
 
-- **🏷️ Scene** (the default, every media kind) — a JSON document that describes the media in millimetres (a fixed-size **label**, a continuous **roll**, or **page** paper) and its elements: text, image, barcode, QR code, line, rectangle, and **repeating groups** bound to a data array. `{{field}}` bindings fill values from your data, a declared field list catches a mistyped binding before a job is queued, and validation reports the problem in plain words.
+- **🏷️ Scene** (the default, every media kind) — a JSON document that describes the media in millimetres (a fixed-size **label**, a continuous **roll**, or **page** paper) and its elements: text, image, barcode, QR code, line, rectangle, **frames** (bordered boxes that hold other elements at coordinates relative to their top-left, nestable four levels deep), and **repeating groups** bound to a data array. `{{field}}` bindings fill values from your data, a declared field list catches a mistyped binding before a job is queued, and validation reports the problem in plain words.
 - **📄 Document** (`page` media only, rejected on thermal) — real **HTML/CSS** with `{{field}}` substitution. The app renders it to PDF with the desktop's own headless browser (Edge, Chromium or Chrome) and sends it over the OS print path. Good for invoices and delivery slips.
 
 **The designer:**
 
-- **Scene editor v1:** the page is a canvas — click an element to select it, drag to move (0.1 mm steps). Add or delete text, lines, rectangles, barcodes, QR, images and repeating groups; edit position, size, content with `{{bindings}}`, text size/bold/italic/align, barcode kind, fill, page placement (`every`, `first`, `last`, `only n`, or `flow` for groups) and the group's column width and row gap. Media dimensions in mm, and the declared data fields follow the bindings the elements actually use.
+- **Scene editor v1:** the page is a canvas — click an element to select it, drag to move (0.1 mm steps), and the selected element grows eight resize handles (corners and edges, 0.1 mm steps). Add or delete text, lines, rectangles, **frames**, barcodes, QR, images and repeating groups; edit position, size, content with `{{bindings}}`, text size/bold/italic/align, barcode kind, fill, a frame's width/height/border thickness, page placement (`every`, `first`, `last`, `only n`, or `flow` for groups) and the group's column width and row gap. Barcodes and QR draw live on the canvas from the sample data. A frame's children live at coordinates relative to the frame's top-left, and the editor keeps them inside the frame — move, nudge and resize all stop at its edges. **Undo/redo** (Ctrl/Cmd+Z, Shift+Z or Ctrl+Y, with buttons in the header; a drag or a burst of typing in one field is one step), **Delete** removes the selection, and the **arrow keys nudge** it 0.1 mm (Shift: 1 mm). Media dimensions in mm, and the declared data fields follow the bindings the elements actually use.
 - **Document editor v1:** the document's code, the paper size (A4/A5/Letter presets included) and sample data, with a live browser preview showing the first record substituted the way the print does it. (The richer CSS designer toolbar is post-v1.)
 
 **Data and preview:**
@@ -33,7 +33,7 @@ Printer facts live in data, not code: **one TOML file per model**, shipped in `c
 - Each profile names the printer's **language** (ZPL, TSPL, CPCL, ESC/POS, or PDF for a document printer), media, dpi and head width, fonts and code pages, native barcode types, delivery pacing (chunk size, pause, close delay) and its **status dialect** — plus any quirks, each with a link to the evidence that proved it.
 - The profile loader cross-checks fields (for example `head_width_dots` against dpi × printable width), so a typo is caught, not printed.
 - **User overrides:** pacing fields you leave in Settings (chunk size, pause, close delay) are stored in the local settings store and merged field-by-field over the profile per job — the shipped profiles are never touched, and a broken saved row can never fail a print.
-- All eleven ship as `untested` until they pass the per-profile hardware checklist on real printers (that is phase 10) — see [Known limitations](./LIMITATIONS.md).
+- All eleven ship as `untested` until they pass the per-profile hardware checklist on real printers (on the roadmap) — see [Known limitations](./LIMITATIONS.md).
 
 ## 🚚 Print pipeline & transports
 
@@ -75,7 +75,7 @@ One pipeline, decided per job, with the reasoning you can read:
 
 ## 🌍 Community registry
 
-The community registry (phase 9) — publish your templates, discover others, print offline:
+The community registry — publish your templates, discover others, print offline:
 
 - **👤 Accounts are handle + password, no email** (1–32 characters of A-Z a-z 0-9 `_` `-`). A new handle + password at sign-in simply creates the account. Passwords are argon2id; only the SHA-256 of a session token is stored.
 - **📤 Publish** a template with a name, a per-account slug and an optional sample of starting records — checked with the same parser and validation the app runs, so the registry never renders or prints, and everything it accepts is something the app can open.
@@ -104,8 +104,8 @@ The community registry (phase 9) — publish your templates, discover others, pr
 
 Not shipped yet — listed here so nobody thinks they are:
 
-- **📱 Android (phase 11):** the app for phones — thermal media (labels, receipts) via the scene track only, plus a background print service third-party apps can print through. The **build** side is already done: CI compiles the Android bundle on pull requests (`android-check`, debug APK) and ships a signed APK + AAB on release tags (`android-build`) — what remains is the app-level work (transport adapters, the print service).
-- **🧪 App-level (UI) e2e:** not in the repo yet. The e2e suite today is Rust-driven, against the virtual printer — a Playwright e2e is a phase 10 decision, if wanted.
-- **🖨️ Hardware verification (phase 10):** the per-profile checklists run on real printers, the failure drills, and the first release candidates.
+- **📱 Android:** the app for phones — thermal media (labels, receipts) via the scene track only, plus a background print service third-party apps can print through. The **build** side is already done: CI compiles the Android bundle on pull requests (`android-check`, debug APK) and ships a signed APK + AAB on release tags (`android-build`) — what remains is the app-level work (transport adapters, the print service).
+- **🧪 App-level (UI) e2e:** not in the repo yet. The e2e suite today is Rust-driven, against the virtual printer — a Playwright e2e is a post-release decision, if wanted.
+- **🖨️ Hardware verification:** the per-profile checklists run on real printers, the failure drills, and the first release candidates.
 
 [⬅️ Back to the README](../README.md)

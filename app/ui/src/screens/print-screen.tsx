@@ -11,12 +11,14 @@ import {
   listSavedPrinters,
   planJob,
   printJob,
+  saveSetting,
   type JobReport,
   type PrepareReport,
   type ProfileInfo,
   type SavedPrinter,
   type Transport,
 } from "@/api";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +40,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { JobPreview } from "@/components/job-preview";
 import { PageHeader } from "@/components/page-header";
+import { icons, type IconName } from "@/lib/icons";
 import { withTemplateStyles } from "@/lib/tailwind";
 import { resultTone, toneClass } from "@/result-words";
 import type { AppTemplate, RecentJob } from "@/templates";
@@ -58,15 +61,21 @@ function ResultCard({ report }: { report: JobReport }) {
       : null;
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{t("result.title")}</CardTitle>
-      </CardHeader>
       <CardContent className="flex flex-col gap-2">
         <div
-          className={`rounded-md px-3 py-2 text-body font-medium ${toneClass(resultTone(report.result))}`}
+          role="status"
+          className={`flex items-start gap-2 rounded-md px-3 py-2 text-body font-medium ${toneClass(resultTone(report.result))}`}
         >
-          {word}
-          {detail ? ` — ${detail}` : ""}
+          {(() => {
+            const Icon = icons[report.result as IconName] ?? icons.confirmed;
+            return (
+              <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+            );
+          })()}
+          <span className="min-w-0">
+            {word}
+            {detail ? ` — ${detail}` : ""}
+          </span>
         </div>
         {report.reason && (
           <p className="text-body-sm text-muted-foreground">{report.reason}</p>
@@ -91,6 +100,7 @@ export function PrintScreen({
   prefill,
   onBack,
   onJob,
+  onEditTemplate,
 }: {
   starter: AppTemplate;
   /** A deep link's starting values (plan phase 8): the printer,
@@ -99,6 +109,8 @@ export function PrintScreen({
   onBack: () => void;
   /** The job, with its result — the recent-jobs list remembers it. */
   onJob: (job: RecentJob) => void;
+  /** Open this template in its editor. */
+  onEditTemplate: () => void;
 }) {
   const { t } = useTranslation();
   const [printers, setPrinters] = useState<ProfileInfo[]>([]);
@@ -126,6 +138,7 @@ export function PrintScreen({
   const [planning, setPlanning] = useState(false);
   const [job, setJob] = useState<JobReport | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [defaultSaved, setDefaultSaved] = useState(false);
 
   useEffect(() => {
     listPrinters()
@@ -305,7 +318,11 @@ export function PrintScreen({
         transport(),
       );
     } catch (e) {
-      report = { result: "failed", counts: null, reason: String(e) };
+      report = {
+        result: "failed",
+        counts: null,
+        reason: t("print.job_failed", { error: String(e) }),
+      };
     }
     setJob(report);
     onJob({
@@ -323,17 +340,59 @@ export function PrintScreen({
     setPrinting(false);
   };
 
+  /** M9: the print screen's secondary actions stay out of the way. */
+  const saveDefault = () => {
+    if (!printer) return;
+    void saveSetting("defaultPrinter", printer).then(() =>
+      setDefaultSaved(true),
+    );
+  };
+  const clearData = () => {
+    setData(starter.sample);
+    setDataUrl("");
+    setLoaded(null);
+    setFetchWarn(null);
+    setPlan(null);
+    setPlanError(null);
+    setJob(null);
+    setDefaultSaved(false);
+  };
+
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <PageHeader title={starter.name} description={starter.description}>
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          {t("print.back")}
-        </Button>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 max-md:pb-24">
+      <PageHeader
+        title={starter.name}
+        description={starter.description}
+        back={{ onClick: onBack, label: t("common.back") }}
+      >
         <Badge variant={starter.track === "scene" ? "default" : "secondary"}>
           {starter.track === "scene"
             ? t("app.track_scene")
             : t("app.track_document")}
         </Badge>
+        <ActionMenu
+          label={t("common.more")}
+          items={[
+            {
+              label: t("print.edit_template"),
+              icon: "edit",
+              onSelect: onEditTemplate,
+            },
+            {
+              label: t("print.save_default_printer"),
+              icon: "printers",
+              disabled: !printer,
+              onSelect: saveDefault,
+            },
+            {
+              label: t("print.clear_data"),
+              icon: "delete",
+              danger: true,
+              separator: true,
+              onSelect: clearData,
+            },
+          ]}
+        />
       </PageHeader>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -577,7 +636,62 @@ export function PrintScreen({
           </Card>
         </div>
 
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 lg:sticky lg:top-20 lg:self-start">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("print.summary")}</CardTitle>
+              <CardDescription>{t("print.summary_note")}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2 text-body-sm">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-muted-foreground">
+                  {t("common.name")}
+                </span>
+                <span className="min-w-0 truncate font-medium">
+                  {starter.name}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-muted-foreground">
+                  {t("print.printer")}
+                </span>
+                <span className="min-w-0 truncate font-medium">
+                  {printer || "—"}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-muted-foreground">
+                  {t("print.transport_title")}
+                </span>
+                <span className="font-medium">
+                  {t(`print.transport_${kind}`)}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-muted-foreground">
+                  {t("print.copies")}
+                </span>
+                <span className="font-medium">{copies}</span>
+              </div>
+              {plan && (
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    {t("print.preview")}
+                  </span>
+                  <span className="font-medium">
+                    {t("print.pages", { count: plan.pages })} ·{" "}
+                    {t("print.records", { count: plan.records })}
+                  </span>
+                </div>
+              )}
+              {defaultSaved && (
+                <p className="text-caption text-success">
+                  {t("print.default_saved")}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>{t("print.preview")}</CardTitle>
@@ -585,14 +699,16 @@ export function PrintScreen({
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex gap-2">
-                <Button onClick={preview} disabled={planning || !printer}>
-                  {planning ? t("print.preparing") : t("print.preview")}
-                </Button>
                 <Button
                   variant="secondary"
-                  onClick={print}
-                  disabled={printing || !printer}
+                  onClick={preview}
+                  disabled={planning || !printer}
                 >
+                  <icons.preview aria-hidden="true" className="h-4 w-4" />
+                  {planning ? t("print.preparing") : t("print.preview")}
+                </Button>
+                <Button onClick={print} disabled={printing || !printer}>
+                  <icons.print aria-hidden="true" className="h-4 w-4" />
                   {printing ? t("print.printing") : t("app.print")}
                 </Button>
               </div>
@@ -626,6 +742,27 @@ export function PrintScreen({
 
           {job && <ResultCard report={job} />}
         </div>
+      </div>
+
+      {/* Phone: the same two actions stay in reach while the form scrolls. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t bg-card px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] md:hidden">
+        <Button
+          variant="secondary"
+          className="flex-1"
+          onClick={preview}
+          disabled={planning || !printer}
+        >
+          <icons.preview aria-hidden="true" className="h-4 w-4" />
+          {t("print.preview")}
+        </Button>
+        <Button
+          className="flex-1"
+          onClick={print}
+          disabled={printing || !printer}
+        >
+          <icons.print aria-hidden="true" className="h-4 w-4" />
+          {t("app.print")}
+        </Button>
       </div>
     </div>
   );

@@ -31,10 +31,23 @@ export const ELEMENT_TYPES = [
   "text",
   "line",
   "rect",
+  "frame",
   "barcode",
   "qr",
   "image",
   "group",
+] as const;
+
+/** What can sit inside a group row or a frame (everything but a group —
+ * a group cannot sit in a frame, v1). */
+export const NESTED_ELEMENT_TYPES = [
+  "text",
+  "line",
+  "rect",
+  "frame",
+  "barcode",
+  "qr",
+  "image",
 ] as const;
 
 /** A blank label to start a new scene template from. */
@@ -62,6 +75,14 @@ export function defaultElement(type: string): Element {
         type: "rect",
         at: { x_mm: 2, y_mm: 12 },
         size: { w_mm: 16, h_mm: 8 },
+      };
+    case "frame":
+      return {
+        type: "frame",
+        at: { x_mm: 2, y_mm: 2 },
+        size: { w_mm: 30, h_mm: 16 },
+        border_mm: 0.3,
+        children: [],
       };
     case "barcode":
       return {
@@ -137,6 +158,8 @@ export function elementLabel(el: Element): string {
         : i18n.t("editor.el_rect");
     case "group":
       return i18n.t("editor.el_group", { bind: el.bind });
+    case "frame":
+      return i18n.t("editor.el_frame");
   }
 }
 
@@ -153,6 +176,8 @@ export function allBindings(template: Template): string[] {
       else if (el.type === "group") {
         if (!names.includes(el.bind)) names.push(el.bind);
         walk(el.items);
+      } else if (el.type === "frame") {
+        walk(el.children);
       }
     }
   };
@@ -181,6 +206,19 @@ export function samePath(a: Path, b: Path): boolean {
   return a.length === b.length && a.every((n, i) => n === b[i]);
 }
 
+/** The children of a container element — a group's items, a frame's
+ * children — or `undefined` when the element holds no children. */
+function childrenOf(el: Element): Element[] | undefined {
+  switch (el.type) {
+    case "group":
+      return el.items;
+    case "frame":
+      return el.children;
+    default:
+      return undefined;
+  }
+}
+
 /** The element at a path, if the template has one there. */
 export function getAt(template: Template, path: Path): Element | undefined {
   let els: Element[] = template.elements;
@@ -188,16 +226,17 @@ export function getAt(template: Template, path: Path): Element | undefined {
   for (const i of path) {
     node = els[i];
     if (!node) return undefined;
-    els = node.type === "group" ? node.items : [];
+    els = childrenOf(node) ?? [];
   }
   return node;
 }
 
-/** The elements living in a container (root, or the group at a path). */
+/** The elements living in a container (root, or the group/frame at a
+ * path). */
 export function elementsOf(template: Template, container: Path): Element[] {
   if (container.length === 0) return template.elements;
   const el = getAt(template, container);
-  return el && el.type === "group" ? el.items : [];
+  return el ? (childrenOf(el) ?? []) : [];
 }
 
 /** Run `fn` on the children of the container at a path ([] = root). */
@@ -209,11 +248,14 @@ function withChildren(
   const rewrite = (els: Element[], rest: Path): Element[] => {
     if (rest.length === 0) return fn(els);
     const [i, ...deeper] = rest;
-    return els.map((el, j) =>
-      j === i && el.type === "group"
-        ? { ...el, items: rewrite(el.items, deeper) }
-        : el,
-    );
+    return els.map((el, j) => {
+      if (j !== i) return el;
+      if (el.type === "group")
+        return { ...el, items: rewrite(el.items, deeper) };
+      if (el.type === "frame")
+        return { ...el, children: rewrite(el.children, deeper) };
+      return el;
+    });
   };
   return { ...template, elements: rewrite(template.elements, container) };
 }
@@ -260,10 +302,110 @@ export function placementWord(p: Placement): string {
   return typeof p === "object" ? `only page ${p.only}` : p;
 }
 
+/** An element's bounds in its parent's coordinates, in mm:
+ * `[x, y, w, h]` — the selection ring, the nudge clamp and the
+ * resize handles all measure from it. */
+export function boundsMm(el: Element): [number, number, number, number] {
+  const { x_mm: x, y_mm: y } = el.at;
+  switch (el.type) {
+    case "text":
+    case "barcode":
+    case "image":
+    case "rect":
+    case "frame":
+      return [x, y, el.size.w_mm, el.size.h_mm];
+    case "qr":
+      return [x, y, el.h_mm, el.h_mm];
+    case "line":
+      return el.vertical
+        ? [x, y, el.thickness_mm, el.length_mm]
+        : [x, y, el.length_mm, el.thickness_mm];
+    case "group": {
+      const h =
+        el.items.reduce((sum, it) => sum + rowHeightMm(it), 0) +
+        Math.max(0, el.items.length - 1) * el.item_gap_mm;
+      return [x, y, el.w_mm, Math.max(4, h)];
+    }
+  }
+}
+
+/**
+ * The new box of a resize, from its original box, the handle under
+ * the pointer (`nw` … `se`, or an edge: `n`, `s`, `e`, `w`) and the
+ * movement in mm. The box keeps at least 1 mm in each direction, and
+ * when `within` is given (the parent frame's size) it never leaves
+ * that box — a frame's children must stay inside it.
+ */
+export function resizeBox(
+  ox: number,
+  oy: number,
+  ow: number,
+  oh: number,
+  handle: string,
+  dx: number,
+  dy: number,
+  within?: { w: number; h: number },
+): [number, number, number, number] {
+  const MIN = 1;
+  let x = ox;
+  let y = oy;
+  let w = ow;
+  let h = oh;
+  if (handle.includes("e")) w = ow + dx;
+  if (handle.includes("s")) h = oh + dy;
+  if (handle.includes("w")) {
+    x = ox + dx;
+    w = ow - dx;
+  }
+  if (handle.includes("n")) {
+    y = oy + dy;
+    h = oh - dy;
+  }
+  if (w < MIN) {
+    if (handle.includes("w")) x -= MIN - w;
+    w = MIN;
+  }
+  if (h < MIN) {
+    if (handle.includes("n")) y -= MIN - h;
+    h = MIN;
+  }
+  if (within) {
+    x = Math.max(0, x);
+    y = Math.max(0, y);
+    w = Math.min(w, within.w - x);
+    h = Math.min(h, within.h - y);
+  }
+  return [
+    Math.round(x * 10) / 10,
+    Math.round(y * 10) / 10,
+    Math.round(w * 10) / 10,
+    Math.round(h * 10) / 10,
+  ];
+}
+
+/**
+ * A position clamped so the box `[0,0,w,h]` at the origin stays
+ * inside `limit` — used to keep a frame's children in the frame when
+ * they are moved or nudged.
+ */
+export function clampToBounds(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  limit: { w: number; h: number },
+): { x_mm: number; y_mm: number } {
+  return {
+    x_mm: Math.min(Math.max(0, x), Math.max(0, limit.w - w)),
+    y_mm: Math.min(Math.max(0, y), Math.max(0, limit.h - h)),
+  };
+}
+
 /** How tall one group row is, in mm — an estimate for the canvas. */
 export function rowHeightMm(item: Element): number {
   switch (item.type) {
     case "text":
+    case "frame":
       return item.size.h_mm;
     case "barcode":
     case "image":

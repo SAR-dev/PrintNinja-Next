@@ -92,7 +92,8 @@ database — one file, no other services. SQL is kept portable on purpose
 ### 🐳 With Docker (the recommended way)
 
 ```sh
-# The image is built by CI on every push to main:
+# The image is published by CI on every release tag (v*); :latest
+# tracks the newest release:
 docker pull ghcr.io/<your-org>/printninja-server:latest
 
 # Or build it from a checkout:

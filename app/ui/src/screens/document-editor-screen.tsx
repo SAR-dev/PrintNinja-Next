@@ -6,6 +6,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { icons } from "@/lib/icons";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -169,12 +170,15 @@ export function DocumentEditorScreen({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <PageHeader title={t("editor.document_title")}>
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          {t("editor.back")}
-        </Button>
+      <PageHeader
+        title={t("editor.document_title")}
+        back={{ onClick: onBack, label: t("common.back") }}
+      >
         <Badge variant="secondary">document</Badge>
-        <Button onClick={save}>{t("editor.save_template")}</Button>
+        <Button onClick={save}>
+          <icons.save aria-hidden="true" className="h-4 w-4" />
+          {t("editor.save_template")}
+        </Button>
       </PageHeader>
 
       <div className="flex flex-col gap-1">

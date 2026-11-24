@@ -115,10 +115,10 @@ The certificate above lasts 5 years. Before it expires, create a new
 one (step 1), sign new builds with it, and roll out the new `.cer`.
 Builds already signed *and timestamped* keep working.
 
-## Android (landing with the Android phase)
+## Android (landing with the Android app)
 
-The Android phase is being wired up in this branch right now — treat
-everything in this section as work in progress until it lands:
+The Android app is still on the roadmap — treat everything in this
+section as work in progress until it lands:
 
 - CI has an `android-check` job (debug APK on pull requests) and an
   `android-build` job (release APK + AAB on every `v*` tag, arm64 only).
@@ -135,7 +135,7 @@ everything in this section as work in progress until it lands:
 
 The keystore itself still has to be created once (the usual
 `keytool -genkeypair` into a `.keystore`) and backed up: if it is lost,
-no one can update an installed app. Until the Android phase is
+no one can update an installed app. Until the Android app is
 finished, the established signing path is the Windows MSI above.
 
 ## Not the same thing: the Tauri updater key
