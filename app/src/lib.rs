@@ -9,6 +9,7 @@
 
 mod api;
 mod deeplink;
+mod discovery;
 mod fetcher;
 mod pairing;
 mod pipeline;
@@ -100,6 +101,54 @@ fn load_inputs(
 #[tauri::command]
 fn list_printers(state: State<'_, AppProfiles>) -> Vec<ProfileInfo> {
     profile_infos(&state.profiles)
+}
+
+/// The queues the OS's spooler already knows — the printers page's
+/// system scan. Off the UI thread: the spooler call blocks on the OS.
+#[tauri::command]
+async fn scan_system_printers() -> Vec<discovery::SystemPrinter> {
+    tauri::async_runtime::spawn_blocking(discovery::enumerate_system_printers)
+        .await
+        .unwrap_or_default()
+}
+
+/// The printers the LAN announced over mDNS — the network scan. The
+/// caller picks how long to listen, in seconds (clamped to 2–30 in
+/// the scanner); 8 when it does not.
+#[tauri::command]
+async fn scan_network_printers(timeout_secs: Option<u64>) -> Vec<discovery::DiscoveredPrinter> {
+    let timeout = timeout_secs.unwrap_or(8);
+    tauri::async_runtime::spawn_blocking(move || discovery::browse_network_printers(timeout))
+        .await
+        .unwrap_or_default()
+}
+
+/// The printers the user has saved, by name.
+#[tauri::command]
+fn list_saved_printers(state: State<'_, Arc<Store>>) -> Result<Vec<store::SavedPrinter>, String> {
+    state.list_saved_printers()
+}
+
+/// A printer the user picked — by name, the profile it speaks and
+/// the transport that reaches it — kept in the store. The profile
+/// must be in the loaded set, checked here, so a saved row can never
+/// point at a profile that is not shipped.
+#[tauri::command]
+fn save_printer(
+    state: State<'_, Arc<Store>>,
+    profiles: State<'_, AppProfiles>,
+    printer: store::SavedPrinter,
+) -> Result<(), String> {
+    if profiles.profiles.find(&printer.model).is_none() {
+        return Err(format!("no printer profile named \"{}\"", printer.model));
+    }
+    state.save_printer(&printer)
+}
+
+/// A saved printer is gone. False when no printer has that name.
+#[tauri::command]
+fn remove_printer(state: State<'_, Arc<Store>>, name: String) -> Result<bool, String> {
+    state.remove_printer(&name)
 }
 
 /// The module pattern of a barcode or QR value, from the same
@@ -638,6 +687,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_printers,
+            scan_system_printers,
+            scan_network_printers,
+            list_saved_printers,
+            save_printer,
+            remove_printer,
             encode_symbol,
             plan_job,
             print_job,

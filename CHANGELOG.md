@@ -542,6 +542,19 @@ Unreleased.
   entries become `@font-face` data URIs injected with the Tailwind styles,
   so the document renders in its own font and nothing is installed on the
   machine
+- Printer discovery (the previous app's "scan & add"): the app can now
+  enumerate the queues the OS already knows — Windows reads the spooler's
+  local and connected printers (`EnumPrintersA`, LOCAL | CONNECTIONS)
+  with each queue's fault in plain words, Linux reads `lpstat -v` — and
+  browse the LAN over mDNS for `_ipp._tcp`, `_ipps._tcp`,
+  `_pdl-datastream._tcp` and `_printer._tcp` services, keeping only the
+  records on a private address and collapsing them by host:port. A
+  discovery is only a hint: the found printer is saved as a named row
+  (profile + transport) in the app's store, and the print path looks it
+  up by the profile it speaks. New commands: `scan_system_printers`,
+  `scan_network_printers` (a bounded wait, clamped 2–30 s),
+  `list_saved_printers`, `save_printer` (the profile must exist) and
+  `remove_printer`
 
 ### Changed
 

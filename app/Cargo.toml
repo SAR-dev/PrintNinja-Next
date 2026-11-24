@@ -25,6 +25,9 @@ tokio = { version = "1", features = ["net", "time", "macros", "rt"] }
 # The community registry client (plan phase 9): the sync engine's
 # HTTP calls.
 reqwest = { workspace = true }
+# Printer discovery (the previous app's "scan & add"): the network
+# scan browses printer service types on the LAN.
+mdns-sd = { workspace = true }
 # Job ids for the local print API, and the pairing codes and tokens.
 uuid = { version = "1", features = ["v4"] }
 rand = "0.8"

@@ -96,6 +96,20 @@ pub struct PairedDevice {
     pub paired_at: i64,
 }
 
+/// A printer the user saved from a scan or by hand: the name they
+/// chose, the profile it speaks, and the transport that reaches it.
+/// The profile stays the shipped, validated set — this row only says
+/// which profile, and how, to use.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedPrinter {
+    pub name: String,
+    /// The profile's model, the key the print path looks it up by.
+    pub model: String,
+    /// The transport, as JSON text.
+    pub transport: String,
+}
+
 /// A row of the community registry's change feed as the app has
 /// applied it (plan phase 9): the local mirror the Community tab
 /// shows. `template` and `sample` are always full on a live row — the
@@ -498,6 +512,50 @@ impl Store {
         Ok(n > 0)
     }
 
+    /// The saved printers, by name.
+    pub fn list_saved_printers(&self) -> Result<Vec<SavedPrinter>, String> {
+        let conn = self.lock();
+        let mut stmt = conn
+            .prepare("SELECT name, model, transport FROM saved_printers ORDER BY name")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok(SavedPrinter {
+                    name: r.get(0)?,
+                    model: r.get(1)?,
+                    transport: r.get(2)?,
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    /// A saved printer, upserted by name: re-saving one with the same
+    /// name replaces it, the way the print screen expects.
+    pub fn save_printer(&self, p: &SavedPrinter) -> Result<(), String> {
+        self.lock()
+            .execute(
+                "INSERT INTO saved_printers (name, model, transport)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(name) DO UPDATE SET
+                   model = excluded.model,
+                   transport = excluded.transport",
+                params![p.name, p.model, p.transport],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// A saved printer is gone. False when no printer has that name.
+    pub fn remove_printer(&self, name: &str) -> Result<bool, String> {
+        let n = self
+            .lock()
+            .execute("DELETE FROM saved_printers WHERE name = ?1", params![name])
+            .map_err(|e| e.to_string())?;
+        Ok(n > 0)
+    }
+
     /// The community mirror, as the change feed last left it.
     pub fn community_templates(&self) -> Result<Vec<CommunityTemplate>, String> {
         let conn = self.lock();
@@ -776,6 +834,11 @@ CREATE TABLE IF NOT EXISTS paired_devices (
   platform TEXT NOT NULL,
   token_hash TEXT NOT NULL,
   paired_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS saved_printers (
+  name TEXT PRIMARY KEY,
+  model TEXT NOT NULL,
+  transport TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS registry_templates (
   owner TEXT NOT NULL,
