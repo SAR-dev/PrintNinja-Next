@@ -27,6 +27,7 @@
     "@radix-ui/react-tooltip": "^1.1.6",
     "@tauri-apps/api": "^2.2.0",
     "@tauri-apps/plugin-deep-link": "^2.6.3",
+    "@tauri-apps/plugin-opener": "^2.7.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "i18next": "^24.2.0",

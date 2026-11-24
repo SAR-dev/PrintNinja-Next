@@ -444,6 +444,10 @@ pub fn run() {
         // the current URL to pick up a link that arrived before the
         // webview was ready.
         .plugin(tauri_plugin_deep_link::init())
+        // External links (the update badge's release page): the webview
+        // cannot open them itself, so the opener plugin hands them to
+        // the OS.
+        .plugin(tauri_plugin_opener::init())
         // A second launch (or a deep link) focuses the running window
         // instead of starting a second app — required once
         // close-to-tray keeps the process alive after the window is

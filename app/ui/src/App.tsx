@@ -46,6 +46,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { UpdateBadge } from "@/components/update-badge";
 import { blankTemplate } from "@/scene/editor-model";
 import { DeepLinkListener } from "@/deeplink";
 import { DocumentEditorScreen } from "@/screens/document-editor-screen";
@@ -631,7 +632,10 @@ function App() {
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3 p-4">
-            <RegistryChip status={registry} />
+            <div className="flex flex-wrap items-center gap-3">
+              <RegistryChip status={registry} />
+              <UpdateBadge />
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
