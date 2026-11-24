@@ -305,7 +305,11 @@ export function PrintScreen({
         transport(),
       );
     } catch (e) {
-      report = { result: "failed", counts: null, reason: String(e) };
+      report = {
+        result: "failed",
+        counts: null,
+        reason: t("print.job_failed", { error: String(e) }),
+      };
     }
     setJob(report);
     onJob({

@@ -151,6 +151,7 @@ const en = {
     url_preview_failed:
       "Could not fetch the data URL ({{error}}) — previewing the typed data instead. The print re-fetches the URL.",
     url_fetch_failed: "Fetching the data URL failed: {{error}}",
+    job_failed: "The print could not be run: {{error}}",
     load_from_file: "Load from file…",
     loaded: "loaded {{file}}",
     copies: "Copies",

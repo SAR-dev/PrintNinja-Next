@@ -153,6 +153,7 @@ const ja: EnStrings = {
     url_preview_failed:
       "データ URL の取得に失敗しました（{{error}}）。入力済みのデータでプレビューしています。印刷時は URL を再取得します。",
     url_fetch_failed: "データ URL の取得に失敗しました: {{error}}",
+    job_failed: "印刷を実行できませんでした: {{error}}",
     load_from_file: "ファイルから読み込み…",
     loaded: "{{file}} を読み込みました",
     copies: "部数",

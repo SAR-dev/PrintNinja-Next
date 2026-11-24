@@ -598,6 +598,10 @@ Unreleased.
 
 ### Fixed
 
+- The print screen's result card no longer shows the raw error string
+  when a print job fails before the pipeline reports — the failure is
+  wrapped in the locale's plain words ("The print could not be run: …"),
+  the way the data-URL fetch failure already was
 - Network scan: a discovered service that advertises only public IP
   addresses is now kept by its mDNS hostname — the name it is reachable
   by on the LAN — instead of being handed one of those public IPs
