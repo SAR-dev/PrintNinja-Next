@@ -51,6 +51,7 @@ const ja: EnStrings = {
     expand: "広げる",
   },
   registry: {
+    account_menu: "アカウントメニュー",
     online: "レジストリ接続中",
     offline: "レジストリ切断中",
     not_signed_in: "未サインイン",

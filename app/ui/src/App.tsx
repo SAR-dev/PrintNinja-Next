@@ -26,8 +26,8 @@ import {
   unpublishTemplate,
   unsaveCommunityTemplate,
 } from "@/api";
+import { AccountMenu } from "@/components/account-menu";
 import { Layout } from "@/components/layout";
-import { StatusBadge } from "@/components/status-badge";
 import {
   Dialog,
   DialogContent,
@@ -42,7 +42,6 @@ import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { UpdateBadge } from "@/components/update-badge";
 import { blankTemplate } from "@/scene/editor-model";
 import { DeepLinkListener } from "@/deeplink";
 import type { NavKey } from "@/lib/nav";
@@ -144,23 +143,6 @@ type View =
   | { name: "print"; template: AppTemplate; prefill?: PrintPrefill }
   | { name: "edit"; template: AppTemplate; from?: NavKey }
   | { name: "document-edit"; template: AppTemplate; from?: NavKey };
-
-/** The registry's state in the top bar: its reach, who is signed
- * in, and how many operations are waiting for the connection. */
-function RegistryChip({ status }: { status: RegistryStatus }) {
-  const { t } = useTranslation();
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <StatusBadge status={status.online ? "online" : "offline"} compact />
-      <span className="hidden min-w-0 truncate text-caption text-muted-foreground lg:inline">
-        {status.handle ?? t("registry.not_signed_in")}
-        {status.pending > 0
-          ? ` · ${t("registry.waiting", { count: status.pending })}`
-          : ""}
-      </span>
-    </span>
-  );
-}
 
 function App() {
   const { t } = useTranslation();
@@ -451,7 +433,7 @@ function App() {
     view.name === "document-edit";
   const active: NavKey =
     view.name === "edit" || view.name === "document-edit"
-      ? view.from ?? "templates"
+      ? (view.from ?? "templates")
       : view.name === "print"
         ? "templates"
         : view.name;
@@ -462,31 +444,13 @@ function App() {
       contextual={contextual}
       onNavigate={(key) => setView({ name: key } as View)}
       topbar={
-        <>
-          <RegistryChip status={registry} />
-          <UpdateBadge />
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={registryBusy}
-            onClick={() => void syncRegistry()}
-          >
-            {registryBusy ? t("registry.syncing") : t("registry.sync")}
-          </Button>
-          {registry.handle ? (
-            <Button variant="ghost" size="sm" onClick={() => void signOut()}>
-              {t("registry.sign_out")}
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSigninOpen(true)}
-            >
-              {t("registry.sign_in")}
-            </Button>
-          )}
-        </>
+        <AccountMenu
+          status={registry}
+          busy={registryBusy}
+          onSync={() => void syncRegistry()}
+          onSignIn={() => setSigninOpen(true)}
+          onSignOut={() => void signOut()}
+        />
       }
     >
       {/* A link can arrive on any view, so the error sits above them all. */}

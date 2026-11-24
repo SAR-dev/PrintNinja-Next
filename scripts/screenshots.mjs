@@ -63,6 +63,7 @@ const VIEWS = [
   "settings",
   "new-template",
   "publish-dialog",
+  "account-menu",
   "signin-dialog",
 ];
 const views = list("views", VIEWS.join(",")).filter((v) =>
@@ -81,6 +82,8 @@ const L = {
     publish: "Publish",
     newTemplate: "New template",
     settings: "Settings",
+    accountMenu: "Account menu",
+    sync: "Sync",
     signIn: "Sign in",
     signOut: "Sign out",
     jobs: "Jobs",
@@ -100,6 +103,8 @@ const L = {
     publish: "公開",
     newTemplate: "新しいテンプレート",
     settings: "設定",
+    accountMenu: "アカウントメニュー",
+    sync: "同期",
     signIn: "サインイン",
     signOut: "サインアウト",
     jobs: "ジョブ",
@@ -448,9 +453,27 @@ async function navigate(page, view, l) {
         .click();
       await page.locator("#publish-slug").waitFor();
       break;
+    case "account-menu":
+      await page
+        .getByRole("button", { name: l.accountMenu })
+        .click();
+      await page.getByRole("menuitem", { name: l.sync, exact: true }).waitFor();
+      break;
     case "signin-dialog":
-      await page.getByRole("button", { name: l.signOut, exact: true }).click();
-      const signIn = page.getByRole("button", { name: l.signIn, exact: true });
+      // Sign in/out and Sync now live in the one account menu (M1).
+      await page
+        .getByRole("button", { name: l.accountMenu })
+        .click();
+      await page
+        .getByRole("menuitem", { name: l.signOut, exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: l.accountMenu })
+        .click();
+      const signIn = page.getByRole("menuitem", {
+        name: l.signIn,
+        exact: true,
+      });
       await signIn.waitFor();
       await signIn.click();
       await page.locator("#signin-handle").waitFor();

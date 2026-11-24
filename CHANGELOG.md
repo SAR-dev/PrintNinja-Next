@@ -603,6 +603,9 @@ Unreleased.
 
 ### Changed
 
+- App: the top bar's registry status chip, Sync and Sign in/out buttons
+  and the update badge are one account menu — a status dot and handle
+  in the trigger, with Sync, Sign in/out and the release link inside
 - App: the phone gets a bottom tab bar with the five destinations
   (Templates, Jobs, Printers, Community, Settings) instead of the tab
   strip under the top bar, and Jobs, Printers and Community become

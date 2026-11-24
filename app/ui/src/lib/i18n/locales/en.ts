@@ -48,6 +48,7 @@ const en = {
     expand: "Expand",
   },
   registry: {
+    account_menu: "Account menu",
     online: "Registry online",
     offline: "Registry offline",
     not_signed_in: "not signed in",

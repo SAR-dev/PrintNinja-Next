@@ -21,8 +21,7 @@ interface LayoutProps {
    * parent's key). */
   active: NavKey;
   onNavigate: (key: NavKey) => void;
-  /** The top bar's right side (registry chip, update badge, sync,
-   * sign in/out). */
+  /** The top bar's right side (the account menu). */
   topbar?: ReactNode;
   /** True on contextual screens (print, edit): the phone's bottom
    * tab bar is off, the parent's destination stays highlighted. */
