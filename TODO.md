@@ -14,6 +14,8 @@ spec for the items below.
 
 ## Done
 
+- [x] P6 — phone print screen: sticky bottom action bar (above the
+      bottom nav while visible) and a result status banner (commit aba0e82)
 - [x] D6 — PC print screen: sticky summary, distinct Preview (Eye) and
       Print (Printer) buttons, ⋯ M9 (edit template, save default printer,
       clear data) (commit 8026908)
@@ -49,8 +51,6 @@ spec for the items below.
 
 ## Remaining findings, in order
 
-- [ ] P6 — print screen (phone): sticky bottom action bar (above the
-      bottom nav while visible), result banner
 - [ ] P7 — editor (phone): canvas stays visible, property panel in a
       sheet, add-element toolbar as icons
 - [ ] P8 — settings (phone): grouped list instead of the 4-tab strip,
