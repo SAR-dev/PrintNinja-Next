@@ -224,6 +224,9 @@ jobs:
           "$SDKMANAGER" "ndk;27.0.12077973" "platforms;android-36" "build-tools;34.0.0"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
+      # The app crate's beforeBuildCommand builds the UI; app/ui is a
+      # standalone pnpm project with its own lockfile.
+      - run: pnpm --dir app/ui install --frozen-lockfile
       - name: Generate Android project if not committed
         run: |
           if [ ! -d app/gen/android ]; then pnpm exec tauri android init --config app/tauri.conf.json --ci; fi
@@ -468,8 +471,10 @@ jobs:
         shell: bash
         run: rm -rf target/release/build/printninja-* target/release/bundle || true
       - run: pnpm install --frozen-lockfile
+      # app/ui is a standalone pnpm project with its own lockfile; the
+      # Tauri CLI rebuilds the frontend itself via beforeBuildCommand.
+      - run: pnpm --dir app/ui install --frozen-lockfile
       # MSI only. Without --target, output lands in target/release/bundle.
-      # The Tauri CLI rebuilds the frontend itself via beforeBuildCommand.
       - run: pnpm exec tauri build --config app/tauri.conf.json --bundles msi
       - uses: actions/upload-artifact@v4
         with:
@@ -502,6 +507,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - run: pnpm install --frozen-lockfile
+      # app/ui is a standalone pnpm project with its own lockfile; the
+      # Tauri CLI rebuilds the frontend itself via beforeBuildCommand.
+      - run: pnpm --dir app/ui install --frozen-lockfile
       # deb + AppImage only (no rpm/Flatpak). Without --target, output
       # lands in target/release/bundle.
       - run: pnpm exec tauri build --config app/tauri.conf.json --bundles deb appimage
@@ -583,6 +591,9 @@ jobs:
           "$SDKMANAGER" "ndk;27.0.12077973" "platforms;android-36" "build-tools;34.0.0"
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
+      # The app crate's beforeBuildCommand builds the UI; app/ui is a
+      # standalone pnpm project with its own lockfile.
+      - run: pnpm --dir app/ui install --frozen-lockfile
       - name: Generate Android project if not committed
         run: |
           if [ ! -d app/gen/android ]; then pnpm exec tauri android init --config app/tauri.conf.json --ci; fi

@@ -3,6 +3,8 @@
   "private": true,
   "version": "0.0.1",
   "scripts": {
+    "dev": "pnpm --dir app/ui dev",
+    "build": "pnpm --dir app/ui build",
     "release": "node scripts/release.mjs",
     "version:set": "node scripts/set-version.mjs",
     "tauri:dev": "tauri dev --config app/tauri.conf.json",
