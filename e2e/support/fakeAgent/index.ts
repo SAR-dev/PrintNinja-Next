@@ -397,6 +397,12 @@ async function invoke(
       return plan(a);
     case "print_job":
       return { result: "confirmed", counts: null, reason: null };
+    case "local_api_status":
+      return {
+        running: true,
+        address: "127.0.0.1:17717",
+        error: null,
+      };
     case "browser_info":
       return {
         mode: state.browserMode,

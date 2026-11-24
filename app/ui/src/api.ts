@@ -368,6 +368,16 @@ export interface Publication {
   publishedAt: number;
 }
 
+/** The local print API listener's state (Diagnostics tab). */
+export interface LocalApiStatus {
+  running: boolean;
+  address: string;
+  error: string | null;
+}
+
+/** Whether the local print API is listening, and where. */
+export const localApiStatus = () => invoke<LocalApiStatus>("local_api_status");
+
 /** The browser choice shown in the Diagnostics tab. */
 export interface BrowserInfo {
   mode: "system" | "managed";

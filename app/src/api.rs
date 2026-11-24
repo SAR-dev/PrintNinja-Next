@@ -69,6 +69,22 @@ pub const MAX_COPIES: u32 = 1000;
 /// How many accepted jobs `GET /v1/jobs` reports.
 const JOB_LIST_LIMIT: usize = 50;
 
+/// The listener's state, readable by the Diagnostics tab. A busy port
+/// used to be an `eprintln` only, so the whole print-from-elsewhere
+/// feature could be down while the UI said nothing.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct ApiStatus {
+    pub running: bool,
+    pub address: String,
+    pub error: Option<String>,
+}
+
+/// Update the shared status without letting a poisoned mutex stop the UI.
+fn set_status(state: &ApiState, change: impl FnOnce(&mut ApiStatus)) {
+    let mut status = state.status.lock().unwrap_or_else(|e| e.into_inner());
+    change(&mut status);
+}
+
 /// What the API's handlers can reach: the loaded profiles, the local
 /// store, and the pairing window — shared with the Tauri commands that
 /// run the same pipeline.
@@ -79,6 +95,7 @@ pub struct ApiState {
     /// The one open pairing window, if any. Memory only: the code is
     /// never written to the store.
     pub window: Arc<Mutex<Option<PairingWindow>>>,
+    pub status: Arc<Mutex<ApiStatus>>,
 }
 
 /// The router, held apart from the socket so the endpoints can be
@@ -113,15 +130,24 @@ pub async fn serve(state: Arc<ApiState>) {
     } else {
         ([127, 0, 0, 1], DEFAULT_PORT).into()
     };
+    set_status(&state, |status| {
+        status.address = addr.to_string();
+        status.error = None;
+        status.running = false;
+    });
     let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(listener) => listener,
         Err(e) => {
-            eprintln!("the local print API could not bind {addr}: {e}");
+            let message = format!("the local print API could not bind {addr}: {e}");
+            eprintln!("{message}");
+            crate::app_log::push("error", "local-api", message.clone());
+            set_status(&state, |status| status.error = Some(message));
             return;
         }
     };
     let scope = if lan_on { "the network" } else { "127.0.0.1" };
     eprintln!("the local print API is listening on http://{addr} ({scope})");
+    set_status(&state, |status| status.running = true);
 
     // The one browser origin this API lets across: the origin the
     // registry serves the demo page from — the app's configured
@@ -151,7 +177,13 @@ pub async fn serve(state: Arc<ApiState>) {
         })
         .into_make_service_with_connect_info::<SocketAddr>();
     if let Err(e) = axum::serve(listener, app).await {
-        eprintln!("the local print API stopped: {e}");
+        let message = format!("the local print API stopped: {e}");
+        eprintln!("{message}");
+        crate::app_log::push("error", "local-api", message.clone());
+        set_status(&state, |status| {
+            status.running = false;
+            status.error = Some(message);
+        });
     }
 }
 
@@ -800,6 +832,7 @@ mod tests {
             profiles,
             store,
             window: Arc::new(Mutex::new(None)),
+            status: Arc::new(Mutex::new(ApiStatus::default())),
         }
     }
 
@@ -895,6 +928,7 @@ poll_after_ms = 200
             profiles: Arc::new(profiles),
             store,
             window: Arc::new(Mutex::new(None)),
+            status: Arc::new(Mutex::new(ApiStatus::default())),
         }
     }
 

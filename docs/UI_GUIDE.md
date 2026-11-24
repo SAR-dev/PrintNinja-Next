@@ -188,7 +188,8 @@ is plain.
   when a printer or server on your own network serves the data URL.
 - **Registry** — **Server address**, the community registry's URL. Leave it
   empty for the server on this computer; changes apply at the next sync.
-- **Diagnostics** — **Browser for documents**: choose the PC's own browser
+- **Diagnostics** — **Local print API** shows whether the listener on port
+  17717 is up (or the bind error in plain words). **Browser for documents**: choose the PC's own browser
   or download a private Chromium build and use that; the detected and
   downloaded paths are shown. **Application log**: recent app events,
   newest first, with **Refresh**, **Download** (a text file) and **Clear**.

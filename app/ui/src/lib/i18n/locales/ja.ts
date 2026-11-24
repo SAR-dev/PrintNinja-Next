@@ -211,6 +211,11 @@ const ja: EnStrings = {
     tab_data: "データ",
     tab_registry: "レジストリ",
     tab_diagnostics: "診断",
+    local_api_title: "ローカル印刷 API",
+    local_api_note:
+      "他のアプリや printninja:// リンクはこのリスナーを使います。ポート 17717 が使用中だと、他のアプリからの印刷はできません。",
+    local_api_running: "{{address}} で待機中",
+    local_api_error: "待機中ではありません — {{error}}",
     browser_title: "ドキュメント用ブラウザ",
     browser_note:
       "HTML テンプレートはヘッドレスブラウザで PDF に変換されます。この PC のブラウザを使うか、専用の Chromium をダウンロードして使えます。",

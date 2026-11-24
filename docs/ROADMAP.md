@@ -69,10 +69,6 @@ found by behavior inspection and verified against the code:
       print screen catches `listPrinters` failures into the Preview
       card's plan-error slot, misattributing an unrelated load failure
       to job preparation.
-- [ ] **A busy port 17717 is invisible** — when the local print API
-      cannot bind, the failure is an `eprintln` only; the whole
-      print-from-elsewhere feature is down and the user is told
-      nothing (TROUBLESHOOTING.md even points at the console line).
 - [ ] **New-template names are hardcoded English** — "New label" /
       "New document" and their descriptions bypass the locale files,
       so a Japanese interface still creates English-named templates.

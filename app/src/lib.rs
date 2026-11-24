@@ -349,6 +349,16 @@ fn remember_job(state: State<'_, Arc<Store>>, job: StoredJob) -> Result<(), Stri
     state.remember_job(&job)
 }
 
+/// The local print API's listener state, for Diagnostics.
+#[tauri::command]
+fn local_api_status(state: State<'_, Arc<api::ApiState>>) -> Result<api::ApiStatus, String> {
+    Ok(state
+        .status
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone())
+}
+
 /// The browser choice shown in the Diagnostics tab.
 #[tauri::command]
 fn browser_info(state: State<'_, Arc<Store>>) -> Result<BrowserInfo, String> {
@@ -768,6 +778,7 @@ pub fn run() {
                     profiles,
                     store: store.clone(),
                     window: Arc::new(std::sync::Mutex::new(None)),
+                    status: Arc::new(std::sync::Mutex::new(api::ApiStatus::default())),
                 });
                 app.manage(api_state.clone());
                 tauri::async_runtime::spawn(api::serve(api_state));
@@ -827,6 +838,7 @@ pub fn run() {
             remember_job,
             load_settings,
             save_setting,
+            local_api_status,
             browser_info,
             browser_select,
             browser_download_cmd,

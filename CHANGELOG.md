@@ -10,6 +10,8 @@ Unreleased.
 
 ### Added
 
+- App: Diagnostics shows the local print API's listener address or its
+  bind error, instead of leaving a busy port 17717 invisible
 - App: the scene editor has a Sample data card; edits feed the live
   canvas, the preview and the saved template, and count as unsaved changes
 - App: a Test print menu on each saved printer (text label or A4 page)

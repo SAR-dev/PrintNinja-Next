@@ -208,6 +208,11 @@ const en = {
     tab_data: "Data",
     tab_registry: "Registry",
     tab_diagnostics: "Diagnostics",
+    local_api_title: "Local print API",
+    local_api_note:
+      "Other apps and printninja:// links use this listener. If port 17717 is busy, printing from elsewhere is off.",
+    local_api_running: "Listening on {{address}}",
+    local_api_error: "Not listening — {{error}}",
     browser_title: "Browser for documents",
     browser_note:
       "HTML templates print to PDF with a headless browser. Use the one on this PC, or download a private Chromium build and use that.",

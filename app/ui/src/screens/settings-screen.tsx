@@ -14,6 +14,8 @@ import {
   browserDownload,
   browserInfo,
   browserSelect,
+  localApiStatus,
+  type LocalApiStatus,
   type BrowserInfo,
   type AppLogEntry,
   beginPairing,
@@ -62,6 +64,7 @@ export function SettingsScreen() {
   const [browser, setBrowser] = useState<BrowserInfo | null>(null);
   const [browserBusy, setBrowserBusy] = useState(false);
   const [browserError, setBrowserError] = useState<string | null>(null);
+  const [apiStatus, setApiStatus] = useState<LocalApiStatus | null>(null);
 
   const lanOn = settings["api.lan"] === "true";
   // Absent means on: the guarded fetcher is the default.
@@ -123,6 +126,14 @@ export function SettingsScreen() {
   };
 
   useEffect(refreshBrowser, []);
+
+  const refreshApiStatus = () => {
+    void localApiStatus()
+      .then(setApiStatus)
+      .catch((e) => setBrowserError(String(e)));
+  };
+
+  useEffect(refreshApiStatus, []);
 
   const chooseBrowser = (mode: BrowserInfo["mode"]) => {
     void browserSelect(mode)
@@ -439,6 +450,31 @@ export function SettingsScreen() {
           <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:!inline">
             {t("settings.tab_diagnostics")}
           </h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("settings.local_api_title")}</CardTitle>
+              <CardDescription>{t("settings.local_api_note")}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <p
+                className={`text-body-sm ${apiStatus?.error || apiStatus?.running === false ? "text-danger" : "text-muted-foreground"}`}
+              >
+                {apiStatus?.error
+                  ? t("settings.local_api_error", { error: apiStatus.error })
+                  : apiStatus?.running
+                    ? t("settings.local_api_running", {
+                        address: apiStatus.address,
+                      })
+                    : ""}
+              </p>
+              <div>
+                <Button variant="outline" size="sm" onClick={refreshApiStatus}>
+                  {t("settings.logs_refresh")}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>{t("settings.browser_title")}</CardTitle>
