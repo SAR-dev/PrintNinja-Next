@@ -71,11 +71,11 @@ Before committing a Rust or app change:
   contact sheet (`index.html`) per platform into `screenshots/`
   (**gitignored — never commit it**). First run needs
   `pnpm exec playwright install chromium`.
-- CI runs the matrix as the **non-blocking** `screenshot-matrix` job and
-  uploads the shots as the `screenshots` artifact. Two android cases fail
-  today (a recent-jobs row overlaps the list's footer button on narrow
-  screens — an app layout issue the phase 11 redesign settles). When the
-  shots are all green again, remove the job's `continue-on-error`.
+- CI runs the matrix as the blocking `screenshot-matrix` job and uploads
+  the shots as the `screenshots` artifact. It must install the `app/ui`
+  pnpm project too (`pnpm --dir app/ui install --frozen-lockfile`) — the
+  script boots `app/ui`'s vite straight from its `node_modules`, which a
+  root-only install never creates.
 - The curated README images are committed under `assets/`. Refresh them
   from a fresh `screenshots/` run when the UI changes.
 

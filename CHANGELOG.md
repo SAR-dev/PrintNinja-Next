@@ -545,6 +545,12 @@ Unreleased.
 
 ### Changed
 
+- CI: `screenshot-matrix` installs the `app/ui` pnpm project (its own
+  lockfile) before the run — the script boots `app/ui`'s vite straight
+  from its `node_modules`, which the root-only install never created,
+  and the job has been failing on that since it was added. All 96 shots
+  pass again, so the job is blocking once more (its `continue-on-error`
+  is removed)
 - Scene editor: the element list is now a tree — a repeating group's
   items sit indented under it (previously in a panel inside the group's
   properties) — and the selection is tracked by element path instead
