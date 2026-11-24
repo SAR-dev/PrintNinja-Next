@@ -1,4 +1,4 @@
-//! PrintNinja (next) — Tauri shell. Windows and Linux first; Android in
+//! PrintNinja — Tauri shell. Windows and Linux first; Android in
 //! phase 11. The frontend lives in `app/ui` and is embedded at compile
 //! time via `tauri::generate_context!` (build it first).
 //!
@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use pn_job::JobResult;
 use pn_profiles::{Profile, ProfileSet};
-use pn_scene::{Records, Template};
+use pn_scene::{BarcodeKind, Records, Template};
 // The tray and menu types only exist on desktop targets; the tray
 // setup below is cfg-gated to match.
 #[cfg(not(target_os = "android"))]
@@ -100,6 +100,52 @@ fn load_inputs(
 #[tauri::command]
 fn list_printers(state: State<'_, AppProfiles>) -> Vec<ProfileInfo> {
     profile_infos(&state.profiles)
+}
+
+/// The module pattern of a barcode or QR value, from the same
+/// encoders the print path uses, so the editor's canvas draws the
+/// symbol live and cannot disagree with the preview (REFACTORING
+/// decision #13). `null` when the value is empty or the symbology
+/// cannot carry it — the canvas then shows why, not a fake symbol.
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SymbolEncoding {
+    /// The quiet zone, in modules, on each side of the symbol.
+    quiet: usize,
+    /// The dark/light pattern: `1` dark, `0` light. For a QR,
+    /// `side × side` cells, row-major.
+    modules: Vec<u8>,
+    /// The side of a QR matrix in modules.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    side: Option<usize>,
+}
+
+#[tauri::command]
+fn encode_symbol(kind: String, value: String) -> Option<SymbolEncoding> {
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    if kind == "qr" {
+        return pn_render::qr_matrix(value).map(|m| SymbolEncoding {
+            quiet: pn_render::QR_QUIET_MODULES,
+            modules: m.modules,
+            side: Some(m.side),
+        });
+    }
+    let kind = match kind.as_str() {
+        "code39" => BarcodeKind::Code39,
+        "code93" => BarcodeKind::Code93,
+        "ean13" => BarcodeKind::Ean13,
+        "upca" => BarcodeKind::Upca,
+        "itf" => BarcodeKind::Itf,
+        _ => BarcodeKind::Code128,
+    };
+    pn_render::barcode_modules(&kind, value).map(|modules| SymbolEncoding {
+        quiet: pn_render::QUIET_MODULES,
+        modules,
+        side: None,
+    })
 }
 
 /// Prepare a job: pick the output path, encode the units, render the
@@ -592,6 +638,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             list_printers,
+            encode_symbol,
             plan_job,
             print_job,
             fetch_data,

@@ -136,6 +136,45 @@ export const parseDeeplink = (url: string) =>
 
 export const listPrinters = () => invoke<ProfileInfo[]>("list_printers");
 
+/**
+ * The module pattern of a barcode or QR value: `1` dark, `0` light,
+ * plus the quiet zone in modules (10 for 1-D, 4 for QR; `side` for a
+ * QR). The shapes mirror `app/src/lib.rs` field for field.
+ */
+export interface SymbolEncoding {
+  quiet: number;
+  modules: number[];
+  side?: number;
+}
+
+const symbolCache = new Map<string, SymbolEncoding | null>();
+
+/** The cached pattern for a value, or undefined when never asked. */
+export function symbolCacheGet(
+  kind: string,
+  value: string,
+): SymbolEncoding | null | undefined {
+  return symbolCache.get(`${kind}\u0000${value}`);
+}
+
+/**
+ * The module pattern of a value, from the Rust core — the same
+ * encoders the print path uses, so the canvas and the preview cannot
+ * disagree (REFACTORING decision #13). `null` when the value is
+ * empty or the symbology cannot carry it. Cached per (kind, value).
+ */
+export function encodeSymbol(kind: string, value: string) {
+  const key = `${kind}\u0000${value}`;
+  const hit = symbolCache.get(key);
+  if (hit !== undefined) return Promise.resolve(hit);
+  return invoke<SymbolEncoding | null>("encode_symbol", { kind, value }).then(
+    (r) => {
+      symbolCache.set(key, r);
+      return r;
+    },
+  );
+}
+
 /** The saved templates, or none on first run. */
 export const loadTemplates = () => invoke<StoredTemplate[]>("load_templates");
 

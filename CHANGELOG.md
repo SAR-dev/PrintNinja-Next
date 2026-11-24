@@ -520,6 +520,12 @@ Unreleased.
   a sticky page header on every view with its actions (New template on
   the list, back/save/preview on the editors); and tone-and-icon
   status and job-result badges in the top bar and the recent-jobs list
+- Scene editor: barcode and QR elements render live from the Rust
+  core's module patterns (the same encoders the print path uses), with
+  the bindings filled from the first sample record — a "show sample
+  data / show fields" toggle, a dashed box with the reason when a
+  value cannot be encoded, and an amber badge when the symbol's
+  modules are smaller than the selected printer's dot pitch
 
 ### Changed
 

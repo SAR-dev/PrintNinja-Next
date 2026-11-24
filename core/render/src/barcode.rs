@@ -15,9 +15,9 @@ use crate::draw::Renderer;
 use crate::geometry::dots_for_mm;
 
 /// Quiet zone on each side of a linear barcode, in modules.
-const QUIET_MODULES: usize = 10;
+pub const QUIET_MODULES: usize = 10;
 /// Quiet zone around a QR code, in modules (the spec asks for 4).
-const QR_QUIET_MODULES: usize = 4;
+pub const QR_QUIET_MODULES: usize = 4;
 
 impl Renderer {
     /// A 1-D barcode in a box at `(x_mm, y_mm)` of `w_mm` × `h_mm`.
@@ -40,7 +40,7 @@ impl Renderer {
         if value.is_empty() {
             return;
         }
-        let Some(modules) = encode(kind, value) else {
+        let Some(modules) = barcode_modules(kind, value) else {
             return;
         };
         let box_w = dots_for_mm(w_mm, self.dpi) as i64;
@@ -97,22 +97,21 @@ impl Renderer {
         if value.is_empty() {
             return;
         }
-        let Ok(code) = QrCode::with_error_correction_level(value.as_bytes(), EcLevel::M) else {
+        let Some(m) = qr_matrix(value) else {
             return;
         };
         let box_dots = dots_for_mm(h_mm, self.dpi) as i64;
         if box_dots <= 0 {
             return;
         }
-        let side = code.width() as i64;
-        let colors = code.to_colors();
+        let side = m.side as i64;
         let total = (side + 2 * QR_QUIET_MODULES as i64) as f64;
         let cell = box_dots as f64 / total;
         let x0 = crate::geometry::signed_dots(x_mm, self.dpi);
         let y0 = crate::geometry::signed_dots(y_mm, self.dpi);
         for y in 0..side {
             for x in 0..side {
-                if colors[(y as usize) * (side as usize) + x as usize] != Color::Dark {
+                if m.modules[(y as usize) * (side as usize) + x as usize] == 0 {
                     continue;
                 }
                 let cx = x + QR_QUIET_MODULES as i64;
@@ -137,26 +136,49 @@ pub fn barcode_module_count(kind: &BarcodeKind, value: &str) -> Option<usize> {
     if value.is_empty() {
         return None;
     }
-    encode(kind, value).map(|m| m.len() + 2 * QUIET_MODULES)
+    barcode_modules(kind, value).map(|m| m.len() + 2 * QUIET_MODULES)
+}
+
+/// A QR code's matrix at error correction M: its side in modules and
+/// the dark/light cells, row-major (`1` dark, `0` light), quiet zone
+/// excluded. `None` when the value is empty or too long for the
+/// largest code.
+#[derive(Debug, PartialEq)]
+pub struct QrMatrix {
+    pub side: usize,
+    pub modules: Vec<u8>,
 }
 
 /// The side of a QR matrix in modules, at error correction M (the
 /// renderer's level), quiet zone excluded. `None` when the value is
-/// empty or too long for the smallest code.
+/// empty or too long for the largest code.
 pub fn qr_module_side(value: &str) -> Option<usize> {
+    qr_matrix(value).map(|m| m.side)
+}
+
+/// The QR matrix a value draws at, at the renderer's error correction
+/// level (M). `draw_qr` draws from this, so the editor's canvas and
+/// the print cannot disagree.
+pub fn qr_matrix(value: &str) -> Option<QrMatrix> {
     let value = value.trim();
     if value.is_empty() {
         return None;
     }
-    QrCode::with_error_correction_level(value.as_bytes(), EcLevel::M)
-        .ok()
-        .map(|c| c.width())
+    let code = QrCode::with_error_correction_level(value.as_bytes(), EcLevel::M).ok()?;
+    let side = code.width();
+    let modules = code
+        .to_colors()
+        .into_iter()
+        .map(|c| (c == Color::Dark) as u8)
+        .collect();
+    Some(QrMatrix { side, modules })
 }
 
 /// Encode `value` as the dark/light module pattern of a linear
 /// symbology: `1` dark, `0` light, quiet zone excluded. `None` when the
-/// symbology cannot carry the value.
-fn encode(kind: &BarcodeKind, value: &str) -> Option<Vec<u8>> {
+/// symbology cannot carry the value. `draw_barcode` draws from this, so
+/// the editor's canvas and the print cannot disagree.
+pub fn barcode_modules(kind: &BarcodeKind, value: &str) -> Option<Vec<u8>> {
     let all_digits = value.chars().all(|c| c.is_ascii_digit());
     match kind {
         // Code 128 needs a character-set prefix; Ɓ selects set B
@@ -344,7 +366,7 @@ mod tests {
         assert!(barcode_module_count(&BarcodeKind::Code128, "プリント").is_none());
         // The count is pattern plus the two quiet zones.
         let count = barcode_module_count(&BarcodeKind::Code128, "HELLO123").unwrap();
-        let pattern = encode(&BarcodeKind::Code128, "HELLO123").unwrap();
+        let pattern = barcode_modules(&BarcodeKind::Code128, "HELLO123").unwrap();
         assert_eq!(count, pattern.len() + 2 * QUIET_MODULES);
 
         assert_eq!(qr_module_side(""), None);
@@ -354,6 +376,96 @@ mod tests {
         let code =
             QrCode::with_error_correction_level(b"https://example.com/o/1042", EcLevel::M).unwrap();
         assert_eq!(side, code.width());
+    }
+
+    /// The known values give the module counts the symbologies define:
+    /// Code 128 is 11 modules per character plus a 13-module stop,
+    /// EAN-13 a fixed 95.
+    #[test]
+    fn known_values_give_their_module_counts() {
+        // Start B + 8 data + check, each 11 modules, plus the 13 stop.
+        assert_eq!(
+            barcode_modules(&BarcodeKind::Code128, "HELLO123")
+                .unwrap()
+                .len(),
+            123
+        );
+        assert_eq!(
+            barcode_module_count(&BarcodeKind::Code128, "HELLO123"),
+            Some(143)
+        );
+        assert_eq!(
+            barcode_modules(&BarcodeKind::Ean13, "5901234123457")
+                .unwrap()
+                .len(),
+            95
+        );
+        // The same rules as the renderer: unencodable is `None`.
+        assert_eq!(barcode_modules(&BarcodeKind::Ean13, "5901234123458"), None);
+        assert_eq!(barcode_modules(&BarcodeKind::Itf, "12345"), None);
+        assert_eq!(barcode_modules(&BarcodeKind::Code128, "プリント"), None);
+    }
+
+    /// A short value is a version-one QR: a 21-module side whose
+    /// corners carry the finder pattern the scanner locks onto.
+    #[test]
+    fn a_short_value_is_a_version_one_qr() {
+        let m = qr_matrix("HELLO").unwrap();
+        assert_eq!(m.side, 21);
+        assert_eq!(m.modules.len(), 21 * 21);
+        // Top-left finder: a 7-module ring on a light border.
+        assert_eq!(&m.modules[0..8], &[1, 1, 1, 1, 1, 1, 1, 0]);
+        assert_eq!(&m.modules[21..29], &[1, 0, 0, 0, 0, 0, 1, 0]);
+        // Bottom edge of the same finder, six rows down.
+        assert_eq!(&m.modules[6 * 21..6 * 21 + 8], &[1, 1, 1, 1, 1, 1, 1, 0]);
+        // Byte-mode data past the largest code (2331 bytes at M) is
+        // `None` — an é keeps the value out of the more roomy
+        // alphanumeric mode.
+        assert_eq!(qr_matrix(&"é".repeat(1200)), None);
+    }
+
+    /// `draw_barcode` inks exactly the pattern `barcode_modules` gives:
+    /// at a box width where one module is a whole number of dots, the
+    /// dark runs cover 2 × (the pattern's dark modules) columns.
+    #[test]
+    fn draw_barcode_inks_the_pattern_it_is_given() {
+        let pattern = barcode_modules(&BarcodeKind::Code128, "HELLO123").unwrap();
+        let dark = pattern.iter().filter(|&&b| b == 1).count();
+        let total = pattern.len() + 2 * QUIET_MODULES; // 143
+                                                       // 286 dots wide: exactly two dots per module, no rounding drift.
+        let w_mm = (2 * total) as f32 * 25.4 / 203.0;
+        let mut r = Renderer::new(203, 320, 100);
+        r.draw_barcode(
+            2.0,
+            1.0,
+            w_mm,
+            10.0,
+            &BarcodeKind::Code128,
+            "HELLO123",
+            false,
+        );
+        let p = r.page();
+        let mid = 8 + 40; // into the bar band
+        let inked = (0..p.width()).filter(|&x| p.get(x, mid)).count();
+        assert_eq!(inked, 2 * dark);
+    }
+
+    /// And the same for `draw_qr`: at a whole-dots cell size the ink
+    /// covers 2×2 dots per dark module of the matrix.
+    #[test]
+    fn draw_qr_inks_the_matrix_it_is_given() {
+        let m = qr_matrix("HELLO").unwrap();
+        let dark = m.modules.iter().filter(|&&b| b == 1).count();
+        // 58 dots across 29 modules (21 + 2×4 quiet): two dots a cell.
+        let h_mm = (2 * (m.side + 2 * QR_QUIET_MODULES)) as f32 * 25.4 / 203.0;
+        let mut r = Renderer::new(203, 80, 80);
+        r.draw_qr(2.0, 2.0, h_mm, "HELLO");
+        let p = r.page();
+        let inked = (0..p.height())
+            .flat_map(|y| (0..p.width()).map(move |x| (x, y)))
+            .filter(|&(x, y)| p.get(x, y))
+            .count();
+        assert_eq!(inked, 4 * dark);
     }
 
     /// The symbol stays inside its box, quiet zone and all.

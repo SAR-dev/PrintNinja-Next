@@ -21,7 +21,10 @@ mod paint;
 mod pdf;
 mod text;
 
-pub use barcode::{barcode_module_count, qr_module_side};
+pub use barcode::{
+    barcode_module_count, barcode_modules, qr_matrix, qr_module_side, QrMatrix, QR_QUIET_MODULES,
+    QUIET_MODULES,
+};
 pub use bitmap::Bitmap;
 pub use draw::Renderer;
 pub use fonts::FontSet;

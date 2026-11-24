@@ -281,6 +281,8 @@ const en = {
     preview_note:
       "Prepared on the chosen printer, the same path as the print — every page of one record.",
     previewing: "Preparing…",
+    show_sample_data: "Show sample data",
+    show_fields: "Show fields",
     pick_printer: "Pick a printer",
     printer_list_error: "The printer list could not be loaded.",
     add_element: "Add element…",

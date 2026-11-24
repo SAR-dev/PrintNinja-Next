@@ -4,11 +4,19 @@
  * prepared-job preview (plan §3.4) is what the printer will actually
  * get, at its own dpi.
  *
+ * Barcodes and QR codes are drawn live from the Rust core's module
+ * patterns — the same encoders the print path uses (REFACTORING
+ * decision #13: preview and print must agree on what a symbol is) —
+ * with the first sample record substituted for the bindings. A value
+ * that cannot be encoded shows a dashed box with the reason, never a
+ * fake symbol.
+ *
  * Media is always shown as white with black ink, whatever the app's
  * theme, because that is what the printer has.
  */
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { encodeSymbol, symbolCacheGet, type SymbolEncoding } from "@/api";
 import {
   getAt,
   pageDims,
@@ -17,17 +25,29 @@ import {
   type Path,
   type Selection,
 } from "./editor-model";
-import type { Element, Template } from "./schema";
+import {
+  bindingNames,
+  substituteBindings,
+  type Element,
+  type Template,
+} from "./schema";
 
 const INK = "#18181b";
 const FAINT = "#71717a";
 const DASH = "4 3";
+const WARN = "#f59e0b";
 
 interface CanvasProps {
   template: Template;
   selection: Selection | null;
   onSelect: (s: Selection | null) => void;
   onMove: (path: Path, x_mm: number, y_mm: number) => void;
+  /** The first sample record, for substituting the bindings. */
+  record: Record<string, unknown> | null;
+  /** Whether the bindings show as sample data (on) or as `{{fields}}`. */
+  showSample: boolean;
+  /** The selected printer's dpi, for the fit warning. */
+  dpi: number | null;
 }
 
 interface Drag {
@@ -45,6 +65,9 @@ export function SceneCanvas({
   selection,
   onSelect,
   onMove,
+  record,
+  showSample,
+  dpi,
 }: CanvasProps) {
   const { w: wMm, h: hMm } = pageDims(template.media);
   const scale = Math.min(12, 480 / wMm);
@@ -115,6 +138,9 @@ export function SceneCanvas({
               scale={scale}
               selected={isSelected(path)}
               beginDrag={beginDrag}
+              record={record}
+              showSample={showSample}
+              dpi={dpi}
             />
           );
         })}
@@ -126,6 +152,14 @@ export function SceneCanvas({
   );
 }
 
+interface GlyphProps {
+  el: Element;
+  scale: number;
+  record: Record<string, unknown> | null;
+  showSample: boolean;
+  dpi: number | null;
+}
+
 /** One selectable element (or group), with its selection ring. */
 function ElementNode({
   el,
@@ -133,20 +167,32 @@ function ElementNode({
   scale,
   selected,
   beginDrag,
+  record,
+  showSample,
+  dpi,
 }: {
   el: Element;
   path: Path;
   scale: number;
   selected: boolean;
   beginDrag: (path: Path) => (e: React.PointerEvent) => void;
+  record: Record<string, unknown> | null;
+  showSample: boolean;
+  dpi: number | null;
 }) {
   const [bx, by, bw, bh] = boundsMm(el);
   return (
     <g className="cursor-move" onPointerDown={beginDrag(path)}>
       {el.type === "group" ? (
-        <GroupGlyph el={el} scale={scale} />
+        <GroupGlyph
+          el={el}
+          scale={scale}
+          record={record}
+          showSample={showSample}
+          dpi={dpi}
+        />
       ) : (
-        glyph(el, scale)
+        glyph(el, scale, record, showSample, dpi)
       )}
       {selected && (
         <rect
@@ -159,6 +205,231 @@ function ElementNode({
           strokeWidth={1.5}
           pointerEvents="none"
         />
+      )}
+    </g>
+  );
+}
+
+/** The bindings in `s`, filled from the sample record when the
+ * canvas shows sample data — else the raw template text. */
+function displayText(
+  s: string,
+  record: Record<string, unknown> | null,
+  showSample: boolean,
+): string {
+  return showSample ? substituteBindings(s, record) : s;
+}
+
+/**
+ * The module pattern of a symbol, debounced ~150 ms so typing in the
+ * value field does not flood the bridge, and cached per (kind, value).
+ * `undefined` while a value is being fetched, `null` when it cannot
+ * be encoded.
+ */
+function useSymbol(
+  kind: string,
+  value: string,
+): SymbolEncoding | null | undefined {
+  const [enc, setEnc] = useState<SymbolEncoding | null | undefined>(() =>
+    symbolCacheGet(kind, value),
+  );
+  useEffect(() => {
+    const hit = symbolCacheGet(kind, value);
+    if (hit !== undefined) {
+      setEnc(hit);
+      return;
+    }
+    setEnc(undefined);
+    let live = true;
+    const t = setTimeout(() => {
+      encodeSymbol(kind, value).then((r) => {
+        if (live) setEnc(r);
+      });
+    }, 150);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [kind, value]);
+  return enc;
+}
+
+/** Whether the symbol's modules fit a whole printer dot at `dpi`. */
+function symbolFits(
+  enc: SymbolEncoding,
+  box_mm: number,
+  dpi: number | null,
+): boolean {
+  if (dpi === null || box_mm <= 0) return true;
+  const total = enc.side
+    ? enc.side + 2 * enc.quiet
+    : enc.modules.length + 2 * enc.quiet;
+  return (box_mm * dpi) / 25.4 / total >= 1;
+}
+
+/** A small amber badge: the symbol is wider than its box allows. */
+function FitBadge({ x, y }: { x: number; y: number }) {
+  return (
+    <g pointerEvents="none">
+      <circle cx={x} cy={y} r={2.6} fill={WARN} />
+      <text
+        x={x}
+        y={y + 1}
+        fontSize={3.6}
+        fontWeight={700}
+        textAnchor="middle"
+        fill="#ffffff"
+      >
+        !
+      </text>
+    </g>
+  );
+}
+
+/** The short reason a value cannot be encoded, for the failure box. */
+function symbolReason(kind: string, value: string): string {
+  const v = value.trim();
+  if (v === "") return "empty value";
+  switch (kind) {
+    case "ean13":
+      return "EAN-13 needs 13 digits with a matching check digit";
+    case "upca":
+      return "UPC-A needs 12 digits with a matching check digit";
+    case "itf":
+      return "ITF needs an even number of digits";
+    case "code128":
+      return "Code 128 needs printable ASCII";
+    default:
+      return "this value cannot be encoded";
+  }
+}
+
+/** A live 1-D barcode, from the core's module pattern. */
+function BarcodeGlyph({
+  el,
+  scale,
+  record,
+  showSample,
+  dpi,
+}: GlyphProps & { el: Extract<Element, { type: "barcode" }> }) {
+  const kind = el.kind ?? "code128";
+  const shown = displayText(el.value, record, showSample);
+  // An un-substituted binding cannot be encoded; the canvas shows the
+  // raw value instead of a symbol of `{{...}}`.
+  const pending = bindingNames(shown).length > 0;
+  const enc = useSymbol(kind, pending ? "" : shown);
+  const { x_mm: x, y_mm: y } = el.at;
+  const { w_mm: w, h_mm: h } = el.size;
+
+  if (pending || enc === undefined || enc === null) {
+    return (
+      <Placeholder
+        x={x}
+        y={y}
+        w={w}
+        h={h}
+        label={
+          pending
+            ? `barcode (${kind})`
+            : enc === undefined
+              ? "…"
+              : symbolReason(kind, shown)
+        }
+        scale={scale}
+      />
+    );
+  }
+
+  const showText = el.show_text !== false;
+  const text_mm = showText ? Math.min(0.3 * h, 2.5) : 0;
+  const bar_h = h - text_mm;
+  const mod_w = w / (enc.modules.length + 2 * enc.quiet);
+  const bars: ReactNode[] = [];
+  for (let i = 0; i < enc.modules.length; ) {
+    if (enc.modules[i] === 1) {
+      const start = i;
+      while (i < enc.modules.length && enc.modules[i] === 1) i += 1;
+      bars.push(
+        <rect
+          key={start}
+          x={(x + (start + enc.quiet) * mod_w) * scale}
+          y={y * scale}
+          width={(i - start) * mod_w * scale}
+          height={bar_h * scale}
+          fill={INK}
+        />,
+      );
+    } else {
+      i += 1;
+    }
+  }
+  const fontSize = Math.max(1.2, Math.min(0.2 * h, 2.5));
+  return (
+    <g>
+      {bars}
+      {showText && (
+        <text
+          x={(x + w / 2) * scale}
+          y={(y + bar_h + 0.75 * text_mm) * scale}
+          fontSize={fontSize * scale}
+          textAnchor="middle"
+          fill={INK}
+        >
+          {shown}
+        </text>
+      )}
+      {!symbolFits(enc, w, dpi) && (
+        <FitBadge x={(x + w - 2.5) * scale} y={(y + 2.5) * scale} />
+      )}
+    </g>
+  );
+}
+
+/** A live QR code, one path of dark modules from the core's matrix. */
+function QrGlyph({
+  el,
+  scale,
+  record,
+  showSample,
+  dpi,
+}: GlyphProps & { el: Extract<Element, { type: "qr" }> }) {
+  const shown = displayText(el.value, record, showSample);
+  const pending = bindingNames(shown).length > 0;
+  const enc = useSymbol("qr", pending ? "" : shown);
+  const { x_mm: x, y_mm: y } = el.at;
+  const h = el.h_mm;
+
+  if (pending || enc === undefined || enc === null) {
+    return (
+      <Placeholder
+        x={x}
+        y={y}
+        w={h}
+        h={h}
+        label={
+          pending ? "qr" : enc === undefined ? "…" : symbolReason("qr", shown)
+        }
+        scale={scale}
+      />
+    );
+  }
+
+  const side = enc.side ?? 1;
+  const cell = h / (side + 2 * enc.quiet);
+  let d = "";
+  for (let r = 0; r < side; r += 1) {
+    for (let c = 0; c < side; c += 1) {
+      if (enc.modules[r * side + c] === 0) continue;
+      const px = x + (c + enc.quiet) * cell;
+      const py = y + (r + enc.quiet) * cell;
+      d += `M${px * scale} ${py * scale}h${cell * scale}v${cell * scale}h${-cell * scale}Z`;
+    }
+  }
+  return (
+    <g>
+      <path d={d} fill={INK} />
+      {!symbolFits(enc, h, dpi) && (
+        <FitBadge x={(x + h - 2.5) * scale} y={(y + 2.5) * scale} />
       )}
     </g>
   );
@@ -189,7 +460,13 @@ function boundsMm(el: Element): [number, number, number, number] {
 }
 
 /** How one element (except a group) is drawn at its own position. */
-function glyph(el: Element, scale: number): ReactNode {
+function glyph(
+  el: Element,
+  scale: number,
+  record: Record<string, unknown> | null,
+  showSample: boolean,
+  dpi: number | null,
+): ReactNode {
   switch (el.type) {
     case "text": {
       const align = el.style.align ?? "left";
@@ -213,7 +490,7 @@ function glyph(el: Element, scale: number): ReactNode {
           textAnchor={anchor}
           fill={INK}
         >
-          {el.content}
+          {displayText(el.content, record, showSample)}
         </text>
       );
     }
@@ -242,27 +519,37 @@ function glyph(el: Element, scale: number): ReactNode {
       );
     case "barcode":
       return (
-        <Placeholder
-          x={el.at.x_mm}
-          y={el.at.y_mm}
-          w={el.size.w_mm}
-          h={el.size.h_mm}
-          label={`barcode (${el.kind ?? "code128"})`}
+        <BarcodeGlyph
+          el={el}
           scale={scale}
+          record={record}
+          showSample={showSample}
+          dpi={dpi}
         />
       );
     case "qr":
       return (
-        <Placeholder
-          x={el.at.x_mm}
-          y={el.at.y_mm}
-          w={el.h_mm}
-          h={el.h_mm}
-          label="qr"
+        <QrGlyph
+          el={el}
           scale={scale}
+          record={record}
+          showSample={showSample}
+          dpi={dpi}
         />
       );
     case "image":
+      if (el.src.startsWith("data:")) {
+        return (
+          <image
+            href={el.src}
+            x={el.at.x_mm * scale}
+            y={el.at.y_mm * scale}
+            width={el.size.w_mm * scale}
+            height={el.size.h_mm * scale}
+            preserveAspectRatio="xMidYMid meet"
+          />
+        );
+      }
       return (
         <Placeholder
           x={el.at.x_mm}
@@ -278,7 +565,9 @@ function glyph(el: Element, scale: number): ReactNode {
   }
 }
 
-/** A dashed box standing in for something the canvas does not encode. */
+/** A dashed box standing in for something the canvas does not draw
+ * live: an unencodable value, an image without a data URI, or a
+ * symbol whose value is still a binding. */
 function Placeholder({
   x,
   y,
@@ -324,9 +613,15 @@ function Placeholder({
 function GroupGlyph({
   el,
   scale,
+  record,
+  showSample,
+  dpi,
 }: {
   el: Extract<Element, { type: "group" }>;
   scale: number;
+  record: Record<string, unknown> | null;
+  showSample: boolean;
+  dpi: number | null;
 }) {
   let cursor = 0;
   const rows = el.items.map((item) => {
@@ -366,7 +661,7 @@ function GroupGlyph({
             (el.at.y_mm + top + 4) * scale
           })`}
         >
-          {glyph(item, scale)}
+          {glyph(item, scale, record, showSample, dpi)}
         </g>
       ))}
     </g>

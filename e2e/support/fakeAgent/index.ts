@@ -135,6 +135,130 @@ function recordCount(data: string): number {
   }
 }
 
+/** A 32-bit FNV-1a hash, to seed the deterministic symbol patterns. */
+function fnv(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/** A small seeded PRNG (mulberry32). */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** The EAN/UPC check digit of the leading digits; `firstWeight` is
+ * 1 for EAN-13 (12 leading) and 3 for UPC-A (11 leading). */
+function checkDigit(d: string, firstWeight: 1 | 3): number {
+  let sum = 0;
+  for (let i = 0; i < d.length; i++) {
+    sum += (d.charCodeAt(i) - 48) * (i % 2 === 0 ? firstWeight : 4 - firstWeight);
+  }
+  return (10 - (sum % 10)) % 10;
+}
+
+/** A deterministic stand-in for the Rust core's `encode_symbol`:
+ * the same shape and the same failure rules, but the module pattern
+ * is a seeded PRNG, so the canvas always draws something plausible. */
+function symbolEncoding(kind: string, value: string): unknown {
+  const v = value.trim();
+  if (v === "") return null;
+  if (kind === "qr") return qrMatrixStub(v);
+  switch (kind) {
+    case "ean13":
+      if (!/^\d{13}$/.test(v) || checkDigit(v.slice(0, 12), 1) !== +v[12]) {
+        return null;
+      }
+      break;
+    case "upca":
+      if (!/^\d{12}$/.test(v) || checkDigit(v.slice(0, 11), 3) !== +v[11]) {
+        return null;
+      }
+      break;
+    case "itf":
+      if (!/^\d+$/.test(v) || v.length % 2 !== 0) return null;
+      break;
+    case "code39":
+      if (!/^[A-Z0-9 $%*+./:-]+$/.test(v)) return null;
+      break;
+    default:
+      // code128, code93: printable ASCII
+      if (!/^[ -~]+$/.test(v)) return null;
+  }
+  const n = 60 + (fnv(v) % 80);
+  const rnd = mulberry32(fnv(`${kind}\u0000${v}`));
+  const modules: number[] = [];
+  while (modules.length < n) {
+    for (let i = 0; i < 1 + Math.floor(rnd() * 4); i++) {
+      if (modules.length < n) modules.push(1);
+    }
+    for (let i = 0; i < 1 + Math.floor(rnd() * 3); i++) {
+      if (modules.length < n) modules.push(0);
+    }
+  }
+  modules[n - 1] = 1;
+  return { quiet: 10, modules };
+}
+
+/** A deterministic QR stand-in: a version-sized box, the three real
+ * finder patterns, the timing tracks, and a PRNG fill for the rest. */
+function qrMatrixStub(
+  value: string,
+): { quiet: number; modules: number[]; side: number } | null {
+  if (value.length > 2953) return null;
+  const side =
+    value.length < 10 ? 21
+    : value.length < 20 ? 25
+    : value.length < 40 ? 29
+    : value.length < 80 ? 33
+    : 37;
+  const m = new Array<number>(side * side).fill(0);
+  const rnd = mulberry32(fnv(`qr\u0000${value}`));
+  const finder = (r0: number, c0: number) => {
+    for (let r = -1; r <= 7; r++) {
+      for (let c = -1; c <= 7; c++) {
+        const rr = r0 + r;
+        const cc = c0 + c;
+        if (rr < 0 || cc < 0 || rr >= side || cc >= side) continue;
+        const border =
+          r >= 0 && r <= 6 && c >= 0 && c <= 6 && (r === 0 || r === 6 || c === 0 || c === 6);
+        const core = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+        m[rr * side + cc] = border || core ? 1 : 0;
+      }
+    }
+  };
+  finder(0, 0);
+  finder(0, side - 7);
+  finder(side - 7, 0);
+  for (let i = 8; i < side - 8; i++) {
+    const bit = i % 2 === 0 ? 1 : 0;
+    m[6 * side + i] = bit;
+    m[i * side + 6] = bit;
+  }
+  const reserved = (r: number, c: number) =>
+    (r < 9 && c < 9) ||
+    (r < 9 && c >= side - 8) ||
+    (r >= side - 8 && c < 9) ||
+    r === 6 ||
+    c === 6;
+  for (let r = 0; r < side; r++) {
+    for (let c = 0; c < side; c++) {
+      if (!reserved(r, c)) m[r * side + c] = rnd() < 0.5 ? 1 : 0;
+    }
+  }
+  return { quiet: 4, modules: m, side };
+}
+
 /** A plausible prepare report: the same shape `plan_job` returns,
  * the preview left null (the UI shows the numbers, not the pages). */
 function plan(a: Record<string, unknown>): unknown {
@@ -169,6 +293,8 @@ async function invoke(
       return { template: null, printer: null, copies: null };
     case "list_printers":
       return state.printers;
+    case "encode_symbol":
+      return symbolEncoding(String(a.kind), String(a.value));
     case "load_templates":
       return state.templates;
     case "save_template": {

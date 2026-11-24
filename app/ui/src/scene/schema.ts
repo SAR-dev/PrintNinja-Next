@@ -154,6 +154,23 @@ export interface Template {
   elements: Element[];
 }
 
+/**
+ * The `{{name}}` bindings in `s`, filled from `record` — the UI mirror
+ * of `pn_scene::substitute_bindings`: a missing field reads as an
+ * empty string, and anything that is not a valid binding stays.
+ */
+export function substituteBindings(
+  s: string,
+  record: Record<string, unknown> | null,
+): string {
+  if (!record) return s;
+  return s.replace(
+    /\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}/g,
+    (match, name: string) =>
+      name in record ? String(record[name] ?? "") : match,
+  );
+}
+
 /** The data bindings `{{name}}` in a string, in order of first use. */
 export function bindingNames(s: string): string[] {
   const names: string[] = [];

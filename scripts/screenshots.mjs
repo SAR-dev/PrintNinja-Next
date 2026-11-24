@@ -132,6 +132,19 @@ function makeSeed(theme) {
         length_mm: 36,
         thickness_mm: 0.2,
       },
+      {
+        type: "barcode",
+        at: { x_mm: 3, y_mm: 11 },
+        size: { w_mm: 34, h_mm: 13 },
+        kind: "code128",
+        value: "{{name}}",
+      },
+      {
+        type: "qr",
+        at: { x_mm: 12, y_mm: 28 },
+        h_mm: 16,
+        value: "{{name}}",
+      },
     ],
   };
   const invoiceTemplate = {

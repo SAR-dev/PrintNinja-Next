@@ -286,6 +286,8 @@ const ja: EnStrings = {
     preview_note:
       "選択したプリンターで準備 — 印刷と同じ手順で、1 レコードの全ページ。",
     previewing: "準備中…",
+    show_sample_data: "サンプルデータを表示",
+    show_fields: "フィールドを表示",
     pick_printer: "プリンターを選択",
     printer_list_error: "プリンターリストを読み込めませんでした。",
     add_element: "要素を追加…",

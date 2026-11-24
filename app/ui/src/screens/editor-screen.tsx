@@ -75,6 +75,7 @@ export function EditorScreen({
     structuredClone(initial.template),
   );
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [showSample, setShowSample] = useState(true);
   const [printers, setPrinters] = useState<ProfileInfo[]>([]);
   const [printer, setPrinter] = useState<string>("");
   const [preview, setPreview] = useState<PrepareReport | null>(null);
@@ -92,6 +93,15 @@ export function EditorScreen({
 
   const bindings = useMemo(() => allBindings(template), [template]);
   const selected = selection ? (getAt(template, selection.path) ?? null) : null;
+
+  /** The first record of the sample data, for the canvas's live
+   *  barcode/QR substitution (plan step 2). `null` when the sample
+   *  does not parse to a record. */
+  const sampleRecord = useMemo<Record<string, unknown> | null>(
+    () => firstRecordOf(initial.sample),
+    [initial.sample],
+  );
+  const dpi = printers.find((p) => p.model === printer)?.dpi ?? null;
 
   const setMedia = (media: Media) => setTemplate((t) => ({ ...t, media }));
   const moveElement = (path: Path, x_mm: number, y_mm: number) =>
@@ -188,7 +198,21 @@ export function EditorScreen({
                 selection={selection}
                 onSelect={setSelection}
                 onMove={moveElement}
+                record={sampleRecord}
+                showSample={showSample}
+                dpi={dpi}
               />
+              <div className="mt-3">
+                <SwitchRow
+                  label={
+                    showSample
+                      ? t("editor.show_sample_data")
+                      : t("editor.show_fields")
+                  }
+                  checked={showSample}
+                  onCheckedChange={setShowSample}
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -987,4 +1011,29 @@ function previewRecord(sample: string): string {
     // not an array — treat the sample as one record
   }
   return sample;
+}
+
+/**
+ * The canvas substitutes the bindings from the first sample record:
+ * the first element of a parsed array, or a parsed object sample.
+ * `null` when the sample is not a record the canvas can fill in.
+ */
+function firstRecordOf(sample: string): Record<string, unknown> | null {
+  try {
+    const arr: unknown = JSON.parse(sample);
+    if (
+      Array.isArray(arr) &&
+      arr.length > 0 &&
+      typeof arr[0] === "object" &&
+      arr[0] !== null
+    ) {
+      return arr[0] as Record<string, unknown>;
+    }
+    if (typeof arr === "object" && arr !== null) {
+      return arr as Record<string, unknown>;
+    }
+  } catch {
+    // not JSON — nothing to substitute from
+  }
+  return null;
 }
