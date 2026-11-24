@@ -61,6 +61,7 @@ const VIEWS = [
   "print-menu",
   "edit",
   "element-menu",
+  "editor-properties",
   "document-edit",
   "settings",
   "new-template",
@@ -87,6 +88,8 @@ const L = {
     moveUp: "Move up",
     editTemplate: "Edit template",
     elementsTitle: "Elements",
+    elText: "Text",
+    selectedTitle: "Selected element",
     publish: "Publish",
     newTemplate: "New template",
     settings: "Settings",
@@ -113,6 +116,8 @@ const L = {
     moveUp: "上へ移動",
     editTemplate: "テンプレートを編集",
     elementsTitle: "要素",
+    elText: "テキスト",
+    selectedTitle: "選択中の要素",
     publish: "公開",
     newTemplate: "新しいテンプレート",
     settings: "設定",
@@ -453,6 +458,16 @@ async function navigate(page, view, l) {
         .first()
         .click();
       await page.getByRole("menuitem", { name: l.moveUp, exact: true }).waitFor();
+      break;
+    case "editor-properties":
+      await navigate(page, "edit", l);
+      await page
+        .locator('[data-slot="card"]')
+        .filter({ has: page.getByRole("heading", { name: l.elementsTitle }) })
+        .getByRole("button", { name: l.elText })
+        .first()
+        .click();
+      await page.getByText(l.selectedTitle, { exact: true }).waitFor();
       break;
     case "document-edit":
       // The card title's heading also carries the track badge, so the

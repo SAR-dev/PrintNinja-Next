@@ -47,6 +47,7 @@ import {
   UserRound,
   Wifi,
   WifiOff,
+  X,
   XCircle,
   type LucideIcon,
 } from "lucide-react";
@@ -82,6 +83,7 @@ export const icons = {
   failed: XCircle,
   wrong_mode_suspected: CircleHelp,
   // Actions
+  close: X,
   more: Ellipsis,
   add: Plus,
   save: Save,

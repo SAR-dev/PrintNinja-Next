@@ -114,6 +114,15 @@ export function EditorScreen({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
 
+  // On the phone the properties are a bottom sheet: keep the canvas
+  // in view when an element is picked from the list further down.
+  useEffect(() => {
+    if (!selection || !window.matchMedia("(max-width: 767px)").matches) return;
+    document
+      .querySelector('[data-slot="app-main"]')
+      ?.scrollTo({ top: 0, behavior: "instant" });
+  }, [selection]);
+
   useEffect(() => {
     listPrinters()
       .then((ps) => {
@@ -541,9 +550,19 @@ export function EditorScreen({
           </Card>
 
           {selected && (
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("editor.selected_element")}</CardTitle>
+            <Card className="max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:max-h-[60dvh] max-md:overflow-y-auto max-md:rounded-b-none max-md:border-b-0 max-md:shadow-2xl">
+              <CardHeader className="max-md:pt-5">
+                <div className="mx-auto mb-1 h-1 w-10 rounded-full bg-muted md:hidden" />
+                <CardTitle className="flex items-center justify-between gap-2">
+                  {t("editor.selected_element")}
+                  <IconButton
+                    icon="close"
+                    label={t("common.close")}
+                    variant="ghost"
+                    className="md:hidden"
+                    onClick={() => setSelection(null)}
+                  />
+                </CardTitle>
                 <CardDescription>
                   {selectedParent
                     ? `${elementLabel(selectedParent)} — ${elementLabel(selected)}`

@@ -608,6 +608,9 @@ Unreleased.
 
 ### Changed
 
+- App: on the phone, selecting an editor element brings the canvas
+  back into view and opens its properties as a bottom sheet; the add
+  actions are an icon toolbar (as on the PC)
 - App: the phone print screen keeps Preview and Print in a sticky
   action bar at the bottom, and the result is a status banner with an
   icon and the printer's outcome
