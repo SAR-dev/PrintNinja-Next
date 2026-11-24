@@ -57,6 +57,8 @@ const VIEWS = [
   "jobs",
   "job-menu",
   "printers",
+  "test-print",
+  "test-print-done",
   "community",
   "saved",
   "print",
@@ -69,6 +71,7 @@ const VIEWS = [
   "document-edit",
   "settings",
   "diagnostics",
+  "repair-dialog",
   "new-template",
   "publish-dialog",
   "template-menu",
@@ -88,6 +91,9 @@ const L = {
   en: {
     print: "Print",
     edit: "Edit",
+    testPrint: "Test print",
+    repair: "Fix PC printing",
+    testText: "Print text label",
     search: "Search templates",
     searchResultsOne: "1 matching",
     openTemplate: "Open template",
@@ -121,6 +127,9 @@ const L = {
   ja: {
     print: "印刷",
     edit: "編集",
+    testPrint: "テスト印刷",
+    repair: "PC の印刷を修復",
+    testText: "文字ラベルを印刷",
     more: "その他の操作",
     duplicate: "複製",
     moveUp: "上へ移動",
@@ -413,6 +422,17 @@ async function navigate(page, view, l) {
         .getByRole("heading", { name: l.recentTitle, level: 1 })
         .waitFor();
       break;
+    case "test-print":
+      await navigate(page, "printers", l);
+      await page.getByRole("button", { name: l.testPrint, exact: true }).first().click();
+      await page.getByRole("menuitem", { name: l.testText, exact: true }).first().waitFor();
+      break;
+    case "test-print-done":
+      await navigate(page, "printers", l);
+      await page.getByRole("button", { name: l.testPrint, exact: true }).first().click();
+      await page.getByRole("menuitem", { name: l.testText, exact: true }).first().click();
+      await page.locator('[data-status]').first().waitFor();
+      break;
     case "printers":
       await page
         .getByRole("button", { name: l.tabPrinters, exact: true })
@@ -515,6 +535,13 @@ async function navigate(page, view, l) {
       if ((page.viewportSize()?.width ?? 0) >= 768)
         await page.getByRole("tab", { name: l.tabDiagnostics }).click();
       await page.getByRole("heading", { name: l.logsTitle, level: 2 }).waitFor();
+      break;
+    case "repair-dialog":
+      await navigate(page, "settings", l);
+      if ((page.viewportSize()?.width ?? 0) >= 768)
+        await page.getByRole("tab", { name: l.tabDiagnostics }).click();
+      await page.getByRole("button", { name: l.repair, exact: true }).first().click();
+      await page.getByRole("dialog").waitFor();
       break;
     case "new-template":
       await page.getByRole("button", { name: l.newTemplate }).click();

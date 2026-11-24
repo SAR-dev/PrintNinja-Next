@@ -27,9 +27,6 @@ Points that cannot be finished until a decision is made sit in the
 - [ ] **TLS transports**: `ipps://` / `https://` endpoints (the
       discovery already marks them and warns the user until this
       lands).
-- [ ] **Test print** — one-click "print a test page" (page or text)
-      from the saved-printer card, so a newly added printer is proven
-      before the first real job (the old app's `test_printer`).
 - [ ] **Capability probe on add** — when a printer is found or typed
       in, offer a detect that queries the (not yet saved) device and
       suggests the language and profile instead of the user picking by
@@ -72,23 +69,9 @@ found by behavior inspection and verified against the code:
       print screen catches `listPrinters` failures into the Preview
       card's plan-error slot, misattributing an unrelated load failure
       to job preparation.
-- [ ] **A busy port 17717 is invisible** — when the local print API
-      cannot bind, the failure is an `eprintln` only; the whole
-      print-from-elsewhere feature is down and the user is told
-      nothing (TROUBLESHOOTING.md even points at the console line).
-- [ ] **Template descriptions are not editable** — both editors save
-      the original description unchanged; only the name has a field.
-- [ ] **The scene editor cannot edit the template's sample data** —
-      the document editor has the Sample data card, the scene one does
-      not.
 - [ ] **New-template names are hardcoded English** — "New label" /
       "New document" and their descriptions bypass the locale files,
       so a Japanese interface still creates English-named templates.
-- [ ] **No repair or export in Diagnostics** — the browser choice and
-      the log viewer with download exist, but there is still no
-      one-click "fix PC printing" repair and no exported diagnostics
-      bundle; TROUBLESHOOTING.md still points at console output the app
-      does not show.
 - [ ] **No e2e coverage of the LAN print-API gate** — pairing claim,
       lockout, token rejection, idempotency and cancel/retry exist
       only as unit tests inside `app/src/api.rs`; the

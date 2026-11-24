@@ -397,6 +397,16 @@ async function invoke(
       return plan(a);
     case "print_job":
       return { result: "confirmed", counts: null, reason: null };
+    case "diagnostics_bundle":
+      return JSON.stringify({ app: { version: "0.0.1" }, local_api: { running: true } });
+    case "diagnostics_repair":
+      return { steps: ["Spooler: restarted", "port 17717: no process"], ok: true };
+    case "local_api_status":
+      return {
+        running: true,
+        address: "127.0.0.1:17717",
+        error: null,
+      };
     case "browser_info":
       return {
         mode: state.browserMode,

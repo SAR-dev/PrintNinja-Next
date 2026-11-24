@@ -368,6 +368,29 @@ export interface Publication {
   publishedAt: number;
 }
 
+/** What the OS-level repair actually did. */
+export interface RepairReport {
+  steps: string[];
+  ok: boolean;
+}
+
+/** A redacted JSON bundle for a bug report. */
+export const diagnosticsBundle = () => invoke<string>("diagnostics_bundle");
+
+/** Restart the OS print service (and optionally free port 17717). */
+export const diagnosticsRepair = (stopPortOwner: boolean) =>
+  invoke<RepairReport>("diagnostics_repair", { stopPortOwner });
+
+/** The local print API listener's state (Diagnostics tab). */
+export interface LocalApiStatus {
+  running: boolean;
+  address: string;
+  error: string | null;
+}
+
+/** Whether the local print API is listening, and where. */
+export const localApiStatus = () => invoke<LocalApiStatus>("local_api_status");
+
 /** The browser choice shown in the Diagnostics tab. */
 export interface BrowserInfo {
   mode: "system" | "managed";

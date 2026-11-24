@@ -82,8 +82,10 @@ and **Copy reason** (enabled when the result has one). Reprint re-sends the
 exact same job — same template, data and transport.
 
 **Printers** — *Printers you added from a scan or by hand.* Scan system, scan
-network or add manually; each found row has **Use**, each saved row
-**Remove**. Below, one card per printer sets **Chunk size (bytes)**, **Pause
+network or add manually; each found row has **Use**, each saved row has a
+**Test print** menu (**Print text label** or **Print test page**) and
+**Remove**. A test sends one tiny job through that printer's saved profile
+and transport, then shows the honest result under the row. Below, one card per printer sets **Chunk size (bytes)**, **Pause
 between chunks (ms)** and **Close delay (ms)**, with **Reset to the profile's
 values** when any override is set.
 
@@ -129,7 +131,8 @@ offers **Retry** and **Reprint**.
 
 ## ✏️ The scene editor
 
-The header has a back arrow, the inline **name** field, an **unsaved dot**
+The header has a back arrow, the inline **name** field, a **Description**
+field, an **unsaved dot**
 while there are changes, the `scene` badge, **undo** (↩) and **redo** (↪)
 icon buttons, **Save template**, **Preview**, and a **⋯** menu showing the
 template size and a second **Save template** command.
@@ -149,13 +152,16 @@ template size and a second **Save template** command.
   child), page placement, and the type's own fields. On the phone this panel
   is a bottom sheet with a close button; picking an element brings the canvas
   back into view first.
+- **Sample data** — the records used for the live canvas substitution and
+  the preview; the saved template carries them too.
 - **Data fields** — the `{{…}}` bindings as badges.
 - **Preview** — prepared on the chosen printer, one record, same path as
   print.
 
 ## 📄 The document editor
 
-Back arrow, inline name, `document` badge, **Save template**:
+Back arrow, inline name, Description field, `document` badge,
+**Save template**:
 
 - **HTML/CSS** — one record per page, `{{field}}` fills from the record,
   with `Bindings:` badges.
@@ -182,10 +188,16 @@ is plain.
   when a printer or server on your own network serves the data URL.
 - **Registry** — **Server address**, the community registry's URL. Leave it
   empty for the server on this computer; changes apply at the next sync.
-- **Diagnostics** — **Browser for documents**: choose the PC's own browser
+- **Diagnostics** — **Local print API** shows whether the listener on port
+  17717 is up (or the bind error in plain words). **Browser for documents**: choose the PC's own browser
   or download a private Chromium build and use that; the detected and
   downloaded paths are shown. **Application log**: recent app events,
-  newest first, with **Refresh**, **Download** (a text file) and **Clear**.
+  newest first, with **Refresh**, **Download** (a text file), **Download
+  diagnostics bundle** (a redacted JSON file with the app state and log)
+  and **Clear**. **Fix PC printing** restarts the OS print service with
+  administrator rights (Spooler on Windows, CUPS on Linux) and can also
+  stop whatever holds port 17717; the steps and any error are shown in
+  plain words.
 
 ## 🌍 Signing in, syncing and publishing
 

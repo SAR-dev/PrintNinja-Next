@@ -75,8 +75,10 @@ pub fn clear() {
 mod tests {
     use super::*;
 
+    // One test: the buffer is process-global, so two parallel tests
+    // would push into each other's entries.
     #[test]
-    fn a_log_keeps_the_newest_entries_first() {
+    fn the_log_is_bounded_and_newest_first() {
         clear();
         push("info", "test", "first");
         push("warn", "test", "second");
@@ -84,11 +86,7 @@ mod tests {
         assert_eq!(got.len(), 2);
         assert_eq!(got[0].message, "second");
         assert_eq!(got[1].message, "first");
-        clear();
-    }
 
-    #[test]
-    fn a_log_is_bounded() {
         clear();
         for i in 0..MAX_ENTRIES + 5 {
             push("info", "test", format!("event {i}"));

@@ -10,6 +10,16 @@ Unreleased.
 
 ### Added
 
+- App: Diagnostics can now run a real OS-level print repair (restart
+  Spooler/CUPS with elevation, optionally free port 17717) and export a
+  redacted JSON diagnostics bundle with the app state and recent log
+- App: Diagnostics shows the local print API's listener address or its
+  bind error, instead of leaving a busy port 17717 invisible
+- App: the scene editor has a Sample data card; edits feed the live
+  canvas, the preview and the saved template, and count as unsaved changes
+- App: a Test print menu on each saved printer (text label or A4 page)
+  that sends a one-record job through the saved profile and transport
+  and shows the honest result
 - App: the sign-in/sign-up dialog has an editable Server address,
   prefilled from `VITE_REGISTRY_URL` when the build sets one (otherwise
   from the app's current registry URL), and saves it for the login
@@ -619,6 +629,8 @@ Unreleased.
 
 ### Changed
 
+- App: both editors now have a Description field and save edits to it
+  instead of keeping the original text
 - App: Ctrl/Cmd+K focuses the top-bar search, Escape clears it, and
   duplicating a template confirms with a toast; interactions use
   120–200 ms transitions and the screenshot script can check 360 px
@@ -705,6 +717,8 @@ Unreleased.
 
 ### Fixed
 
+- App: the Android build no longer fails to compile the Diagnostics
+  repair code (string type inference) or warns about an unused handle
 - App: the PC Settings screen shows only the selected tab again; the
   phone still shows all groups in one list
 - Sub-screens have a real back affordance: an arrow button before the page

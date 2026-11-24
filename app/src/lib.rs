@@ -11,6 +11,7 @@ mod api;
 mod app_log;
 mod browser_download;
 mod deeplink;
+mod diagnostics;
 mod discovery;
 mod fetcher;
 mod pairing;
@@ -347,6 +348,56 @@ fn load_recent_jobs(state: State<'_, Arc<Store>>) -> Result<Vec<StoredJob>, Stri
 #[tauri::command]
 fn remember_job(state: State<'_, Arc<Store>>, job: StoredJob) -> Result<(), String> {
     state.remember_job(&job)
+}
+
+/// A redacted bundle the user can download from Diagnostics.
+#[tauri::command]
+fn diagnostics_bundle(
+    api_state: State<'_, Arc<api::ApiState>>,
+    store: State<'_, Arc<Store>>,
+) -> Result<String, String> {
+    let settings = store.load_settings()?;
+    let api = api_state
+        .status
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let browser = browser_download::info(&settings);
+    let printers = store
+        .list_saved_printers()?
+        .into_iter()
+        .map(|p| (p.name, p.model, p.transport))
+        .collect::<Vec<_>>();
+    Ok(diagnostics::bundle(
+        &settings,
+        &api,
+        &browser,
+        &printers,
+        &app_log::entries(),
+    ))
+}
+
+/// Restart the OS print service with elevation, optionally freeing the
+/// API port. Runs off the UI thread because the OS may prompt.
+#[tauri::command]
+async fn diagnostics_repair(stop_port_owner: bool) -> Result<diagnostics::RepairReport, String> {
+    let report = tauri::async_runtime::spawn_blocking(move || diagnostics::repair(stop_port_owner))
+        .await
+        .map_err(|e| e.to_string())?;
+    for step in &report.steps {
+        app_log::push("info", "repair", step.clone());
+    }
+    Ok(report)
+}
+
+/// The local print API's listener state, for Diagnostics.
+#[tauri::command]
+fn local_api_status(state: State<'_, Arc<api::ApiState>>) -> Result<api::ApiStatus, String> {
+    Ok(state
+        .status
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone())
 }
 
 /// The browser choice shown in the Diagnostics tab.
@@ -768,6 +819,7 @@ pub fn run() {
                     profiles,
                     store: store.clone(),
                     window: Arc::new(std::sync::Mutex::new(None)),
+                    status: Arc::new(std::sync::Mutex::new(api::ApiStatus::default())),
                 });
                 app.manage(api_state.clone());
                 tauri::async_runtime::spawn(api::serve(api_state));
@@ -827,6 +879,9 @@ pub fn run() {
             remember_job,
             load_settings,
             save_setting,
+            diagnostics_bundle,
+            diagnostics_repair,
+            local_api_status,
             browser_info,
             browser_select,
             browser_download_cmd,
@@ -852,23 +907,27 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building PrintNinja");
-    app.run(|app_handle, event| match event {
-        // The window's close button hides the app to the tray;
-        // quitting is the tray menu's "Quit PrintNinja". Desktop
-        // only — on Android there is no tray, so closing ends the
-        // app like any other activity.
-        #[cfg(not(target_os = "android"))]
-        tauri::RunEvent::WindowEvent {
-            label,
-            event: tauri::WindowEvent::CloseRequested { api, .. },
-            ..
-        } if label == "main" => {
-            if let Some(window) = app_handle.get_webview_window(&label) {
-                let _ = window.hide();
+    app.run(|app_handle, event| {
+        #[cfg(target_os = "android")]
+        let _ = app_handle;
+        match event {
+            // The window's close button hides the app to the tray;
+            // quitting is the tray menu's "Quit PrintNinja". Desktop
+            // only — on Android there is no tray, so closing ends the
+            // app like any other activity.
+            #[cfg(not(target_os = "android"))]
+            tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::CloseRequested { api, .. },
+                ..
+            } if label == "main" => {
+                if let Some(window) = app_handle.get_webview_window(&label) {
+                    let _ = window.hide();
+                }
+                api.prevent_close();
             }
-            api.prevent_close();
+            _ => {}
         }
-        _ => {}
     });
 }
 
