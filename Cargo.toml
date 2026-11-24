@@ -1,7 +1,7 @@
 # PrintNinja (next) — Rust workspace.
 #
-# Layout per docs/planned/REFACTORING-PLAN.md §5.11:
-#   core/{scene,render,planner,profiles,encoders,transport,job}
+# Layout (see docs/ARCHITECTURE.md):
+#   core/{scene,browser,render,planner,profiles,encoders,transport,job}
 #   app/                Tauri shell (Windows, Linux; Android in phase 11)
 #   tests/golden        golden-file harness + committed golden byte files
 #
@@ -13,18 +13,21 @@ resolver = "2"
 members = [
     "app",
     "core/scene",
+    "core/browser",
     "core/render",
     "core/planner",
     "core/profiles",
     "core/encoders",
     "core/transport",
     "core/job",
+    "server",
     "tests/golden",
+    "tests/e2e",
 ]
 exclude = ["tests/e2e/support/virtual-printer"]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.0.1"
 edition = "2021"
 rust-version = "1.90.0"
 
@@ -32,3 +35,15 @@ rust-version = "1.90.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+toml = "0.8"
+swash = "0.2"
+ab_glyph = "0.2"
+barcoders = { version = "2", default-features = false }
+flate2 = "1"
+qrcode = { version = "0.14", default-features = false }
+# The app's registry client (plan phase 9): rustls so the Linux gate
+# needs no OpenSSL at all.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Printer discovery: the network scan browses the four printer service
+# types on the LAN, the same way the previous app's mDNS scanner did.
+mdns-sd = "0.13"

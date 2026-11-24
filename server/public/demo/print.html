@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Print API demo — PrintNinja</title>
+  <!-- Demo page: plain HTML and a little inline CSS/JS. No build
+       step, no framework, no CDN — it must work on a LAN with no
+       internet. It mirrors the app's Print page and calls the local
+       REST API the app exposes (127.0.0.1:17717 by default). The
+       app lets exactly this page's origin across to the API (CORS);
+       a page served from anywhere else cannot. -->
+  <style>
+    :root {
+      --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0;
+      --text: #1e293b; --muted: #64748b; --faint: #94a3b8;
+      --dark: #0f172a; --ok: #059669; --err: #dc2626; --warn: #d97706;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 14px/1.5 system-ui, "Segoe UI", sans-serif;
+      min-height: 100vh;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px; display: grid; gap: 12px;
+    }
+    h1 { font-size: 17px; margin: 0; }
+    h2 { font-size: 13px; margin: 0; }
+    p.sub { margin: 0; color: var(--muted); font-size: 13px; }
+    label span { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 4px; }
+    input, select, textarea {
+      width: 100%; border: 1px solid #cbd5e1; border-radius: 6px;
+      padding: 6px 10px; font: 14px system-ui, sans-serif; background: #fff; color: var(--text);
+    }
+    textarea { font: 12px/1.5 ui-monospace, Consolas, monospace; resize: vertical; }
+    .row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+    .flex1 { flex: 1; min-width: 200px; }
+    .w24 { width: 96px; flex: none; }
+    button {
+      border: 0; border-radius: 6px; padding: 7px 14px; font: 500 13px system-ui, sans-serif;
+      background: var(--dark); color: #fff; cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    .tabs { display: flex; gap: 4px; }
+    .tab {
+      border: 0; border-radius: 6px; padding: 5px 10px; font: 500 12px system-ui, sans-serif;
+      background: #f1f5f9; color: #475569; cursor: pointer;
+    }
+    .tab.on { background: var(--dark); color: #fff; }
+    .status { font-size: 12px; color: var(--faint); }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+    .jobline { font-size: 13px; margin: 0; }
+    .mono { font-family: ui-monospace, Consolas, monospace; }
+    .st-queued, .st-running { color: var(--warn); }
+    .st-done { color: var(--ok); }
+    .st-cancelled { color: var(--err); }
+    .errline { font-size: 13px; color: var(--err); margin: 0; white-space: pre-wrap; }
+    details { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    summary { font-size: 13px; font-weight: 500; cursor: pointer; }
+    details > div { margin-top: 12px; display: grid; gap: 12px; }
+    .note { font-size: 12px; color: var(--muted); margin: 0; }
+    footer { font-size: 12px; color: var(--faint); padding-bottom: 16px; }
+    .gridpane { margin-top: 8px; display: grid; gap: 8px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- What this is, and which API it talks to. -->
+    <header class="card">
+      <div>
+        <h1>PrintNinja — print API demo</h1>
+        <p class="sub">The same form as the app's Print page, straight against the REST API.</p>
+      </div>
+      <div class="row">
+        <label class="flex1">
+          <span>API server</span>
+          <input id="base" type="text" value="http://127.0.0.1:17717" spellcheck="false" />
+        </label>
+        <button id="load">Load lists</button>
+        <span id="apiState" class="status">not checked</span>
+      </div>
+    </header>
+
+    <!-- The job: printer, template, data, copies — like the Print page. -->
+    <section class="card">
+      <h2>Job</h2>
+
+      <div class="grid2">
+        <label>
+          <span>Printer</span>
+          <select id="printer"><option value="" disabled selected>Load lists first</option></select>
+        </label>
+        <label>
+          <span>Template</span>
+          <select id="template"><option value="" disabled selected>Load lists first</option></select>
+        </label>
+      </div>
+
+      <!-- Data source: pasted JSON or CSV, or a URL the app fetches. -->
+      <div>
+        <div class="tabs">
+          <button type="button" class="tab on" data-src="data">Data</button>
+          <button type="button" class="tab" data-src="url">Data URL</button>
+        </div>
+        <div id="paneData" class="gridpane">
+          <textarea id="dataText" rows="8" spellcheck="false">{
+  "order": {
+    "id": "1042",
+    "total": 18.5,
+    "createdAt": "2026-11-04T12:00:00Z"
+  },
+  "customer": { "name": "John Doe" }
+}</textarea>
+          <p class="note">JSON (one record, or a list) or CSV text — the same shapes the app takes.</p>
+        </div>
+        <div id="paneUrl" class="gridpane hidden">
+          <input id="dataUrl" type="url" placeholder="https://…" spellcheck="false" />
+          <select id="dataMethod" style="width:auto">
+            <option>GET</option>
+            <option>POST</option>
+            <option>PUT</option>
+            <option>PATCH</option>
+            <option>DELETE</option>
+          </select>
+          <p class="note">The app fetches it, guarded: http/https only, no loopback, link-local or private address unless you allow it in the app's settings.</p>
+        </div>
+      </div>
+
+      <div class="row">
+        <label class="w24">
+          <span>Copies</span>
+          <input id="copies" type="number" min="1" max="1000" value="1" />
+        </label>
+        <button id="print">Print</button>
+      </div>
+    </section>
+
+    <!-- The result: job id, status, what it came out to. -->
+    <section id="resultCard" class="card hidden">
+      <h2>Result</h2>
+      <p class="jobline">
+        Job <span id="jobId" class="mono"></span> —
+        <span id="jobStatus"></span>
+      </p>
+      <p id="jobDetail" class="note"></p>
+      <p id="jobError" class="errline hidden"></p>
+    </section>
+
+    <!-- Advanced: a device token when the page is opened off this PC,
+         and a transport when none is saved in the app. -->
+    <details>
+      <summary>Advanced</summary>
+      <div>
+        <label>
+          <span>Device token</span>
+          <input id="token" type="text" placeholder="Leave empty when using this PC" spellcheck="false" />
+          <p class="note">Browsers on this PC are trusted (loopback) and need no token. From another device on your network, paste the device token the app paired for it.</p>
+        </label>
+        <label>
+          <span>Transport (optional JSON)</span>
+          <textarea id="transport" rows="2" placeholder='{"kind":"tcp","host":"192.168.1.50","port":9100}' spellcheck="false"></textarea>
+          <p class="note">Where the job goes: tcp, ipp, spooler or bluetooth. Empty: the app's saved default for the printer.</p>
+        </label>
+      </div>
+    </details>
+
+    <footer>
+      GET /v1/printers · GET /v1/templates · POST /v1/print · GET /v1/jobs/{id}
+      — the app lets this page's origin across to the API; a page served from
+      anywhere else cannot call it.
+    </footer>
+  </div>
+
+  <script>
+    // The whole page in one object: state on top, actions below.
+    const demo = {
+      busy: false,
+      source: "data",        // "data" | "url"
+      job: null,
+      pollTimer: null,
+
+      base() { return document.getElementById("base").value.replace(/\/$/, ""); },
+      printer() { return document.getElementById("printer").value; },
+      template() { return document.getElementById("template").value; },
+
+      headers() {
+        const h = { "content-type": "application/json" };
+        const token = document.getElementById("token").value.trim();
+        if (token) h["X-PrintNinja-Device-Token"] = token;
+        return h;
+      },
+
+      async api(path, init = {}) {
+        const res = await fetch(this.base() + path, {
+          ...init,
+          headers: { ...this.headers(), ...(init.headers || {}) },
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok && res.status !== 409) {
+          const msg = body?.error || "HTTP " + res.status;
+          const e = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+          e.status = res.status;
+          throw e;
+        }
+        return body;
+      },
+
+      async loadLists() {
+        this.setBusy(true);
+        const state = document.getElementById("apiState");
+        try {
+          const [printers, templates] = await Promise.all([
+            this.api("/v1/printers"),
+            this.api("/v1/templates"),
+          ]);
+          const ps = document.getElementById("printer");
+          ps.length = 0;
+          for (const p of printers.printers || []) {
+            const o = document.createElement("option");
+            o.value = p.model;
+            o.textContent = p.model + " (" + p.language + ", " + (p.media || []).join(", ") + ")";
+            ps.appendChild(o);
+          }
+          const ts = document.getElementById("template");
+          ts.length = 0;
+          for (const t of templates.templates || []) {
+            const o = document.createElement("option");
+            o.value = t.name;
+            o.textContent = t.description ? t.name + " — " + t.description : t.name;
+            ts.appendChild(o);
+          }
+          state.textContent = "reachable";
+          state.className = "status ok";
+        } catch (e) {
+          state.textContent = "unreachable";
+          state.className = "status err";
+          this.showJob(null, "unreachable", "Cannot reach the API: " + e.message);
+        } finally {
+          this.setBusy(false);
+        }
+      },
+
+      // A 409 duplicate carries the original job's id: show it, don't
+      // print it twice.
+      async print() {
+        this.stopPolling();
+        this.setBusy(true);
+        const body = {
+          template: this.template(),
+          printer: this.printer(),
+          copies: Number(document.getElementById("copies").value) || 1,
+        };
+        const transportRaw = document.getElementById("transport").value.trim();
+        if (transportRaw) {
+          let t;
+          try { t = JSON.parse(transportRaw); }
+          catch (e) {
+            this.setBusy(false);
+            this.showJob(null, "failed", "The transport JSON is not valid: " + e.message);
+            return;
+          }
+          body.transport = t;
+        }
+        if (this.source === "data") {
+          const raw = document.getElementById("dataText").value;
+          // JSON when it parses, the raw text (CSV or not) otherwise.
+          try { body.data = JSON.parse(raw); } catch { body.data = raw; }
+        } else {
+          const url = document.getElementById("dataUrl").value.trim();
+          if (!url) {
+            this.setBusy(false);
+            this.showJob(null, "failed", "Enter the data URL first.");
+            return;
+          }
+          body.dataUrl = url;
+          body.dataUrlMethod = document.getElementById("dataMethod").value;
+        }
+
+        try {
+          const created = await this.api("/v1/print", {
+            method: "POST",
+            body: JSON.stringify(body),
+            headers: { "Idempotency-Key": "demo-" + Date.now() },
+          });
+          this.showJob(created.jobId, created.status || "queued",
+            created.status === "duplicate"
+              ? "Duplicate request — the original job." : null);
+          this.startPolling(created.jobId);
+        } catch (e) {
+          this.showJob(null, "failed", e.message);
+        } finally {
+          this.setBusy(false);
+        }
+      },
+
+      showJob(id, status, detail, error) {
+        document.getElementById("resultCard").classList.remove("hidden");
+        document.getElementById("jobId").textContent = id || "—";
+        const el = document.getElementById("jobStatus");
+        el.textContent = status;
+        el.className = "st-" + status;
+        document.getElementById("jobDetail").textContent = detail || "";
+        const err = document.getElementById("jobError");
+        if (error) { err.textContent = error; err.classList.remove("hidden"); }
+        else err.classList.add("hidden");
+      },
+
+      startPolling(id) {
+        this.pollTimer = setInterval(async () => {
+          try {
+            const v = await this.api("/v1/jobs/" + id);
+            const job = v.job;
+            let detail = null, error = null;
+            if (job.result) {
+              try {
+                const r = JSON.parse(job.result);
+                detail = r.result + (r.counts ? " — " + r.counts[0] + " of " + r.counts[1] : "");
+                if (r.reason) error = r.reason;
+              } catch { detail = job.result; }
+            }
+            this.showJob(job.id, job.status, detail, error);
+            // Terminal states: stop asking.
+            if (["done", "cancelled"].includes(job.status)) this.stopPolling();
+          } catch {
+            // The API blinked once; keep polling, give up after a long
+            // silence.
+            this.giveups = (this.giveups || 0) + 1;
+            if (this.giveups > 120) this.stopPolling();
+          }
+        }, 1000);
+      },
+
+      stopPolling() {
+        if (this.pollTimer) clearInterval(this.pollTimer);
+        this.pollTimer = null;
+        this.giveups = 0;
+      },
+
+      setBusy(busy) {
+        this.busy = busy;
+        for (const id of ["load", "print"])
+          document.getElementById(id).disabled = busy;
+      },
+    };
+
+    // The data-source tabs.
+    for (const tab of document.querySelectorAll(".tab")) {
+      tab.addEventListener("click", () => {
+        demo.source = tab.dataset.src;
+        for (const t of document.querySelectorAll(".tab"))
+          t.classList.toggle("on", t === tab);
+        document.getElementById("paneData").classList.toggle("hidden", demo.source !== "data");
+        document.getElementById("paneUrl").classList.toggle("hidden", demo.source !== "url");
+      });
+    }
+    document.getElementById("load").addEventListener("click", () => demo.loadLists());
+    document.getElementById("print").addEventListener("click", () => demo.print());
+  </script>
+</body>
+</html>

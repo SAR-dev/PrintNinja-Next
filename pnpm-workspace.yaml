@@ -1,0 +1,8 @@
+# Build-script approvals (pnpm >= 10 mechanism; pnpm 12 fails
+# `pnpm install --frozen-lockfile` in CI when a dependency's build
+# scripts are only ignored — that broke android-check).
+# Managed by `pnpm approve-builds`; esbuild's postinstall is only a
+# version check for the platform binary it gets from
+# optionalDependencies, so allowing it is safe.
+allowBuilds:
+  esbuild: true

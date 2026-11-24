@@ -1,7 +1,7 @@
 {
   "name": "printninja-ui",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -26,6 +26,8 @@
     "@radix-ui/react-tabs": "^1.1.2",
     "@radix-ui/react-tooltip": "^1.1.6",
     "@tauri-apps/api": "^2.2.0",
+    "@tauri-apps/plugin-deep-link": "^2.6.3",
+    "@tauri-apps/plugin-opener": "^2.7.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "i18next": "^24.2.0",
@@ -35,7 +37,8 @@
     "react-i18next": "^15.4.0",
     "react-resizable-panels": "^2.1.7",
     "sonner": "^1.7.1",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.0",
+    "tailwind4": "npm:tailwindcss@^4.3.3"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

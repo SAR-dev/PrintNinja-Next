@@ -1,0 +1,13 @@
+# Keep the Docker build context small: nothing the registry image
+# needs to compile (cargo build -p pn-server) or ship (binary +
+# migrations). The repo is the context — the Dockerfile lives in
+# server/ but reads the workspace manifests at the root.
+.git
+**/target
+**/node_modules
+app/ui/dist
+graphify-out
+.claude
+*.db
+*.db-wal
+*.db-shm

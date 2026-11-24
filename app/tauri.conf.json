@@ -1,13 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "PrintNinja",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "identifier": "com.printninja.next",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm build",
-    "frontendDist": "../ui/dist"
+    "frontendDist": "ui/dist"
   },
   "app": {
     "windows": [
@@ -19,6 +19,13 @@
     ],
     "security": {
       "csp": null
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "deeplink": [
+        "printninja"
+      ]
     }
   },
   "bundle": {

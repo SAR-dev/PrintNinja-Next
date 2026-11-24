@@ -1,0 +1,188 @@
+/**
+ * The app shell, the old app's design language: a top bar with the
+ * brand and the account's indicators, a collapsible sidebar on the
+ * left (a strip under the top bar on small screens), and the content
+ * scroller the page headers stick to. The view state machine stays
+ * in App; the shell only knows which nav item is active.
+ */
+import { useEffect, useState, type ReactNode } from "react";
+import { ChevronRight, Printer } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { getAppVersion } from "@/lib/appUpdate";
+import { NAV_ITEMS, type NavKey } from "@/lib/nav";
+import { cn } from "@/lib/utils";
+
+const SIDEBAR_KEY = "printninja-sidebar-collapsed";
+
+interface LayoutProps {
+  /** The nav key of the current view (contextual views keep their
+   * parent's key). */
+  active: NavKey;
+  onNavigate: (key: NavKey) => void;
+  /** The top bar's right side (registry chip, update badge, sync,
+   * sign in/out). */
+  topbar?: ReactNode;
+  children: ReactNode;
+}
+
+export function Layout({ active, onNavigate, topbar, children }: LayoutProps) {
+  const { t } = useTranslation();
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    void getAppVersion().then((v) => {
+      if (alive && v && v !== "0.0.0") setVersion(v);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, String(collapsed));
+    } catch {
+      // Remembering failed; the sidebar still works this session.
+    }
+  }, [collapsed]);
+
+  return (
+    <div className="flex h-dvh-safe flex-col overflow-hidden bg-background">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[60] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-primary-foreground"
+      >
+        {t("nav.skip")}
+      </a>
+
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-card px-3 md:px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <Printer aria-hidden="true" className="h-4 w-4" />
+          </span>
+          <span className="truncate text-base font-semibold tracking-tight">
+            {t("app.title")}
+          </span>
+          {version !== "" && (
+            <span className="hidden shrink-0 text-xs text-muted-foreground md:inline">
+              v{version}
+            </span>
+          )}
+        </div>
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1.5 md:gap-2">
+          {topbar}
+        </div>
+      </header>
+
+      <nav
+        aria-label={t("nav.aria")}
+        className="flex shrink-0 items-center gap-1 overflow-x-auto border-b bg-card px-2 py-1.5 md:hidden"
+      >
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          const isActive = active === item.key;
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onNavigate(item.key)}
+              aria-current={isActive ? "page" : undefined}
+              className={cn(
+                "flex h-9 shrink-0 items-center gap-2 rounded-md px-3 text-sm transition-colors",
+                isActive
+                  ? "bg-accent font-medium text-accent-foreground"
+                  : "text-foreground/80 hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+              {t(item.labelKey)}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="flex min-h-0 flex-1">
+        <aside
+          className={cn(
+            "hidden shrink-0 flex-col border-r bg-card transition-[width] duration-150 md:flex",
+            collapsed ? "w-14" : "w-56",
+          )}
+        >
+          <nav
+            aria-label={t("nav.aria")}
+            className="flex-1 space-y-1 overflow-y-auto p-2"
+          >
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = active === item.key;
+              const label = t(item.labelKey);
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => onNavigate(item.key)}
+                  aria-current={isActive ? "page" : undefined}
+                  title={collapsed ? label : undefined}
+                  className={cn(
+                    "flex h-control w-full items-center gap-3 rounded-md px-2.5 text-sm transition-colors",
+                    collapsed && "justify-center px-0",
+                    isActive
+                      ? "bg-accent font-medium text-accent-foreground"
+                      : "text-foreground/80 hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+                  {!collapsed && <span className="truncate">{label}</span>}
+                </button>
+              );
+            })}
+          </nav>
+          <div className="border-t p-2">
+            <button
+              type="button"
+              onClick={() => setCollapsed((c) => !c)}
+              aria-label={collapsed ? t("nav.expand") : t("nav.collapse")}
+              className={cn(
+                "flex h-8 w-full items-center gap-3 rounded-md px-2.5 text-sm text-foreground/80 transition-colors hover:bg-muted hover:text-foreground",
+                collapsed && "justify-center px-0",
+              )}
+            >
+              <ChevronRight
+                aria-hidden="true"
+                className={cn(
+                  "h-4 w-4 shrink-0 transition-transform duration-150",
+                  !collapsed && "rotate-180",
+                )}
+              />
+              {!collapsed && (
+                <span className="truncate">{t("nav.collapse")}</span>
+              )}
+            </button>
+          </div>
+        </aside>
+
+        <main
+          id="main"
+          data-slot="app-main"
+          tabIndex={-1}
+          className="min-w-0 flex-1 overflow-y-auto focus:outline-none"
+        >
+          <div
+            data-slot="app-content"
+            className="mx-auto w-full max-w-[1600px] space-y-4 px-4 py-4 md:px-6 md:py-5"
+          >
+            {children}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}

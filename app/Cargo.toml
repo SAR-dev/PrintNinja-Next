@@ -12,4 +12,61 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 tauri-build = "2"
 
 [dependencies]
+# The local print API (plan phase 8): axum on the app's own tokio
+# runtime (tauri's), a listener of its own; tower for the LAN gate's
+# middleware layer.
+axum = "0.8"
+tower = { version = "0.5", features = ["util"] }
+# The CORS layer for the registry's demo page — the one browser
+# origin the local API lets across to it (the old app's share
+# service pattern; a wildcard would let any LAN page probe the API).
+tower-http = { version = "0.6", features = ["cors"] }
+tokio = { version = "1", features = ["net", "time", "macros", "rt"] }
+# The community registry client (plan phase 9): the sync engine's
+# HTTP calls.
+reqwest = { workspace = true }
+# Printer discovery (the previous app's "scan & add"): the network
+# scan browses printer service types on the LAN.
+mdns-sd = { workspace = true }
+# Job ids for the local print API, and the pairing codes and tokens.
+uuid = { version = "1", features = ["v4"] }
+rand = "0.8"
+sha2 = "0.10"
 tauri = "2"
+# printninja:// deep links (plan phase 8): the plugin delivers the
+# URL; single-instance forwards it to the running app when the OS
+# hands the link to a fresh process instead (the `deep-link` feature
+# re-parses the second instance's args through the deep-link plugin
+# and emits the URL on the first instance's handle).
+tauri-plugin-deep-link = "2"
+# External links (the update badge's release page): the webview cannot
+# open them itself, so the opener plugin hands them to the OS.
+tauri-plugin-opener = "2"
+# The deep link's query strings, the same decoder the old app used.
+urlencoding = "2"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+pn-scene = { path = "../core/scene" }
+pn-profiles = { path = "../core/profiles" }
+pn-planner = { path = "../core/planner" }
+pn-encoders = { path = "../core/encoders" }
+pn-render = { path = "../core/render" }
+pn-browser = { path = "../core/browser" }
+pn-job = { path = "../core/job" }
+pn-transport = { path = "../core/transport" }
+
+# Desktop-only Tauri surface. The tray icon (and the `tray-icon`
+# feature that ships it), start-with-computer, and single-instance
+# have no Android implementation, so they stay off the android
+# target; the code that uses them is cfg-gated to match.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+
+[dev-dependencies]
+# The registry client's tests speak to a live pn-server on a
+# throwaway port (plan phase 9).
+pn-server = { path = "../server" }

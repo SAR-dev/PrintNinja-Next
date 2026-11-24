@@ -1,0 +1,37 @@
+[package]
+name = "pn-server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "pn_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pn-server"
+path = "src/main.rs"
+
+[dependencies]
+# The publishing server (plan phase 9): the community registry. The same
+# HTTP + storage stack as the app's local print API — axum on a tokio
+# runtime, rusqlite for the registry database — plus argon2 for account
+# passwords and a session-token scheme (only the token's hash is stored,
+# the same pattern the app's device pairing uses).
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+argon2 = "0.5"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+rand = "0.8"
+sha2 = "0.10"
+hex = "0.4"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+pn-scene = { path = "../core/scene" }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"

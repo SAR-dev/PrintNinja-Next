@@ -1,0 +1,5 @@
+# Golden byte files are exact byte sequences, not text: never convert
+# their line endings at commit or checkout. Without this, a Windows
+# checkout (core.autocrlf=true) turns the ASCII .bin goldens into CRLF
+# and the pinned-byte tests fail with the same bytes plus \r.
+*.bin binary
