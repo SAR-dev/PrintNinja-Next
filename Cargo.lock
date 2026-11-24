@@ -1796,7 +1796,7 @@ dependencies = [
 
 [[package]]
 name = "golden-harness"
-version = "0.0.1"
+version = "2026.1124.0"
 
 [[package]]
 name = "gtk"
@@ -3410,14 +3410,14 @@ dependencies = [
 
 [[package]]
 name = "pn-browser"
-version = "0.0.1"
+version = "2026.1124.0"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "pn-e2e"
-version = "0.0.1"
+version = "2026.1124.0"
 dependencies = [
  "pn-browser",
  "pn-encoders",
@@ -3431,7 +3431,7 @@ dependencies = [
 
 [[package]]
 name = "pn-encoders"
-version = "0.0.1"
+version = "2026.1124.0"
 dependencies = [
  "golden-harness",
  "pn-profiles",
@@ -3442,7 +3442,7 @@ dependencies = [
 
 [[package]]
 name = "pn-job"
-version = "0.0.1"
+version = "2026.1124.0"
 dependencies = [
  "pn-profiles",
  "pn-transport",
@@ -3450,7 +3450,7 @@ dependencies = [
 
 [[package]]
 name = "pn-planner"
-version = "0.0.1"
+version = "2026.1124.0"
 dependencies = [
  "pn-encoders",
  "pn-profiles",
@@ -3460,7 +3460,7 @@ dependencies = [
 
 [[package]]
 name = "pn-profiles"
-version = "0.0.1"
+version = "2026.1124.0"
 dependencies = [
  "serde",
  "tempfile",
@@ -3470,7 +3470,7 @@ dependencies = [
 
 [[package]]
 name = "pn-render"
-version = "0.0.1"
+version = "2026.1124.0"
 dependencies = [
  "ab_glyph",
  "barcoders",
@@ -3484,7 +3484,7 @@ dependencies = [
 
 [[package]]
 name = "pn-scene"
-version = "0.0.1"
+version = "2026.1124.0"
 dependencies = [
  "golden-harness",
  "serde",
@@ -3493,7 +3493,7 @@ dependencies = [
 
 [[package]]
 name = "pn-server"
-version = "0.0.1"
+version = "2026.1124.0"
 dependencies = [
  "argon2",
  "axum",
@@ -3514,7 +3514,7 @@ dependencies = [
 
 [[package]]
 name = "pn-transport"
-version = "0.0.1"
+version = "2026.1124.0"
 
 [[package]]
 name = "png"
@@ -3590,7 +3590,7 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "printninja"
-version = "0.0.1"
+version = "2026.1124.0"
 dependencies = [
  "axum",
  "mdns-sd",

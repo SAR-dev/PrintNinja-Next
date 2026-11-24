@@ -8,6 +8,8 @@ Unreleased.
 
 ## Unreleased
 
+## [2026.1124.0] - 2026-11-24
+
 ### Added
 
 - App: Diagnostics can now run a real OS-level print repair (restart
