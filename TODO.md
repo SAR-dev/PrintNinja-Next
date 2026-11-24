@@ -14,6 +14,9 @@ spec for the items below.
 
 ## Done
 
+- [x] D4 — PC top bar: brand + version on the left (already in
+      `layout.tsx`), status dot + account menu on the right (P4) — no
+      further code needed; checked in the screenshot matrix
 - [x] D3 — PC sidebar: grouped items, job and community-saved count
       badges, Settings pinned above Collapse (commit 32d4531)
 - [x] P4 — account menu M1 in the top bar: one menu replacing
@@ -34,8 +37,6 @@ spec for the items below.
 
 ## Remaining findings, in order
 
-- [ ] D4 — PC top bar: brand + version on the left, a status dot + the
-      account menu on the right
 - [ ] D1 — icon system: `app/ui/src/lib/icons.ts` registry + `IconButton`
       (aria-label + Tooltip, `h-control w-control`), icons on primary
       buttons per plan §4.3; after this, screens never import
