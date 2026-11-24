@@ -5,11 +5,16 @@
   "scripts": {
     "release": "node scripts/release.mjs",
     "version:set": "node scripts/set-version.mjs",
+    "tauri:dev": "tauri dev --config app/tauri.conf.json",
+    "tauri:build": "tauri build --config app/tauri.conf.json",
     "test:rust": "docker compose -f tests/docker-compose.test.yml run --rm rust-test",
     "test:rust:report": "docker compose -f tests/docker-compose.test.yml run --rm rust-test cargo junit --no-fail-fast -o /workspace/test-report/junit.xml",
     "test:virtual-printer": "cargo test --manifest-path tests/e2e/support/virtual-printer/Cargo.toml"
   },
   "engines": {
     "node": "22.x"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0"
   }
 }
