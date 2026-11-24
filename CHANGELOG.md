@@ -15,6 +15,14 @@ Unreleased.
 - App: a Test print menu on each saved printer (text label or A4 page)
   that sends a one-record job through the saved profile and transport
   and shows the honest result
+- App: the sign-in/sign-up dialog has an editable Server address,
+  prefilled from `VITE_REGISTRY_URL` when the build sets one (otherwise
+  from the app's current registry URL), and saves it for the login
+- App: a browser choice in Diagnostics — keep the PC's own browser or
+  download a managed Chromium build for the document track; the PDF
+  render now uses a fresh profile and background services off
+- App: an in-memory application log with a Diagnostics tab in Settings
+  to view, refresh, download and clear recent events
 - App: a PC top-bar search field that filters the Templates list (no
   command palette), and a ⋯ menu on each recent job (M4: reprint,
   retry, open template, copy reason)
@@ -704,6 +712,8 @@ Unreleased.
 
 ### Fixed
 
+- App: the PC Settings screen shows only the selected tab again; the
+  phone still shows all groups in one list
 - Sub-screens have a real back affordance: an arrow button before the page
   title on the print, editor and settings screens, replacing the text link
   that sat inside the title row; the scene editor's undo and redo are

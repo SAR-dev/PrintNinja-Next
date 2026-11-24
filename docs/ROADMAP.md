@@ -76,12 +76,11 @@ found by behavior inspection and verified against the code:
 - [ ] **New-template names are hardcoded English** — "New label" /
       "New document" and their descriptions bypass the locale files,
       so a Japanese interface still creates English-named templates.
-- [ ] **No diagnostics story** — the render engine's status, the
-      document track's browser choice, a log viewer with download, a
-      one-click "fix PC printing" repair and an exported diagnostics
-      bundle; the old app had all of it and the new app has none
-      (TROUBLESHOOTING.md currently points at console output the app
-      never shows).
+- [ ] **No repair or export in Diagnostics** — the browser choice and
+      the log viewer with download exist, but there is still no
+      one-click "fix PC printing" repair and no exported diagnostics
+      bundle; TROUBLESHOOTING.md still points at console output the app
+      does not show.
 - [ ] **No e2e coverage of the LAN print-API gate** — pairing claim,
       lockout, token rejection, idempotency and cancel/retry exist
       only as unit tests inside `app/src/api.rs`; the
@@ -173,9 +172,7 @@ are the encoders.
   and logo.
 - Background extras: start minimized, minimize-to-tray (close-to-tray
   and autostart already exist).
-- Diagnostics: the document track's browser choice (auto / system /
-  custom path), a log viewer with download, a one-click "fix PC
-  printing" repair, an exported diagnostics bundle.
+- Diagnostics: a one-click "fix PC printing" repair and an exported diagnostics bundle.
 - A CUPS daemon URL setting (Linux).
 
 **Checked and not gaps:** the label languages, USB (via the spooler /

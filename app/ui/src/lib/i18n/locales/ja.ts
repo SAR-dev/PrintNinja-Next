@@ -72,6 +72,8 @@ const ja: EnStrings = {
     signing_in: "サインイン中…",
     sign_out: "サインアウト",
     sign_in_title: "レジストリにサインイン",
+    server_note:
+      "サインイン先の共有サーバーです。ここまたは設定 → レジストリで変更できます。",
     sign_in_description:
       "ハンドルとパスワードでサインインします（メールは不要）。アカウントはコミュニティテンプレートの公開と保存に使います。",
     handle: "ハンドル",
@@ -208,6 +210,24 @@ const ja: EnStrings = {
     tab_network: "ネットワーク",
     tab_data: "データ",
     tab_registry: "レジストリ",
+    tab_diagnostics: "診断",
+    browser_title: "ドキュメント用ブラウザ",
+    browser_note:
+      "HTML テンプレートはヘッドレスブラウザで PDF に変換されます。この PC のブラウザを使うか、専用の Chromium をダウンロードして使えます。",
+    browser_system: "この PC",
+    browser_managed: "ダウンロードした Chromium",
+    browser_detected: "検出: {{path}}",
+    browser_managed_path: "使用中: {{path}}",
+    browser_version: "バージョン {{version}}",
+    browser_download: "Chromium をダウンロード",
+    browser_downloading: "ダウンロード中…",
+    logs_title: "アプリのログ",
+    logs_note:
+      "最近のアプリの出来事です。新しいものから表示します。ダウンロードしない限りこのコンピュータの外には出ません。",
+    logs_refresh: "更新",
+    logs_download: "ダウンロード",
+    logs_clear: "クリア",
+    logs_empty: "まだログはありません。",
     appearance: "外観",
     appearance_note:
       "アプリ全体のテーマです。次に起動したときも同じに戻ります。",

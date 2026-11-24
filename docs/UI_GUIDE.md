@@ -188,11 +188,18 @@ is plain.
   when a printer or server on your own network serves the data URL.
 - **Registry** — **Server address**, the community registry's URL. Leave it
   empty for the server on this computer; changes apply at the next sync.
+- **Diagnostics** — **Browser for documents**: choose the PC's own browser
+  or download a private Chromium build and use that; the detected and
+  downloaded paths are shown. **Application log**: recent app events,
+  newest first, with **Refresh**, **Download** (a text file) and **Clear**.
 
 ## 🌍 Signing in, syncing and publishing
 
 Open the account menu to **Sign in** — *A handle and a password, no email.*
-The account is for publishing and saving community templates. **Sign out**
+The dialog also has a **Server address** field: it starts with the shared
+server baked into the build, or the one the app currently uses, and you can
+change it for this sign-in. The account is for publishing and saving
+community templates. **Sign out**
 is in the same menu; the community mirror and saved copies stay on the
 computer. A card's **Publish** opens *Publish `<name>` to the community*
 with **Name**, **Slug** and **Readme**; **Unpublish** takes it back down.

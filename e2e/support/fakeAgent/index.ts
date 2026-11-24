@@ -150,6 +150,23 @@ const state = {
   online: seed.registryStatus?.online ?? true,
   community: (seed.community ?? []).map((r) => ({ ...r })),
   publications: (seed.publications ?? []).map((p) => ({ ...p })),
+  browserMode: "system",
+  browserPath: null as string | null,
+  browserVersion: null as string | null,
+  logs: [
+    {
+      at_ms: Date.UTC(2026, 10, 24, 12, 0, 0),
+      level: "info",
+      target: "pipeline",
+      message: "prepared 2 record(s), 2 page(s) on the raster path",
+    },
+    {
+      at_ms: Date.UTC(2026, 10, 24, 12, 1, 0),
+      level: "info",
+      target: "registry",
+      message: "signed in as ninja",
+    },
+  ],
 };
 
 /** The records the data text holds: a JSON array, or one object. */
@@ -380,9 +397,30 @@ async function invoke(
       return plan(a);
     case "print_job":
       return { result: "confirmed", counts: null, reason: null };
+    case "browser_info":
+      return {
+        mode: state.browserMode,
+        managed_path: state.browserPath,
+        version: state.browserVersion,
+        system: ["/usr/bin/chromium"],
+      };
+    case "browser_select":
+      state.browserMode = String(a.mode);
+      return undefined;
+    case "browser_download_cmd":
+      state.browserPath = "/home/user/.local/share/PrintNinja/browser/chrome";
+      state.browserVersion = "141.0.0.0";
+      state.browserMode = "managed";
+      return state.browserPath;
+    case "app_logs":
+      return state.logs;
+    case "app_log_clear":
+      state.logs = [];
+      return undefined;
     case "registry_url":
       return state.registryUrl;
     case "registry_login":
+      if (a.url) state.settings["registry.url"] = String(a.url);
       state.handle = String(a.handle);
       return state.handle;
     case "registry_logout":
