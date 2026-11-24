@@ -14,6 +14,8 @@ spec for the items below.
 
 ## Done
 
+- [x] P8 — phone settings: grouped list instead of the tab strip,
+      segmented theme/language controls (commit e1a9772)
 - [x] P7 — phone editor: canvas kept in view, property panel in a
       bottom sheet, add-element icon toolbar (commit 4c31b4f)
 - [x] P6 — phone print screen: sticky bottom action bar (above the
@@ -53,8 +55,6 @@ spec for the items below.
 
 ## Remaining findings, in order
 
-- [ ] P8 — settings (phone): grouped list instead of the 4-tab strip,
-      segmented theme/language controls
 - [ ] D7 — top bar search field (Q3: search only, no command palette),
       job-row ⋯ M4 (Reprint, Retry, Open template, Copy reason)
 
