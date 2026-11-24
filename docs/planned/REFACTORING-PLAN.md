@@ -412,6 +412,8 @@ Each phase ends in something testable; no phase is "done" until its exit criteri
 
 ### Phase 9 — Template publishing (community registry)
 
+*Done 2026-11-24 — the registry is complete, tested and deployable: `pn-server` (`f5355f6`) with handle-based accounts (argon2id, hashed session tokens, password/handle change), publishing with normalized document storage and per-account slugs (`adb9c1d`), per-account saves (`37fecf4`), the change feed with tombstones for offline sync (`d2b0ea4`), and terminal database migrations (`9ffa330`); in the app, the sync client with its offline queue, the Community/Saved tabs and the publish flow (`65b532d`). It ships as a standalone Docker image with the CI parity jobs — `server-check`, `server-image`, `server-e2e` (the full HTTP lifecycle via `server/e2e.py` against the container) and `server-publish` (GHCR on push to main) — plus user documentation in `docs/REGISTRY.md` (`4cbaa2c`). 69 server unit tests and the 11-step lifecycle e2e are green on the host and in the container.*
+
 - Publishing server: accounts, publish (a template — scene JSON or HTML/CSS — plus readme), community gallery (browse/search), save community templates as editable local copies, and offline-first sync of local changes. The current `server/` (TypeScript) is the reference implementation; port or rebuild it against the template schemas (both tracks).
 - UI (extends phase 7): Community and Saved tabs in the template list, a publish flow with metadata from a template, and saved-community-template state.
 - The server validates the template (scene schema, or `format: html` with `page` media for the document track); publishing never involves rendering or printing.
