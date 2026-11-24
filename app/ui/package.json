@@ -37,7 +37,8 @@
     "react-i18next": "^15.4.0",
     "react-resizable-panels": "^2.1.7",
     "sonner": "^1.7.1",
-    "tailwind-merge": "^2.6.0"
+    "tailwind-merge": "^2.6.0",
+    "tailwind4": "npm:tailwindcss@^4.3.3"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

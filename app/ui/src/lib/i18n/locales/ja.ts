@@ -299,7 +299,7 @@ const ja: EnStrings = {
     page_number: "番号",
     html_css: "HTML/CSS",
     html_css_note:
-      "ページごとに 1 レコード。{{field}} はレコードから埋められます。",
+      "ページごとに 1 レコード。{{field}} はレコードから埋められます。Tailwind クラス（p-4、flex、w-[37mm] など）も使えます。",
     bindings: "バインディング:",
     paper: "用紙",
     paper_note: "ドキュメントを印刷するページ（ミリメートル）。",

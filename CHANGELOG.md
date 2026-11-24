@@ -526,6 +526,15 @@ Unreleased.
   data / show fields" toggle, a dashed box with the reason when a
   value cannot be encoded, and an amber badge when the symbol's
   modules are smaller than the selected printer's dot pitch
+- Document templates can use Tailwind classes (`p-4`, `flex`, arbitrary
+  values like `w-[37mm]`): the classes are compiled in memory with
+  Tailwind v4's `compile()` when a job is prepared or the editor previews
+  the document, and the result is injected as a `<style>` before
+  `</head>` — never stored. A template that matches no utility is left
+  byte for byte unchanged, and the template's own CSS (unlayered) still
+  beats any Tailwind rule. Fonts, the `dark:` ancestor variant and the
+  default border colour match the previous app's build, so its templates
+  keep rendering the way they did
 
 ### Changed
 

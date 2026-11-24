@@ -36,6 +36,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { JobPreview } from "@/components/job-preview";
 import { PageHeader } from "@/components/page-header";
+import { withTailwindCss } from "@/lib/tailwind";
 import { resultTone, toneClass } from "@/result-words";
 import type { AppTemplate, RecentJob } from "@/templates";
 
@@ -138,7 +139,19 @@ export function PrintScreen({
       .catch((e) => setPlanError(String(e)));
   }, []);
 
-  const templateJson = JSON.stringify(starter.template);
+  /**
+   * The template JSON the pipeline gets. A document template carries its
+   * Tailwind styles at this moment — the classes are compiled and injected
+   * in memory (see lib/tailwind) before the HTML leaves the UI, so the
+   * preview and the print render the same classes the editor shows.
+   */
+  const preparedTemplateJson = async () => {
+    const tpl = starter.template;
+    if (starter.track === "document" && tpl.html) {
+      return JSON.stringify({ ...tpl, html: await withTailwindCss(tpl.html) });
+    }
+    return JSON.stringify(tpl);
+  };
   const chosen = printers.find((p) => p.model === printer);
 
   const transport = (): Transport => {
@@ -188,7 +201,14 @@ export function PrintScreen({
           setFetchWarn(t("print.url_preview_failed", { error: String(e) }));
         }
       }
-      setPlan(await planJob(templateJson, printer, body, Number(copies) || 1));
+      setPlan(
+        await planJob(
+          await preparedTemplateJson(),
+          printer,
+          body,
+          Number(copies) || 1,
+        ),
+      );
     } catch (e) {
       setPlan(null);
       setPlanError(String(e));
@@ -221,7 +241,7 @@ export function PrintScreen({
     let report: JobReport;
     try {
       report = await printJob(
-        templateJson,
+        await preparedTemplateJson(),
         printer,
         body,
         copiesN,

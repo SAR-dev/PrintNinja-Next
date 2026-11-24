@@ -4,7 +4,7 @@
  * first record substituted the way the print does it (plan §5.3). A
  * richer CSS designer toolbar lands post-v1.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { withTailwindCss } from "@/lib/tailwind";
 import { bindingNames } from "@/scene/schema";
 import type { AppTemplate } from "@/templates";
 
@@ -79,6 +80,20 @@ export function DocumentEditorScreen({
 
   const bindings = useMemo(() => bindingNames(html), [html]);
   const filled = useMemo(() => previewHtml(html, sample), [html, sample]);
+
+  // The preview shows the same styles the print will: the document's
+  // Tailwind classes are compiled and injected the way the print screen
+  // does, so what the iframe shows is what the page will be.
+  const [previewDoc, setPreviewDoc] = useState(filled);
+  useEffect(() => {
+    let live = true;
+    void withTailwindCss(filled).then((doc) => {
+      if (live) setPreviewDoc(doc);
+    });
+    return () => {
+      live = false;
+    };
+  }, [filled]);
 
   const save = () =>
     onSave({
@@ -214,7 +229,7 @@ export function DocumentEditorScreen({
             <iframe
               title={t("editor.live_preview_iframe")}
               sandbox=""
-              srcDoc={filled}
+              srcDoc={previewDoc}
               className="h-[560px] w-full rounded-sm border border-border bg-white"
             />
           </CardContent>

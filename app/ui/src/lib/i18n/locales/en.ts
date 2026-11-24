@@ -293,7 +293,8 @@ const en = {
     page_only: "Only page…",
     page_number: "Number",
     html_css: "HTML/CSS",
-    html_css_note: "One record per page; {{field}} fills from the record.",
+    html_css_note:
+      "One record per page; {{field}} fills from the record. Tailwind classes work too (p-4, flex, w-[37mm]).",
     bindings: "Bindings:",
     paper: "Paper",
     paper_note: "The page the document prints on, in millimetres.",
