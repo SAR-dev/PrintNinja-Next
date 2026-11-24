@@ -420,6 +420,7 @@ async function invoke(
     case "registry_url":
       return state.registryUrl;
     case "registry_login":
+      if (a.url) state.settings["registry.url"] = String(a.url);
       state.handle = String(a.handle);
       return state.handle;
     case "registry_logout":

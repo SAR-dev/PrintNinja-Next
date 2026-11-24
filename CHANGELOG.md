@@ -10,6 +10,9 @@ Unreleased.
 
 ### Added
 
+- App: the sign-in/sign-up dialog has an editable Server address,
+  prefilled from `VITE_REGISTRY_URL` when the build sets one (otherwise
+  from the app's current registry URL), and saves it for the login
 - App: a browser choice in Diagnostics — keep the PC's own browser or
   download a managed Chromium build for the document track; the PDF
   render now uses a fresh profile and background services off

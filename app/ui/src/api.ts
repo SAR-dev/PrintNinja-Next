@@ -408,7 +408,9 @@ export const registryLogin = (
   handle: string,
   password: string,
   create: boolean,
-) => invoke<string>("registry_login", { handle, password, create });
+  /** A different shared server to use for this sign-in, if any. */
+  url?: string,
+) => invoke<string>("registry_login", { handle, password, create, url });
 
 /** Sign out of the registry; the local queue keeps waiting. */
 export const registryLogout = () => invoke<void>("registry_logout");

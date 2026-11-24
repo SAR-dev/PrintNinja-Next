@@ -71,6 +71,8 @@ const ja: EnStrings = {
     signing_in: "サインイン中…",
     sign_out: "サインアウト",
     sign_in_title: "レジストリにサインイン",
+    server_note:
+      "サインイン先の共有サーバーです。ここまたは設定 → レジストリで変更できます。",
     sign_in_description:
       "ハンドルとパスワードでサインインします（メールは不要）。アカウントはコミュニティテンプレートの公開と保存に使います。",
     handle: "ハンドル",

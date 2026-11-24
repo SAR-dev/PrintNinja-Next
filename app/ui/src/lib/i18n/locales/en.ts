@@ -68,6 +68,8 @@ const en = {
     signing_in: "Signing in…",
     sign_out: "Sign out",
     sign_in_title: "Sign in to the registry",
+    server_note:
+      "The shared server to sign in to. Change it here or in Settings → Registry.",
     sign_in_description:
       "A handle and a password, no email. The account is for publishing and saving community templates.",
     handle: "Handle",
