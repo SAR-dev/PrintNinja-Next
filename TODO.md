@@ -14,6 +14,9 @@ spec for the items below.
 
 ## Done
 
+- [x] D7 — PC top-bar search field (search only, no palette) and
+      job-row ⋯ M4 (reprint, retry, open template, copy reason)
+      (commit 8df3028)
 - [x] P8 — phone settings: grouped list instead of the tab strip,
       segmented theme/language controls (commit e1a9772)
 - [x] P7 — phone editor: canvas kept in view, property panel in a
@@ -54,9 +57,6 @@ spec for the items below.
       `settings-printers` → `printers`, new `jobs`).
 
 ## Remaining findings, in order
-
-- [ ] D7 — top bar search field (Q3: search only, no command palette),
-      job-row ⋯ M4 (Reprint, Retry, Open template, Copy reason)
 
 ## Final polish commit (plan phase 7)
 
