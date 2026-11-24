@@ -5,6 +5,8 @@
  * and lets the description go — the old app's page header, ported.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface PageHeaderProps {
@@ -13,6 +15,8 @@ interface PageHeaderProps {
   /** The page's action controls; the primary action goes last. */
   children?: ReactNode;
   className?: string;
+  /** Renders an icon-only back button before the title. */
+  back?: { onClick: () => void; label: string };
 }
 
 export function PageHeader({
@@ -20,6 +24,7 @@ export function PageHeader({
   description,
   children,
   className,
+  back,
 }: PageHeaderProps) {
   const rootRef = useRef<HTMLElement | null>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -44,6 +49,17 @@ export function PageHeader({
         className,
       )}
     >
+      {back && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={back.onClick}
+          aria-label={back.label}
+          className="-ml-2 shrink-0"
+        >
+          <ArrowLeft className="size-5" />
+        </Button>
+      )}
       <h1 className="min-w-0 truncate text-xl font-semibold leading-tight tracking-tight max-md:text-2xl max-md:font-bold max-md:leading-[1.1] max-md:tracking-[-0.03em]">
         {title}
       </h1>

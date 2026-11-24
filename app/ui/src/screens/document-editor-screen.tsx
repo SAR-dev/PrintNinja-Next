@@ -169,10 +169,10 @@ export function DocumentEditorScreen({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <PageHeader title={t("editor.document_title")}>
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          {t("editor.back")}
-        </Button>
+      <PageHeader
+        title={t("editor.document_title")}
+        back={{ onClick: onBack, label: t("common.back") }}
+      >
         <Badge variant="secondary">document</Badge>
         <Button onClick={save}>{t("editor.save_template")}</Button>
       </PageHeader>

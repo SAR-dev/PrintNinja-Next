@@ -329,10 +329,11 @@ export function PrintScreen({
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <PageHeader title={starter.name} description={starter.description}>
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          {t("print.back")}
-        </Button>
+      <PageHeader
+        title={starter.name}
+        description={starter.description}
+        back={{ onClick: onBack, label: t("common.back") }}
+      >
         <Badge variant={starter.track === "scene" ? "default" : "secondary"}>
           {starter.track === "scene"
             ? t("app.track_scene")

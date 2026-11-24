@@ -6,6 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Redo2, Undo2 } from "lucide-react";
 import {
   listPrinters,
   planJob,
@@ -327,28 +328,28 @@ export function EditorScreen({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <PageHeader title={t("editor.title")}>
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          {t("editor.back")}
-        </Button>
+      <PageHeader
+        title={t("editor.title")}
+        back={{ onClick: onBack, label: t("common.back") }}
+      >
         <Badge>scene</Badge>
         <Button
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={undo}
           disabled={past.length === 0}
-          aria-label="Undo (Ctrl+Z)"
+          aria-label={t("editor.undo")}
         >
-          ↩
+          <Undo2 className="size-4" />
         </Button>
         <Button
           variant="ghost"
-          size="sm"
+          size="icon"
           onClick={redo}
           disabled={future.length === 0}
-          aria-label="Redo (Ctrl+Shift+Z)"
+          aria-label={t("editor.redo")}
         >
-          ↪
+          <Redo2 className="size-4" />
         </Button>
         <Button onClick={save}>{t("editor.save_template")}</Button>
         <Button variant="secondary" onClick={previewJob} disabled={preparing}>

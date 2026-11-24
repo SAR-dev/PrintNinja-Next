@@ -125,7 +125,6 @@ const ja: EnStrings = {
     title: "結果",
   },
   print: {
-    back: "← テンプレート",
     printer: "プリンター",
     printer_note: "プロファイルセットから — プロファイルがプリンターです。",
     pick_printer: "プリンターを選択",
@@ -251,10 +250,11 @@ const ja: EnStrings = {
     save_printer: "プリンターを保存",
   },
   editor: {
-    back: "← テンプレート",
     title: "テンプレートを編集",
     document_title: "ドキュメントを編集",
     save_template: "テンプレートを保存",
+    undo: "元に戻す (Ctrl+Z)",
+    redo: "やり直す (Ctrl+Shift+Z)",
     untitled_template: "無題のテンプレート",
     untitled_document: "無題のドキュメント",
     page: "ページ",

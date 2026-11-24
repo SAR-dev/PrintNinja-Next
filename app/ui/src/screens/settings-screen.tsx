@@ -149,11 +149,8 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       <PageHeader
         title={t("settings.title")}
         description={t("settings.subtitle")}
-      >
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          {t("common.back")}
-        </Button>
-      </PageHeader>
+        back={{ onClick: onBack, label: t("common.back") }}
+      />
 
       {error && (
         <p className="rounded-lg border border-danger bg-danger-soft px-4 py-3 text-body-sm text-danger">

@@ -649,6 +649,10 @@ Unreleased.
 
 ### Fixed
 
+- Sub-screens have a real back affordance: an arrow button before the page
+  title on the print, editor and settings screens, replacing the text link
+  that sat inside the title row; the scene editor's undo and redo are
+  icon buttons instead of the tiny text glyphs
 - Phone tab strips: a stacked (non-segmented) tab row now sizes to its
   triggers — the fixed strip height squeezed three stacked tabs into a
   one-tab-tall box, so on a phone only the active tab was visible

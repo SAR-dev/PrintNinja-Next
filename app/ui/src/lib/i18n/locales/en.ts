@@ -122,7 +122,6 @@ const en = {
     title: "Result",
   },
   print: {
-    back: "← Templates",
     printer: "Printer",
     printer_note: "From the profile set — the profile is the printer.",
     pick_printer: "Pick a printer",
@@ -247,10 +246,11 @@ const en = {
     save_printer: "Save printer",
   },
   editor: {
-    back: "← Templates",
     title: "Edit template",
     document_title: "Edit document",
     save_template: "Save template",
+    undo: "Undo (Ctrl+Z)",
+    redo: "Redo (Ctrl+Shift+Z)",
     untitled_template: "Untitled template",
     untitled_document: "Untitled document",
     page: "Page",
