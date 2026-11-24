@@ -10,6 +10,9 @@ import { cn } from "@/lib/utils";
 
 interface PageHeaderProps {
   title: ReactNode;
+  /** An inline control (e.g. the editor's name field) shown in place
+   * of the title; the h1 stays in the tree, visually hidden. */
+  titleControl?: ReactNode;
   description?: ReactNode;
   /** The page's action controls; the primary action goes last. */
   children?: ReactNode;
@@ -20,6 +23,7 @@ interface PageHeaderProps {
 
 export function PageHeader({
   title,
+  titleControl,
   description,
   children,
   className,
@@ -57,9 +61,15 @@ export function PageHeader({
           className="-ml-2 shrink-0"
         />
       )}
-      <h1 className="min-w-0 truncate text-xl font-semibold leading-tight tracking-tight max-md:text-2xl max-md:font-bold max-md:leading-[1.1] max-md:tracking-[-0.03em]">
+      <h1
+        className={cn(
+          "min-w-0 truncate text-xl font-semibold leading-tight tracking-tight max-md:text-2xl max-md:font-bold max-md:leading-[1.1] max-md:tracking-[-0.03em]",
+          titleControl && "sr-only",
+        )}
+      >
         {title}
       </h1>
+      {titleControl}
       {description !== undefined && !scrolled && (
         <p className="hidden max-w-prose text-sm text-muted-foreground md:block">
           {description}

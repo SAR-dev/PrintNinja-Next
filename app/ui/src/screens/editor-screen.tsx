@@ -13,8 +13,15 @@ import {
   type PrepareReport,
   type ProfileInfo,
 } from "@/api";
+import { AddElement, ElementList } from "@/components/editor/element-list";
+import {
+  NumField,
+  PlacementSelect,
+  SwitchRow,
+} from "@/components/editor/fields";
 import { JobPreview } from "@/components/job-preview";
 import { PageHeader } from "@/components/page-header";
+import { ActionMenu } from "@/components/ui/action-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
@@ -34,19 +41,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   allBindings,
   boundsMm,
   clampToBounds,
   defaultElement,
-  ELEMENT_TYPES,
   elementLabel,
   elementsOf,
   getAt,
   insertAt,
-  NESTED_ELEMENT_TYPES,
   removeAt,
   samePath,
   updateAt,
@@ -60,7 +64,6 @@ import type {
   BarcodeKind,
   Element,
   Media,
-  Placement,
   Template,
 } from "@/scene/schema";
 import type { AppTemplate } from "@/templates";
@@ -139,6 +142,13 @@ export function EditorScreen({
   );
   const dpi = printers.find((p) => p.model === printer)?.dpi ?? null;
 
+  /** The dot in the header: the loaded template has changed. */
+  const dirty = useMemo(() => {
+    const saved = JSON.stringify(withSyncedFields(initial.template));
+    const current = JSON.stringify(withSyncedFields(template));
+    return saved !== current || name.trim() !== initial.name;
+  }, [initial, name, template]);
+
   // -- undo/redo: one step per action, bursts of the same key (a drag,
   // typing in one field) coalesced within 800 ms.
   const [past, setPast] = useState<Template[]>([]);
@@ -169,6 +179,23 @@ export function EditorScreen({
     setPast((p) => [...p, template]);
     setTemplate(future[0]);
     setFuture((f) => f.slice(1));
+  };
+
+  /** Move an element one place among its siblings (draw order). */
+  const moveSibling = (path: Path, delta: number) => {
+    const index = path[path.length - 1];
+    const parent = path.slice(0, -1);
+    const target = index + delta;
+    if (target < 0 || target >= elementsOf(template, parent).length) return;
+    commit(
+      (t) => {
+        const el = getAt(t, path);
+        return el ? insertAt(removeAt(t, path), [...parent, target], el) : t;
+      },
+      `move:${path.join("/")}`,
+    );
+    if (selection && samePath(selection.path, path))
+      setSelection({ path: [...parent, target] });
   };
 
   const setMedia = (media: Media) => commit((t) => ({ ...t, media }), "media");
@@ -320,6 +347,16 @@ export function EditorScreen({
     });
 
   const media = template.media;
+  const sizeLabel =
+    media.kind === "roll"
+      ? t("editor.template_size", {
+          w: media.width_mm,
+          h: media.label_height_mm,
+        })
+      : t("editor.template_size", {
+          w: media.width_mm,
+          h: media.height_mm,
+        });
   const changeMediaKind = (kind: Media["kind"]) => {
     if (kind === "roll")
       setMedia({ kind, width_mm: media.width_mm, label_height_mm: 30 });
@@ -331,6 +368,25 @@ export function EditorScreen({
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <PageHeader
         title={t("editor.title")}
+        titleControl={
+          <div className="flex min-w-0 items-center gap-2">
+            <Input
+              id="t-name"
+              aria-label={t("common.name")}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="max-w-64"
+            />
+            {dirty && (
+              <span
+                role="img"
+                aria-label={t("editor.unsaved")}
+                title={t("editor.unsaved")}
+                className="h-2 w-2 shrink-0 rounded-full bg-warning"
+              />
+            )}
+          </div>
+        }
         back={{ onClick: onBack, label: t("common.back") }}
       >
         <Badge>scene</Badge>
@@ -355,16 +411,24 @@ export function EditorScreen({
         <Button variant="secondary" onClick={previewJob} disabled={preparing}>
           {preparing ? t("editor.previewing") : t("editor.preview")}
         </Button>
-      </PageHeader>
-
-      <div className="flex flex-col gap-1">
-        <Label htmlFor="t-name">{t("common.name")}</Label>
-        <Input
-          id="t-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+        <ActionMenu
+          items={[
+            {
+              label: sizeLabel,
+              icon: "rect",
+              disabled: true,
+              onSelect: () => undefined,
+            },
+            {
+              label: t("editor.save_template"),
+              icon: "save",
+              onSelect: save,
+              separator: true,
+            },
+          ]}
+          label={t("common.more")}
         />
-      </div>
+      </PageHeader>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-w-0 flex-col gap-6">
@@ -469,6 +533,7 @@ export function EditorScreen({
                 basePath={[]}
                 selection={selection}
                 onSelect={setSelection}
+                onMove={moveSibling}
                 onDelete={deleteElement}
               />
               <AddElement onAdd={(type) => addElement([], type)} where="root" />
@@ -1039,206 +1104,6 @@ export function EditorScreen({
 
 /** The element tree: select and delete. A group's items sit indented
  *  under it; the draw order is the list order. */
-function ElementList({
-  elements,
-  basePath,
-  selection,
-  onSelect,
-  onDelete,
-}: {
-  elements: Element[];
-  basePath: Path;
-  selection: Selection | null;
-  onSelect: (s: Selection | null) => void;
-  onDelete: (path: Path) => void;
-}) {
-  const { t } = useTranslation();
-  const rows: { el: Element; path: Path; depth: number }[] = [];
-  const collect = (els: Element[], base: Path, depth: number) => {
-    els.forEach((el, i) => {
-      const path = [...base, i];
-      rows.push({ el, path, depth });
-      if (el.type === "group") collect(el.items, path, depth + 1);
-      else if (el.type === "frame") collect(el.children, path, depth + 1);
-    });
-  };
-  collect(elements, basePath, basePath.length);
-  return (
-    <div className="flex flex-col gap-1">
-      {rows.length === 0 && (
-        <span className="text-body-sm text-muted-foreground">
-          {t("editor.element_empty")}
-        </span>
-      )}
-      {rows.map(({ el, path, depth }) => {
-        const isSel = selection ? samePath(selection.path, path) : false;
-        return (
-          <div
-            key={path.join("/")}
-            style={{ marginLeft: (depth - 1) * 16 }}
-            className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${
-              isSel ? "bg-accent text-accent-foreground" : "hover:bg-accent/50"
-            }`}
-          >
-            <button
-              type="button"
-              className="min-w-0 flex-1 truncate text-left text-body-sm"
-              onClick={() => onSelect(isSel ? null : { path })}
-            >
-              {elementLabel(el)}
-            </button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="shrink-0 px-2 text-muted-foreground"
-              onClick={() => onDelete(path)}
-            >
-              {t("common.delete")}
-            </Button>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/** Where new elements can go: at the root, in a group's row, or in a
- * frame. A group cannot sit in a frame (v1), so a row and a frame offer
- * the same nested list. */
-function AddElement({
-  onAdd,
-  where,
-}: {
-  onAdd: (type: string) => void;
-  where: "root" | "row" | "frame";
-}) {
-  const { t } = useTranslation();
-  const types = where === "root" ? ELEMENT_TYPES : NESTED_ELEMENT_TYPES;
-  const placeholder =
-    where === "root"
-      ? t("editor.add_element")
-      : where === "row"
-        ? t("editor.add_to_row")
-        : t("editor.add_to_frame");
-  return (
-    <Select onValueChange={(v) => onAdd(v)}>
-      <SelectTrigger>
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {types.map((type) => (
-          <SelectItem key={type} value={type}>
-            {type}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-/** Where a root element sits in a multi-page output. Groups must flow. */
-function PlacementSelect({
-  value,
-  onChange,
-}: {
-  value: Placement;
-  onChange: (p: Placement) => void;
-}) {
-  const { t } = useTranslation();
-  const isOnly = typeof value === "object";
-  return (
-    <div className="flex items-end gap-2">
-      <div className="flex flex-1 flex-col gap-1">
-        <Label>{t("editor.page")}</Label>
-        <Select
-          value={isOnly ? "only" : value}
-          onValueChange={(v) =>
-            onChange(v === "only" ? { only: 2 } : (v as Placement))
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="every">{t("editor.page_every")}</SelectItem>
-            <SelectItem value="first">{t("editor.page_first")}</SelectItem>
-            <SelectItem value="last">{t("editor.page_last")}</SelectItem>
-            <SelectItem value="only">{t("editor.page_only")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      {isOnly && (
-        <div className="flex w-20 flex-col gap-1">
-          <Label>{t("editor.page_number")}</Label>
-          <Input
-            type="number"
-            min={1}
-            value={value.only}
-            onChange={(e) => {
-              const n = e.target.valueAsNumber;
-              if (Number.isFinite(n))
-                onChange({ only: Math.max(1, Math.round(n)) });
-            }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function NumField({
-  id,
-  label,
-  value,
-  onChange,
-  step = 0.1,
-}: {
-  id: string;
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  step?: number;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        type="number"
-        inputMode="decimal"
-        step={step}
-        min={0}
-        value={value}
-        onChange={(e) => {
-          const v = e.target.valueAsNumber;
-          if (Number.isFinite(v)) onChange(v);
-        }}
-      />
-    </div>
-  );
-}
-
-function SwitchRow({
-  label,
-  checked,
-  onCheckedChange,
-}: {
-  label: string;
-  checked: boolean;
-  onCheckedChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Switch
-        checked={checked}
-        onCheckedChange={onCheckedChange}
-        aria-label={label}
-      />
-      <Label className="cursor-pointer text-body-sm">{label}</Label>
-    </div>
-  );
-}
-
 /**
  * The editor previews one record: the first of the sample data, when
  * the sample parses, else the sample as is (a single record object).

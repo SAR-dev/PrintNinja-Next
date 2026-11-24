@@ -608,6 +608,10 @@ Unreleased.
 
 ### Changed
 
+- App: the scene editor is split into editor components, its element
+  rows have type icons and a ⋯ menu (move up/down, delete), adding an
+  element uses an icon toolbar, and the header holds an inline name,
+  an unsaved dot and a ⋯ menu with the template size and Save
 - App: template cards now lead with Print, use an icon-only Edit and
   put Publish/Unpublish, Duplicate and Delete in a ⋯ menu (also opened
   by right-click on the PC); New template is a split button on the PC
