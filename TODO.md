@@ -14,6 +14,8 @@ spec for the items below.
 
 ## Done
 
+- [x] P7 — phone editor: canvas kept in view, property panel in a
+      bottom sheet, add-element icon toolbar (commit 4c31b4f)
 - [x] P6 — phone print screen: sticky bottom action bar (above the
       bottom nav while visible) and a result status banner (commit aba0e82)
 - [x] D6 — PC print screen: sticky summary, distinct Preview (Eye) and
@@ -51,8 +53,6 @@ spec for the items below.
 
 ## Remaining findings, in order
 
-- [ ] P7 — editor (phone): canvas stays visible, property panel in a
-      sheet, add-element toolbar as icons
 - [ ] P8 — settings (phone): grouped list instead of the 4-tab strip,
       segmented theme/language controls
 - [ ] D7 — top bar search field (Q3: search only, no command palette),
