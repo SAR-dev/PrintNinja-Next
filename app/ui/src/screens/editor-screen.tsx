@@ -4,7 +4,7 @@
  * repeating-group settings. The preview is prepared with the same path
  * as the print (plan §3.4) — on the chosen printer, at its own dpi.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   listPrinters,
@@ -36,6 +36,8 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   allBindings,
+  boundsMm,
+  clampToBounds,
   defaultElement,
   ELEMENT_TYPES,
   elementLabel,
@@ -60,6 +62,30 @@ import type {
   Template,
 } from "@/scene/schema";
 import type { AppTemplate } from "@/templates";
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+/**
+ * Where an element at `path` goes when moved to (x_mm, y_mm): when it
+ * sits in a frame, clamped so it stays inside the frame's size — the
+ * scene validation rejects a child that leaves its frame.
+ */
+function frameClamped(
+  t: Template,
+  path: Path,
+  el: Element,
+  x_mm: number,
+  y_mm: number,
+): { x_mm: number; y_mm: number } {
+  const parent = getAt(t, path.slice(0, -1));
+  if (parent?.type !== "frame")
+    return { x_mm: round1(x_mm), y_mm: round1(y_mm) };
+  const [, , bw, bh] = boundsMm(el);
+  return clampToBounds(round1(x_mm), round1(y_mm), bw, bh, {
+    w: parent.size.w_mm,
+    h: parent.size.h_mm,
+  });
+}
 
 export function EditorScreen({
   initial,
@@ -111,26 +137,154 @@ export function EditorScreen({
   );
   const dpi = printers.find((p) => p.model === printer)?.dpi ?? null;
 
-  const setMedia = (media: Media) => setTemplate((t) => ({ ...t, media }));
+  // -- undo/redo: one step per action, bursts of the same key (a drag,
+  // typing in one field) coalesced within 800 ms.
+  const [past, setPast] = useState<Template[]>([]);
+  const [future, setFuture] = useState<Template[]>([]);
+  const lastPush = useRef<{ key: string; at: number } | null>(null);
+  const pushHistory = (key: string) => {
+    const now = Date.now();
+    const last = lastPush.current;
+    if (last && last.key === key && now - last.at < 800) return;
+    lastPush.current = { key, at: now };
+    setPast((p) => [...p.slice(-99), template]);
+    setFuture([]);
+  };
+  const commit = (fn: (t: Template) => Template, key: string) => {
+    pushHistory(key);
+    setTemplate(fn);
+  };
+  const undo = () => {
+    if (past.length === 0) return;
+    lastPush.current = null;
+    setFuture((f) => [template, ...f]);
+    setTemplate(past[past.length - 1]);
+    setPast((p) => p.slice(0, -1));
+  };
+  const redo = () => {
+    if (future.length === 0) return;
+    lastPush.current = null;
+    setPast((p) => [...p, template]);
+    setTemplate(future[0]);
+    setFuture((f) => f.slice(1));
+  };
+
+  const setMedia = (media: Media) => commit((t) => ({ ...t, media }), "media");
   const moveElement = (path: Path, x_mm: number, y_mm: number) =>
     setTemplate((t) =>
-      updateAt(t, path, (el) => ({ ...el, at: { ...el.at, x_mm, y_mm } })),
+      updateAt(t, path, (el) => {
+        const at = frameClamped(t, path, el, x_mm, y_mm);
+        return { ...el, at };
+      }),
     );
-  const updateSelected = (fn: (el: Element) => Element) => {
+  const startDrag = (path: Path) => pushHistory(`drag:${path.join("/")}`);
+  const resizeElement = (
+    path: Path,
+    x_mm: number,
+    y_mm: number,
+    w_mm: number,
+    h_mm: number,
+  ) =>
+    commit(
+      (t) =>
+        updateAt(t, path, (el) => {
+          if (!("size" in el)) return el;
+          const parent = getAt(t, path.slice(0, -1));
+          let x = x_mm;
+          let y = y_mm;
+          let w = w_mm;
+          let h = h_mm;
+          if (parent?.type === "frame") {
+            x = Math.max(0, x);
+            y = Math.max(0, y);
+            w = Math.min(w, parent.size.w_mm - x);
+            h = Math.min(h, parent.size.h_mm - y);
+          }
+          return {
+            ...el,
+            at: { x_mm: round1(x), y_mm: round1(y) },
+            size: { ...el.size, w_mm: round1(w), h_mm: round1(h) },
+          };
+        }),
+      `resize:${path.join("/")}`,
+    );
+  /** The selected element's position, for the arrow-key nudge. */
+  const nudge = (dx: number, dy: number) => {
     if (!selection) return;
     const path = selection.path;
-    setTemplate((t) => updateAt(t, path, fn));
+    commit(
+      (t) =>
+        updateAt(t, path, (el) => {
+          const at = frameClamped(
+            t,
+            path,
+            el,
+            el.at.x_mm + dx,
+            el.at.y_mm + dy,
+          );
+          return { ...el, at };
+        }),
+      `nudge:${path.join("/")}`,
+    );
+  };
+  const updateSelected = (fn: (el: Element) => Element) => {
+    if (!selection) return;
+    const key = `sel:${selection.path.join("/")}`;
+    commit((t) => updateAt(t, selection.path, fn), key);
   };
   const addElement = (container: Path, type: string) => {
     const path = [...container, elementsOf(template, container).length];
     const newEl = defaultElement(type);
-    setTemplate((t) => insertAt(t, path, newEl));
+    commit((t) => insertAt(t, path, newEl), `add:${container.join("/")}`);
     setSelection({ path });
   };
   const deleteElement = (path: Path) => {
-    setTemplate((t) => removeAt(t, path));
+    commit((t) => removeAt(t, path), `del:${path.join("/")}`);
     setSelection(null);
   };
+
+  // Ctrl/Cmd+Z / Shift+Z (or Ctrl+Y) undo/redo; Delete removes the
+  // selection; the arrow keys nudge it 0.1 mm (Shift: 1 mm).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && (e.key === "z" || e.key === "Z")) {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (mod && (e.key === "y" || e.key === "Y") && !e.shiftKey) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      // Never steal keys from a text input.
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest("input, textarea, select")
+      )
+        return;
+      if (!selection) return;
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        deleteElement(selection.path);
+        return;
+      }
+      const step = e.shiftKey ? 1 : 0.1;
+      let dx = 0;
+      let dy = 0;
+      if (e.key === "ArrowLeft") dx = -step;
+      else if (e.key === "ArrowRight") dx = step;
+      else if (e.key === "ArrowUp") dy = -step;
+      else if (e.key === "ArrowDown") dy = step;
+      else return;
+      e.preventDefault();
+      nudge(dx, dy);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   const previewJob = async () => {
     setPreparing(true);
@@ -178,6 +332,24 @@ export function EditorScreen({
           {t("editor.back")}
         </Button>
         <Badge>scene</Badge>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={undo}
+          disabled={past.length === 0}
+          aria-label="Undo (Ctrl+Z)"
+        >
+          ↩
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={redo}
+          disabled={future.length === 0}
+          aria-label="Redo (Ctrl+Shift+Z)"
+        >
+          ↪
+        </Button>
         <Button onClick={save}>{t("editor.save_template")}</Button>
         <Button variant="secondary" onClick={previewJob} disabled={preparing}>
           {preparing ? t("editor.previewing") : t("editor.preview")}
@@ -206,6 +378,8 @@ export function EditorScreen({
                 selection={selection}
                 onSelect={setSelection}
                 onMove={moveElement}
+                onDragStart={startDrag}
+                onResize={resizeElement}
                 record={sampleRecord}
                 showSample={showSample}
                 dpi={dpi}

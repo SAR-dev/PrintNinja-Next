@@ -18,8 +18,10 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { encodeSymbol, symbolCacheGet, type SymbolEncoding } from "@/api";
 import {
+  boundsMm,
   getAt,
   pageDims,
+  resizeBox,
   rowHeightMm,
   samePath,
   type Path,
@@ -42,6 +44,18 @@ interface CanvasProps {
   selection: Selection | null;
   onSelect: (s: Selection | null) => void;
   onMove: (path: Path, x_mm: number, y_mm: number) => void;
+  /** A drag is actually moving (the first pointer move) — one undo
+   * step per drag. */
+  onDragStart: (path: Path) => void;
+  /** The selected element's new box from a resize handle, in its
+   * parent's coordinates. */
+  onResize: (
+    path: Path,
+    x_mm: number,
+    y_mm: number,
+    w_mm: number,
+    h_mm: number,
+  ) => void;
   /** The first sample record, for substituting the bindings. */
   record: Record<string, unknown> | null;
   /** Whether the bindings show as sample data (on) or as `{{fields}}`. */
@@ -56,6 +70,20 @@ interface Drag {
   startY: number;
   origX: number;
   origY: number;
+  started: boolean;
+}
+
+/** A resize handle under the pointer: the box's origin as the drag
+ * began, and which corner or edge is being pulled. */
+interface Resize {
+  path: Path;
+  handle: string;
+  startX: number;
+  startY: number;
+  ox: number;
+  oy: number;
+  ow: number;
+  oh: number;
 }
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
@@ -65,6 +93,8 @@ export function SceneCanvas({
   selection,
   onSelect,
   onMove,
+  onDragStart,
+  onResize,
   record,
   showSample,
   dpi,
@@ -74,6 +104,7 @@ export function SceneCanvas({
   const width = wMm * scale;
   const height = hMm * scale;
   const drag = useRef<Drag | null>(null);
+  const resize = useRef<Resize | null>(null);
 
   const isSelected = (path: Path) =>
     selection ? samePath(selection.path, path) : false;
@@ -89,6 +120,7 @@ export function SceneCanvas({
       startY: e.clientY,
       origX: el.at.x_mm,
       origY: el.at.y_mm,
+      started: false,
     };
     (e.target as SVGElement).setPointerCapture(e.pointerId);
   };
@@ -96,6 +128,10 @@ export function SceneCanvas({
   const moveDrag = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d) return;
+    if (!d.started) {
+      d.started = true;
+      onDragStart(d.path);
+    }
     onMove(
       d.path,
       round1(d.origX + (e.clientX - d.startX) / scale),
@@ -107,6 +143,45 @@ export function SceneCanvas({
     drag.current = null;
   };
 
+  const beginResize =
+    (path: Path, handle: string) => (e: React.PointerEvent) => {
+      e.stopPropagation();
+      const el = getAt(template, path);
+      if (!el || !("size" in el)) return;
+      onSelect({ path });
+      const [x, y, w, h] = boundsMm(el);
+      resize.current = {
+        path,
+        handle,
+        startX: e.clientX,
+        startY: e.clientY,
+        ox: x,
+        oy: y,
+        ow: w,
+        oh: h,
+      };
+      (e.target as SVGElement).setPointerCapture(e.pointerId);
+    };
+
+  const moveResize = (e: React.PointerEvent) => {
+    const r = resize.current;
+    if (!r) return;
+    const [x, y, w, h] = resizeBox(
+      r.ox,
+      r.oy,
+      r.ow,
+      r.oh,
+      r.handle,
+      (e.clientX - r.startX) / scale,
+      (e.clientY - r.startY) / scale,
+    );
+    onResize(r.path, x, y, w, h);
+  };
+
+  const endResize = () => {
+    resize.current = null;
+  };
+
   return (
     <div className="overflow-auto rounded-md border border-border bg-muted/40 p-4">
       <svg
@@ -116,9 +191,19 @@ export function SceneCanvas({
         className="mx-auto block"
         style={{ touchAction: "none" }}
         onPointerDown={() => onSelect(null)}
-        onPointerMove={moveDrag}
-        onPointerUp={endDrag}
-        onPointerLeave={endDrag}
+        onPointerMove={(e) => {
+          // A move and a resize are never live at the same time.
+          moveDrag(e);
+          moveResize(e);
+        }}
+        onPointerUp={() => {
+          endDrag();
+          endResize();
+        }}
+        onPointerLeave={() => {
+          endDrag();
+          endResize();
+        }}
       >
         <rect
           x={0}
@@ -139,6 +224,7 @@ export function SceneCanvas({
               selected={isSelected(path)}
               isSelected={isSelected}
               beginDrag={beginDrag}
+              beginResize={beginResize}
               record={record}
               showSample={showSample}
               dpi={dpi}
@@ -162,8 +248,9 @@ interface GlyphProps {
 }
 
 /** One selectable element (or group or frame), with its selection
- * ring. A frame's children are selectable in their own right — the
- * deepest element under the pointer wins. */
+ * ring and — for an element with a size — its resize handles. A
+ * frame's children are selectable in their own right: the deepest
+ * element under the pointer wins. */
 function ElementNode({
   el,
   path,
@@ -171,6 +258,7 @@ function ElementNode({
   selected,
   isSelected,
   beginDrag,
+  beginResize,
   record,
   showSample,
   dpi,
@@ -181,6 +269,7 @@ function ElementNode({
   selected: boolean;
   isSelected: (path: Path) => boolean;
   beginDrag: (path: Path) => (e: React.PointerEvent) => void;
+  beginResize: (path: Path, handle: string) => (e: React.PointerEvent) => void;
   record: Record<string, unknown> | null;
   showSample: boolean;
   dpi: number | null;
@@ -195,6 +284,7 @@ function ElementNode({
           scale={scale}
           isSelected={isSelected}
           beginDrag={beginDrag}
+          beginResize={beginResize}
           record={record}
           showSample={showSample}
           dpi={dpi}
@@ -222,6 +312,64 @@ function ElementNode({
           pointerEvents="none"
         />
       )}
+      {selected && "size" in el && (
+        <ResizeHandles
+          x={bx * scale}
+          y={by * scale}
+          w={bw * scale}
+          h={bh * scale}
+          path={path}
+          beginResize={beginResize}
+        />
+      )}
+    </g>
+  );
+}
+
+/** The eight resize handles (corners and edges) of a selected box,
+ * in the parent's coordinates. */
+const HANDLES: { h: string; fx: number; fy: number; cursor: string }[] = [
+  { h: "nw", fx: 0, fy: 0, cursor: "nwse-resize" },
+  { h: "n", fx: 0.5, fy: 0, cursor: "ns-resize" },
+  { h: "ne", fx: 1, fy: 0, cursor: "nesw-resize" },
+  { h: "e", fx: 1, fy: 0.5, cursor: "ew-resize" },
+  { h: "se", fx: 1, fy: 1, cursor: "nwse-resize" },
+  { h: "s", fx: 0.5, fy: 1, cursor: "ns-resize" },
+  { h: "sw", fx: 0, fy: 1, cursor: "nesw-resize" },
+  { h: "w", fx: 0, fy: 0.5, cursor: "ew-resize" },
+];
+
+function ResizeHandles({
+  x,
+  y,
+  w,
+  h,
+  path,
+  beginResize,
+}: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  path: Path;
+  beginResize: (path: Path, handle: string) => (e: React.PointerEvent) => void;
+}) {
+  return (
+    <g>
+      {HANDLES.map(({ h: handle, fx, fy, cursor }) => (
+        <rect
+          key={handle}
+          x={x + fx * w - 3}
+          y={y + fy * h - 3}
+          width={6}
+          height={6}
+          fill="#ffffff"
+          stroke="#2563eb"
+          strokeWidth={1.5}
+          style={{ cursor }}
+          onPointerDown={beginResize(path, handle)}
+        />
+      ))}
     </g>
   );
 }
@@ -236,6 +384,7 @@ function FrameGlyph({
   scale,
   isSelected,
   beginDrag,
+  beginResize,
   record,
   showSample,
   dpi,
@@ -245,6 +394,7 @@ function FrameGlyph({
   scale: number;
   isSelected?: (path: Path) => boolean;
   beginDrag?: (path: Path) => (e: React.PointerEvent) => void;
+  beginResize?: (path: Path, handle: string) => (e: React.PointerEvent) => void;
   record: Record<string, unknown> | null;
   showSample: boolean;
   dpi: number | null;
@@ -280,6 +430,7 @@ function FrameGlyph({
             selected={isSelected([...path, i])}
             isSelected={isSelected}
             beginDrag={beginDrag!}
+            beginResize={beginResize!}
             record={record}
             showSample={showSample}
             dpi={dpi}
@@ -515,31 +666,6 @@ function QrGlyph({
       )}
     </g>
   );
-}
-
-/** An element's bounds in mm (selection ring and drag math). */
-function boundsMm(el: Element): [number, number, number, number] {
-  const { x_mm: x, y_mm: y } = el.at;
-  switch (el.type) {
-    case "text":
-    case "barcode":
-    case "image":
-    case "rect":
-    case "frame":
-      return [x, y, el.size.w_mm, el.size.h_mm];
-    case "qr":
-      return [x, y, el.h_mm, el.h_mm];
-    case "line":
-      return el.vertical
-        ? [x, y, el.thickness_mm, el.length_mm]
-        : [x, y, el.length_mm, el.thickness_mm];
-    case "group": {
-      const h =
-        el.items.reduce((sum, it) => sum + rowHeightMm(it), 0) +
-        Math.max(0, el.items.length - 1) * el.item_gap_mm;
-      return [x, y, el.w_mm, Math.max(4, h)];
-    }
-  }
 }
 
 /** How one element (except a group) is drawn at its own position. */

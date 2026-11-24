@@ -591,6 +591,12 @@ Unreleased.
   and a frame's own width, height and border-thickness properties. A
   frame's children take the frame's page, so the page picker is hidden
   for them
+- Scene editor: undo/redo (Ctrl/Cmd+Z, Shift+Z or Ctrl+Y, with buttons
+  in the header; bursts of the same action coalesce into one step),
+  resize handles on the selected element — eight, corners and edges,
+  0.1 mm steps, and a frame's children can be moved, nudged or resized
+  only as far as the frame's edges allow — plus Delete to remove the
+  selection and arrow keys to nudge it 0.1 mm (Shift: 1 mm)
 
 ### Changed
 

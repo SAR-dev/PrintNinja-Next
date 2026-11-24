@@ -302,6 +302,105 @@ export function placementWord(p: Placement): string {
   return typeof p === "object" ? `only page ${p.only}` : p;
 }
 
+/** An element's bounds in its parent's coordinates, in mm:
+ * `[x, y, w, h]` — the selection ring, the nudge clamp and the
+ * resize handles all measure from it. */
+export function boundsMm(el: Element): [number, number, number, number] {
+  const { x_mm: x, y_mm: y } = el.at;
+  switch (el.type) {
+    case "text":
+    case "barcode":
+    case "image":
+    case "rect":
+    case "frame":
+      return [x, y, el.size.w_mm, el.size.h_mm];
+    case "qr":
+      return [x, y, el.h_mm, el.h_mm];
+    case "line":
+      return el.vertical
+        ? [x, y, el.thickness_mm, el.length_mm]
+        : [x, y, el.length_mm, el.thickness_mm];
+    case "group": {
+      const h =
+        el.items.reduce((sum, it) => sum + rowHeightMm(it), 0) +
+        Math.max(0, el.items.length - 1) * el.item_gap_mm;
+      return [x, y, el.w_mm, Math.max(4, h)];
+    }
+  }
+}
+
+/**
+ * The new box of a resize, from its original box, the handle under
+ * the pointer (`nw` … `se`, or an edge: `n`, `s`, `e`, `w`) and the
+ * movement in mm. The box keeps at least 1 mm in each direction, and
+ * when `within` is given (the parent frame's size) it never leaves
+ * that box — a frame's children must stay inside it.
+ */
+export function resizeBox(
+  ox: number,
+  oy: number,
+  ow: number,
+  oh: number,
+  handle: string,
+  dx: number,
+  dy: number,
+  within?: { w: number; h: number },
+): [number, number, number, number] {
+  const MIN = 1;
+  let x = ox;
+  let y = oy;
+  let w = ow;
+  let h = oh;
+  if (handle.includes("e")) w = ow + dx;
+  if (handle.includes("s")) h = oh + dy;
+  if (handle.includes("w")) {
+    x = ox + dx;
+    w = ow - dx;
+  }
+  if (handle.includes("n")) {
+    y = oy + dy;
+    h = oh - dy;
+  }
+  if (w < MIN) {
+    if (handle.includes("w")) x -= MIN - w;
+    w = MIN;
+  }
+  if (h < MIN) {
+    if (handle.includes("n")) y -= MIN - h;
+    h = MIN;
+  }
+  if (within) {
+    x = Math.max(0, x);
+    y = Math.max(0, y);
+    w = Math.min(w, within.w - x);
+    h = Math.min(h, within.h - y);
+  }
+  return [
+    Math.round(x * 10) / 10,
+    Math.round(y * 10) / 10,
+    Math.round(w * 10) / 10,
+    Math.round(h * 10) / 10,
+  ];
+}
+
+/**
+ * A position clamped so the box `[0,0,w,h]` at the origin stays
+ * inside `limit` — used to keep a frame's children in the frame when
+ * they are moved or nudged.
+ */
+export function clampToBounds(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  limit: { w: number; h: number },
+): { x_mm: number; y_mm: number } {
+  return {
+    x_mm: Math.min(Math.max(0, x), Math.max(0, limit.w - w)),
+    y_mm: Math.min(Math.max(0, y), Math.max(0, limit.h - h)),
+  };
+}
+
 /** How tall one group row is, in mm — an estimate for the canvas. */
 export function rowHeightMm(item: Element): number {
   switch (item.type) {
