@@ -1,11 +1,12 @@
 # TODO — finishing docs/planned/UI_IMPROVEMENT_PLAN.md
 
-Working on `develop`. Policy: **one local commit per finding** (P1–P8, D1–D7),
+Working on branch `ui-improvement-plan` (cut from `develop`, pushed to
+origin — keep pushing it as findings land). Policy:
+**one local commit per finding** (P1–P8, D1–D7),
 each ending with the house loop (biome lint + vite build, CHANGELOG bullet,
-`graphify update .`, one-line message, no body, no Co-Authored-By).
-**Push only when the whole plan is done**, then delete `docs/planned/`
-(including `UI_IMPROVEMENT_PLAN.md`) and this `TODO.md`, and commit that
-deletion.
+`graphify update .`, one-line message, no body, no Co-Authored-By) and a
+push to the branch. At the very end: delete `docs/planned/` (including
+`UI_IMPROVEMENT_PLAN.md`) and this `TODO.md`, and commit that deletion.
 
 The plan doc is `docs/planned/UI_IMPROVEMENT_PLAN.md`; its §3.5 (ActionMenu
 primitive), §4 (icon system, menus M1–M9), §5.1 (PC card layout) are the
@@ -77,10 +78,10 @@ spec for the items below.
 
 - [ ] Update README.md screenshots (fresh `pnpm shots`, then
       `pnpm shots:assets`) **before the final push**
-- [ ] Push the whole plan's commits
+- [ ] Push the last commits to `ui-improvement-plan`
 - [ ] Delete the `docs/planned/` directory (with
-      `UI_IMPROVEMENT_PLAN.md`) and this `TODO.md`, and commit the
-      deletion
+      `UI_IMPROVEMENT_PLAN.md`) and this `TODO.md`, commit the deletion
+      and push
 
 ## Notes
 
