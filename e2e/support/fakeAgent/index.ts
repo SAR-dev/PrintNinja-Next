@@ -150,6 +150,20 @@ const state = {
   online: seed.registryStatus?.online ?? true,
   community: (seed.community ?? []).map((r) => ({ ...r })),
   publications: (seed.publications ?? []).map((p) => ({ ...p })),
+  logs: [
+    {
+      at_ms: Date.UTC(2026, 10, 24, 12, 0, 0),
+      level: "info",
+      target: "pipeline",
+      message: "prepared 2 record(s), 2 page(s) on the raster path",
+    },
+    {
+      at_ms: Date.UTC(2026, 10, 24, 12, 1, 0),
+      level: "info",
+      target: "registry",
+      message: "signed in as ninja",
+    },
+  ],
 };
 
 /** The records the data text holds: a JSON array, or one object. */
@@ -380,6 +394,11 @@ async function invoke(
       return plan(a);
     case "print_job":
       return { result: "confirmed", counts: null, reason: null };
+    case "app_logs":
+      return state.logs;
+    case "app_log_clear":
+      state.logs = [];
+      return undefined;
     case "registry_url":
       return state.registryUrl;
     case "registry_login":

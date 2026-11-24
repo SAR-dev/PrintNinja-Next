@@ -68,6 +68,7 @@ const VIEWS = [
   "editor-properties",
   "document-edit",
   "settings",
+  "diagnostics",
   "new-template",
   "publish-dialog",
   "template-menu",
@@ -100,6 +101,8 @@ const L = {
     publish: "Publish",
     newTemplate: "New template",
     settings: "Settings",
+    tabDiagnostics: "Diagnostics",
+    logsTitle: "Application log",
     accountMenu: "Account menu",
     sync: "Sync",
     signIn: "Sign in",
@@ -128,6 +131,8 @@ const L = {
     publish: "公開",
     newTemplate: "新しいテンプレート",
     settings: "設定",
+    tabDiagnostics: "診断",
+    logsTitle: "アプリのログ",
     accountMenu: "アカウントメニュー",
     sync: "同期",
     signIn: "サインイン",
@@ -504,6 +509,12 @@ async function navigate(page, view, l) {
         .getByRole("button", { name: l.settings, exact: true })
         .click();
       await page.getByRole("heading", { name: l.settings, level: 1 }).waitFor();
+      break;
+    case "diagnostics":
+      await navigate(page, "settings", l);
+      if ((page.viewportSize()?.width ?? 0) >= 768)
+        await page.getByRole("tab", { name: l.tabDiagnostics }).click();
+      await page.getByRole("heading", { name: l.logsTitle, level: 2 }).waitFor();
       break;
     case "new-template":
       await page.getByRole("button", { name: l.newTemplate }).click();

@@ -9,6 +9,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  appLogClear,
+  appLogs,
+  type AppLogEntry,
   beginPairing,
   isAutostart,
   loadSettings,
@@ -50,6 +53,8 @@ export function SettingsScreen() {
   const [registryUrlText, setRegistryUrlText] = useState("");
   /** The address the app resolves to now, shown as the placeholder. */
   const [registryDefault, setRegistryDefault] = useState("");
+  const [logs, setLogs] = useState<AppLogEntry[]>([]);
+  const [logError, setLogError] = useState<string | null>(null);
 
   const lanOn = settings["api.lan"] === "true";
   // Absent means on: the guarded fetcher is the default.
@@ -95,6 +100,37 @@ export function SettingsScreen() {
     }, 1000);
     return () => clearInterval(timer);
   }, [pairCode]);
+
+  const refreshLogs = () => {
+    void appLogs()
+      .then(setLogs)
+      .catch((e) => setLogError(String(e)));
+  };
+
+  useEffect(refreshLogs, []);
+
+  const downloadLogs = () => {
+    const text = logs
+      .map(
+        (entry) =>
+          `${new Date(entry.at_ms).toISOString()} [${entry.level}] ${entry.target}: ${entry.message}`,
+      )
+      .join("\n");
+    const url = URL.createObjectURL(
+      new Blob([text], { type: "text/plain;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "printninja.log";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const clearLogs = () => {
+    void appLogClear()
+      .then(() => setLogs([]))
+      .catch((e) => setLogError(String(e)));
+  };
 
   const save = (key: string, value: string) => {
     void saveSetting(key, value)
@@ -157,14 +193,17 @@ export function SettingsScreen() {
           <TabsTrigger value="registry">
             {t("settings.tab_registry")}
           </TabsTrigger>
+          <TabsTrigger value="diagnostics">
+            {t("settings.tab_diagnostics")}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent
           value="general"
           forceMount
-          className="flex flex-col gap-6 max-md:block"
+          className="flex-col gap-6 data-[state=active]:flex data-[state=inactive]:hidden max-md:!flex"
         >
-          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:!inline">
             {t("settings.tab_general")}
           </h2>
           <Card>
@@ -224,9 +263,9 @@ export function SettingsScreen() {
         <TabsContent
           value="network"
           forceMount
-          className="flex flex-col gap-6 max-md:block"
+          className="flex-col gap-6 data-[state=active]:flex data-[state=inactive]:hidden max-md:!flex"
         >
-          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:!inline">
             {t("settings.tab_network")}
           </h2>
           <Card>
@@ -299,9 +338,9 @@ export function SettingsScreen() {
         <TabsContent
           value="data"
           forceMount
-          className="flex flex-col gap-6 max-md:block"
+          className="flex-col gap-6 data-[state=active]:flex data-[state=inactive]:hidden max-md:!flex"
         >
-          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:!inline">
             {t("settings.tab_data")}
           </h2>
           <Card>
@@ -332,9 +371,9 @@ export function SettingsScreen() {
         <TabsContent
           value="registry"
           forceMount
-          className="flex flex-col gap-6 max-md:block"
+          className="flex-col gap-6 data-[state=active]:flex data-[state=inactive]:hidden max-md:!flex"
         >
-          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:!inline">
             {t("settings.tab_registry")}
           </h2>
           <Card>
@@ -358,6 +397,62 @@ export function SettingsScreen() {
               <span className="text-caption text-muted-foreground">
                 {t("settings.registry_url_note")}
               </span>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent
+          value="diagnostics"
+          forceMount
+          className="flex-col gap-6 data-[state=active]:flex data-[state=inactive]:hidden max-md:!flex"
+        >
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:!inline">
+            {t("settings.tab_diagnostics")}
+          </h2>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("settings.logs_title")}</CardTitle>
+              <CardDescription>{t("settings.logs_note")}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={refreshLogs}>
+                  {t("settings.logs_refresh")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={logs.length === 0}
+                  onClick={downloadLogs}
+                >
+                  {t("settings.logs_download")}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={logs.length === 0}
+                  onClick={clearLogs}
+                >
+                  {t("settings.logs_clear")}
+                </Button>
+              </div>
+              {logError && (
+                <p className="text-caption text-danger">{logError}</p>
+              )}
+              {logs.length === 0 ? (
+                <p className="text-body-sm text-muted-foreground">
+                  {t("settings.logs_empty")}
+                </p>
+              ) : (
+                <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 font-mono text-caption whitespace-pre-wrap">
+                  {logs
+                    .map(
+                      (entry) =>
+                        `${new Date(entry.at_ms).toLocaleString()} [${entry.level}] ${entry.target}: ${entry.message}`,
+                    )
+                    .join("\n")}
+                </pre>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

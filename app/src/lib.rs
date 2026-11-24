@@ -8,6 +8,7 @@
 //! work off the UI thread.
 
 mod api;
+mod app_log;
 mod deeplink;
 mod discovery;
 mod fetcher;
@@ -211,12 +212,24 @@ async fn plan_job(
     let (profile, template, records) =
         load_inputs(&state.profiles, &store, &template, &profile, &data)?;
     let (profile, template, records) = (profile.clone(), template.clone(), records.clone());
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         prepare_units(&template, &profile, &records, copies).map(|units| units.report)
     })
     .await
     .map_err(|e| e.to_string())?
-    .map_err(|e: PipelineError| e.to_string())
+    .map_err(|e: PipelineError| e.to_string());
+    match &result {
+        Ok(report) => app_log::push(
+            "info",
+            "pipeline",
+            format!(
+                "prepared {} record(s), {} page(s) on the {} path",
+                report.records, report.pages, report.path
+            ),
+        ),
+        Err(e) => app_log::push("error", "pipeline", e.to_string()),
+    }
+    result
 }
 
 /// Prepare and print a job in one call, over the given transport.
@@ -235,6 +248,7 @@ async fn print_job(
     let (profile, template, records) =
         load_inputs(&state.profiles, &store, &template, &profile, &data)?;
     let (profile, template, records) = (profile.clone(), template.clone(), records.clone());
+    let profile_model = profile.profile.model.clone();
     let report = tauri::async_runtime::spawn_blocking(move || {
         let units = prepare_units(&template, &profile, &records, copies)?;
         let factory = factory(&transport, units.document_format);
@@ -243,6 +257,14 @@ async fn print_job(
     })
     .await
     .map_err(|e| e.to_string())?;
+    match &report {
+        Ok(r) => app_log::push(
+            "info",
+            "pipeline",
+            format!("print result: {} ({})", r.result, profile_model),
+        ),
+        Err(e) => app_log::push("error", "pipeline", e.to_string()),
+    }
     report.map_err(|e| e.to_string())
 }
 
@@ -301,6 +323,18 @@ fn load_recent_jobs(state: State<'_, Arc<Store>>) -> Result<Vec<StoredJob>, Stri
 #[tauri::command]
 fn remember_job(state: State<'_, Arc<Store>>, job: StoredJob) -> Result<(), String> {
     state.remember_job(&job)
+}
+
+/// The app's own recent events, for the Diagnostics settings tab.
+#[tauri::command]
+fn app_logs() -> Vec<app_log::LogEntry> {
+    app_log::entries()
+}
+
+/// Forget the recorded events.
+#[tauri::command]
+fn app_log_clear() {
+    app_log::clear();
 }
 
 /// The saved settings, key to value.
@@ -432,10 +466,22 @@ async fn registry_login(
     handle: String,
     password: String,
     create: bool,
+    url: Option<String>,
 ) -> Result<String, String> {
-    registry::Registry::from_settings(&state)?
+    // A sign-in can point the app at a different shared server. Save
+    // it first: the registry client reads the setting on construction.
+    if let Some(url) = url.filter(|s| !s.trim().is_empty()) {
+        state.save_setting(registry::URL_KEY, url.trim())?;
+        app_log::push("info", "registry", format!("server set to {}", url.trim()));
+    }
+    let result = registry::Registry::from_settings(&state)?
         .login(&state, &handle, &password, create)
-        .await
+        .await;
+    match &result {
+        Ok(h) => app_log::push("info", "registry", format!("signed in as {h}")),
+        Err(e) => app_log::push("error", "registry", e.clone()),
+    }
+    result
 }
 
 /// Sign out: the session is revoked (best effort) and the stored
@@ -634,7 +680,11 @@ pub fn run() {
             let store = match Store::open(&db_path) {
                 Ok(store) => Some(Arc::new(store)),
                 Err(e) => {
-                    eprintln!("the local store at {} did not open: {e}", db_path.display());
+                    app_log::push(
+                        "error",
+                        "store",
+                        format!("the local store at {} did not open: {e}", db_path.display()),
+                    );
                     None
                 }
             };
@@ -711,6 +761,8 @@ pub fn run() {
             remember_job,
             load_settings,
             save_setting,
+            app_logs,
+            app_log_clear,
             is_autostart,
             set_autostart,
             begin_pairing,

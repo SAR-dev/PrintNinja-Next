@@ -368,6 +368,20 @@ export interface Publication {
   publishedAt: number;
 }
 
+/** One event from the app's own log (Diagnostics tab). */
+export interface AppLogEntry {
+  at_ms: number;
+  level: string;
+  target: string;
+  message: string;
+}
+
+/** The app's recent events, newest first. */
+export const appLogs = () => invoke<AppLogEntry[]>("app_logs");
+
+/** Forget the recorded events. */
+export const appLogClear = () => invoke<void>("app_log_clear");
+
 /** The registry server the app talks to, as the app resolves it. */
 export const registryUrl = () => invoke<string>("registry_url");
 

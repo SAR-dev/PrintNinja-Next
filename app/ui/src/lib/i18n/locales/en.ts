@@ -204,6 +204,14 @@ const en = {
     tab_network: "Network",
     tab_data: "Data",
     tab_registry: "Registry",
+    tab_diagnostics: "Diagnostics",
+    logs_title: "Application log",
+    logs_note:
+      "Recent app events, newest first. Nothing leaves this computer unless you download it.",
+    logs_refresh: "Refresh",
+    logs_download: "Download",
+    logs_clear: "Clear",
+    logs_empty: "No events recorded yet.",
     appearance: "Appearance",
     appearance_note:
       "The theme of the whole app. It comes back the same on the next start.",

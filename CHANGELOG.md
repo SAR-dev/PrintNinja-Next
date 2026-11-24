@@ -10,6 +10,8 @@ Unreleased.
 
 ### Added
 
+- App: an in-memory application log with a Diagnostics tab in Settings
+  to view, refresh, download and clear recent events
 - App: a PC top-bar search field that filters the Templates list (no
   command palette), and a ⋯ menu on each recent job (M4: reprint,
   retry, open template, copy reason)
@@ -697,6 +699,8 @@ Unreleased.
 
 ### Fixed
 
+- App: the PC Settings screen shows only the selected tab again; the
+  phone still shows all groups in one list
 - Sub-screens have a real back affordance: an arrow button before the page
   title on the print, editor and settings screens, replacing the text link
   that sat inside the title row; the scene editor's undo and redo are

@@ -207,6 +207,14 @@ const ja: EnStrings = {
     tab_network: "ネットワーク",
     tab_data: "データ",
     tab_registry: "レジストリ",
+    tab_diagnostics: "診断",
+    logs_title: "アプリのログ",
+    logs_note:
+      "最近のアプリの出来事です。新しいものから表示します。ダウンロードしない限りこのコンピュータの外には出ません。",
+    logs_refresh: "更新",
+    logs_download: "ダウンロード",
+    logs_clear: "クリア",
+    logs_empty: "まだログはありません。",
     appearance: "外観",
     appearance_note:
       "アプリ全体のテーマです。次に起動したときも同じに戻ります。",
