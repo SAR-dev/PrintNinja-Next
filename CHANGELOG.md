@@ -649,6 +649,9 @@ Unreleased.
 
 ### Fixed
 
+- Phone template cards: the title and the action buttons no longer share
+  one clipped line — below the desktop width the header stacks and the
+  actions wrap, so Print and Delete are always fully reachable
 - The print screen's result card no longer shows the raw error string
   when a print job fails before the pipeline reports — the failure is
   wrapped in the locale's plain words ("The print could not be run: …"),

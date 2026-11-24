@@ -223,9 +223,9 @@ function TemplatesScreen({
           );
           return (
             <Card key={tpl.id}>
-              <CardHeader className="flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
+              <CardHeader className="flex-row items-center justify-between max-md:flex-col max-md:items-stretch">
+                <div className="min-w-0">
+                  <CardTitle className="flex flex-wrap items-center gap-2">
                     {tpl.name}
                     <Badge
                       variant={tpl.track === "scene" ? "default" : "secondary"}
@@ -240,7 +240,7 @@ function TemplatesScreen({
                   </CardTitle>
                   <CardDescription>{tpl.description}</CardDescription>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap justify-end gap-2 max-md:justify-start">
                   {published ? (
                     <Button
                       variant="ghost"
