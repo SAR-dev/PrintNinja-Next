@@ -251,8 +251,8 @@ renders or prints: it stores, validates and serves.
   `db reset` rebuilds from scratch — terminal commands, the way you would
   expect from any other project.
 - **Self-hostable**: `server/Dockerfile` bakes the binary and migrations
-  into an image with the database on a `/data` volume. CI pushes it to
-  **GHCR** on every push to `main` (`server-publish`), and
+  into an image with the database on a `/data` volume. CI publishes it to
+  **GHCR** on `v*` release tags (`server-publish-release`), and
   [`REGISTRY.md`](REGISTRY.md) is the user guide for running your own.
 
 ## The test pyramid
@@ -292,8 +292,9 @@ renders or prints: it stores, validates and serves.
   `chromium-render` (a real system Chrome proves the document track; the
   Docker container deliberately has no browser), a `rust-check` gate job,
   and the registry jobs `server-check`, `server-image`, `server-e2e`
-  (the full HTTP lifecycle via `server/e2e.py` against the container) and
-  `server-publish` (GHCR, main pushes only).
+  (the full HTTP lifecycle via `server/e2e.py` against the container);
+  the registry image is published to GHCR only on release tags
+  (`server-publish-release`).
 
 ## Platforms
 

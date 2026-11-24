@@ -12,7 +12,6 @@
 #   server-check      registry (pn-server) fmt + clippy + tests
 #   server-image      the registry Docker image builds
 #   server-e2e        the registry image through a full HTTP lifecycle
-#   server-publish    push the registry image to GHCR (push to main)
 #
 # Tag jobs (run on pushed v* tags):
 #   version-check         tag is vX.Y.Z, on main, all manifests match
@@ -20,7 +19,9 @@
 #   linux-build           deb + AppImage (ubuntu-24.04)
 #   android-build         release APK + AAB (ubuntu, shared keystore)
 #   github-release        draft GitHub release with the installers
-#   server-publish-release registry image tagged with the release version
+#   server-publish-release registry image pushed to GHCR, tagged with the
+#                          release version (plus latest) — the only place
+#                          the registry image is published
 #
 #   rust-check        gate job: passes only when all Rust jobs passed
 #
@@ -317,7 +318,7 @@ jobs:
       - run: cargo test -p pn-server
 
   # The deployable package (server/Dockerfile): prove the image builds.
-  # The same image server-e2e runs and server-publish pushes.
+  # The same image server-e2e runs and server-publish-release pushes.
   server-image:
     runs-on: ubuntu-latest
     needs: server-check
@@ -362,32 +363,6 @@ jobs:
         run: |
           docker rm -f printninja-e2e || true
           docker volume rm printninja-e2e-data || true
-
-  # Every push to main publishes the registry image to GHCR, so a
-  # deployment is one pull away. Tagged by commit sha and latest; the
-  # version tag arrives with the release flow (plan phase 10).
-  server-publish:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    needs: [server-image, server-e2e]
-    permissions:
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build, tag and push
-        run: |
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/printninja-server"
-          TAG="sha-${GITHUB_SHA::7}"
-          docker build -f server/Dockerfile \
-            --provenance=false \
-            -t "$IMAGE:latest" -t "$IMAGE:$TAG" .
-          docker push "$IMAGE:latest"
-          docker push "$IMAGE:$TAG"
 
   # Tag builds must match the version in every manifest, otherwise the
   # artifacts get published under the wrong version. Runs for every

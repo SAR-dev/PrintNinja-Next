@@ -603,6 +603,10 @@ Unreleased.
 
 ### Changed
 
+- CI: the registry image is published to GHCR only on `v*` release tags
+  (`server-publish-release`) — the `server-publish` job that pushed
+  `latest` and a `sha-<short>` tag on every push to `main` is removed,
+  so a merge no longer publishes a package
 - Docs: the scene editor and the frame element are now written up in
   `docs/FEATURES.md`, `docs/ARCHITECTURE.md` (a new "The scene format"
   section: the element types, the frame's four-level nesting, its
