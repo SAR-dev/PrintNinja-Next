@@ -649,6 +649,9 @@ Unreleased.
 
 ### Fixed
 
+- Phone tab strips: a stacked (non-segmented) tab row now sizes to its
+  triggers — the fixed strip height squeezed three stacked tabs into a
+  one-tab-tall box, so on a phone only the active tab was visible
 - Phone template cards: the title and the action buttons no longer share
   one clipped line — below the desktop width the header stacks and the
   actions wrap, so Print and Delete are always fully reachable
