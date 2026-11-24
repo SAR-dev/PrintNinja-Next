@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Segmented } from "@/components/ui/segmented";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { setLanguage } from "@/lib/i18n";
@@ -149,7 +150,7 @@ export function SettingsScreen() {
       )}
 
       <Tabs defaultValue="general">
-        <TabsList className="flex-wrap">
+        <TabsList className="flex-wrap max-md:hidden">
           <TabsTrigger value="general">{t("settings.tab_general")}</TabsTrigger>
           <TabsTrigger value="network">{t("settings.tab_network")}</TabsTrigger>
           <TabsTrigger value="data">{t("settings.tab_data")}</TabsTrigger>
@@ -158,25 +159,29 @@ export function SettingsScreen() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="flex flex-col gap-6">
+        <TabsContent
+          value="general"
+          forceMount
+          className="flex flex-col gap-6 max-md:block"
+        >
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+            {t("settings.tab_general")}
+          </h2>
           <Card>
             <CardHeader>
               <CardTitle>{t("settings.appearance")}</CardTitle>
               <CardDescription>{t("settings.appearance_note")}</CardDescription>
             </CardHeader>
-            <CardContent className="flex gap-2">
-              <Button
-                variant={theme === "light" ? "default" : "outline"}
-                onClick={() => pickTheme("light")}
-              >
-                {t("settings.light")}
-              </Button>
-              <Button
-                variant={theme === "dark" ? "default" : "outline"}
-                onClick={() => pickTheme("dark")}
-              >
-                {t("settings.dark")}
-              </Button>
+            <CardContent>
+              <Segmented
+                label={t("settings.appearance")}
+                value={theme}
+                onChange={pickTheme}
+                options={[
+                  { value: "light", label: t("settings.light") },
+                  { value: "dark", label: t("settings.dark") },
+                ]}
+              />
             </CardContent>
           </Card>
 
@@ -185,19 +190,16 @@ export function SettingsScreen() {
               <CardTitle>{t("settings.language")}</CardTitle>
               <CardDescription>{t("settings.language_note")}</CardDescription>
             </CardHeader>
-            <CardContent className="flex gap-2">
-              <Button
-                variant={i18n.language === "en" ? "default" : "outline"}
-                onClick={() => setLanguage("en")}
-              >
-                {t("settings.language_english")}
-              </Button>
-              <Button
-                variant={i18n.language === "ja" ? "default" : "outline"}
-                onClick={() => setLanguage("ja")}
-              >
-                {t("settings.language_japanese")}
-              </Button>
+            <CardContent>
+              <Segmented
+                label={t("settings.language")}
+                value={i18n.language.startsWith("ja") ? "ja" : "en"}
+                onChange={(v) => setLanguage(v)}
+                options={[
+                  { value: "en", label: t("settings.language_english") },
+                  { value: "ja", label: t("settings.language_japanese") },
+                ]}
+              />
             </CardContent>
           </Card>
 
@@ -219,7 +221,14 @@ export function SettingsScreen() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="network" className="flex flex-col gap-6">
+        <TabsContent
+          value="network"
+          forceMount
+          className="flex flex-col gap-6 max-md:block"
+        >
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+            {t("settings.tab_network")}
+          </h2>
           <Card>
             <CardHeader>
               <CardTitle>{t("settings.network")}</CardTitle>
@@ -287,7 +296,14 @@ export function SettingsScreen() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="data" className="flex flex-col gap-6">
+        <TabsContent
+          value="data"
+          forceMount
+          className="flex flex-col gap-6 max-md:block"
+        >
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+            {t("settings.tab_data")}
+          </h2>
           <Card>
             <CardHeader>
               <CardTitle>{t("settings.data")}</CardTitle>
@@ -313,7 +329,14 @@ export function SettingsScreen() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="registry" className="flex flex-col gap-6">
+        <TabsContent
+          value="registry"
+          forceMount
+          className="flex flex-col gap-6 max-md:block"
+        >
+          <h2 className="hidden text-caption font-semibold tracking-wide text-muted-foreground uppercase max-md:block">
+            {t("settings.tab_registry")}
+          </h2>
           <Card>
             <CardHeader>
               <CardTitle>{t("settings.registry")}</CardTitle>

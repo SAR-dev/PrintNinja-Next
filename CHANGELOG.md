@@ -608,6 +608,9 @@ Unreleased.
 
 ### Changed
 
+- App: the phone's Settings is one grouped list under headings (no
+  tab strip), and theme and language use a selected-state segmented
+  control instead of pairs of buttons
 - App: on the phone, selecting an editor element brings the canvas
   back into view and opens its properties as a bottom sheet; the add
   actions are an icon toolbar (as on the PC)
