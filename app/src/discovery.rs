@@ -201,17 +201,14 @@ fn service_info_to_printer(info: &ServiceInfo, kind: &str) -> Option<DiscoveredP
     })
 }
 
-/// The record's address to send to: the first private one, else the
-/// first, else none (the caller falls back to the hostname).
+/// The record's address to send to: the first private one, else none
+/// (the caller falls back to the hostname — a record that advertises
+/// only public addresses is reached by its mDNS name, not by that IP).
 fn pick_lan_address(info: &ServiceInfo) -> Option<String> {
-    let addrs = info.get_addresses();
-    let first = addrs.iter().next()?;
-    for addr in addrs.iter() {
-        if is_lan_host(&addr.to_string()) {
-            return Some(addr.to_string());
-        }
-    }
-    Some(first.to_string())
+    info.get_addresses()
+        .iter()
+        .find(|addr| is_lan_host(&addr.to_string()))
+        .map(|addr| addr.to_string())
 }
 
 /// Whether `host` is a loopback, link-local or private address — the
@@ -488,9 +485,11 @@ mod tests {
         )
         .expect("a valid service record");
         // The record's only address is public: the printer keeps its
-        // hostname, and the scan's filter drops it there.
+        // mDNS hostname (trailing dot trimmed), and a name always
+        // passes the scan's LAN filter — the advertisement came over
+        // the LAN, and the name is how the printer is reached.
         let p = service_info_to_printer(&info, "ipp").expect("a printer");
-        assert_eq!(p.host, "public.local.");
+        assert_eq!(p.host, "public.local");
         assert!(is_lan_host(&p.host));
     }
 

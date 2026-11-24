@@ -568,3 +568,9 @@ Unreleased.
   items sit indented under it (previously in a panel inside the group's
   properties) — and the selection is tracked by element path instead
   of container+index, the groundwork for nested designs
+
+### Fixed
+
+- Network scan: a discovered service that advertises only public IP
+  addresses is now kept by its mDNS hostname — the name it is reachable
+  by on the LAN — instead of being handed one of those public IPs
