@@ -41,6 +41,8 @@ const en = {
     skip: "Skip to content",
     templates: "Templates",
     jobs: "Jobs",
+    group_workspace: "Workspace",
+    group_resources: "Resources",
     printers: "Printers",
     community: "Community",
     settings: "Settings",

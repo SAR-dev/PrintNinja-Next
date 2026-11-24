@@ -44,6 +44,8 @@ const ja: EnStrings = {
     skip: "コンテンツへスキップ",
     templates: "テンプレート",
     jobs: "ジョブ",
+    group_workspace: "ワークスペース",
+    group_resources: "リソース",
     printers: "プリンター",
     community: "コミュニティ",
     settings: "設定",

@@ -603,6 +603,9 @@ Unreleased.
 
 ### Changed
 
+- App: the PC sidebar groups Templates/Jobs under Workspace and
+  Printers/Community under Resources, shows job and saved-template
+  counts, and pins Settings below the groups next to Collapse
 - App: the top bar's registry status chip, Sync and Sign in/out buttons
   and the update badge are one account menu — a status dot and handle
   in the trigger, with Sync, Sign in/out and the release link inside

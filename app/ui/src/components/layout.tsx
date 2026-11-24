@@ -10,11 +10,64 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ChevronRight, Printer } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { getAppVersion } from "@/lib/appUpdate";
-import { NAV_ITEMS, type NavKey } from "@/lib/nav";
+import { NAV_ITEMS, type NavItem, type NavKey } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { BottomNav } from "./bottom-nav";
 
 const SIDEBAR_KEY = "printninja-sidebar-collapsed";
+
+/** PC sidebar groups. Settings is not a group: it is pinned below them. */
+const SIDEBAR_GROUPS: { labelKey: string; keys: NavKey[] }[] = [
+  { labelKey: "nav.group_workspace", keys: ["templates", "jobs"] },
+  { labelKey: "nav.group_resources", keys: ["printers", "community"] },
+];
+
+/** One sidebar row: icon, label and an optional count (jobs, saved). */
+function SidebarButton({
+  item,
+  active,
+  collapsed,
+  count,
+  onClick,
+}: {
+  item: NavItem;
+  active: boolean;
+  collapsed: boolean;
+  count?: number;
+  onClick: () => void;
+}) {
+  const { t } = useTranslation();
+  const Icon = item.icon;
+  const label = t(item.labelKey);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      title={collapsed ? label : undefined}
+      className={cn(
+        "relative flex h-control w-full items-center gap-3 rounded-md px-2.5 text-sm transition-colors",
+        collapsed && "justify-center px-0",
+        active
+          ? "bg-accent font-medium text-accent-foreground"
+          : "text-foreground/80 hover:bg-muted hover:text-foreground",
+      )}
+    >
+      <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+      {!collapsed && <span className="truncate">{label}</span>}
+      {count != null && count > 0 && (
+        <span
+          className={cn(
+            "flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1 text-caption tabular-nums text-muted-foreground",
+            collapsed && "absolute top-0 right-0 h-4 min-w-4 px-0.5",
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
 
 interface LayoutProps {
   /** The nav key of the current view (contextual views keep their
@@ -23,6 +76,8 @@ interface LayoutProps {
   onNavigate: (key: NavKey) => void;
   /** The top bar's right side (the account menu). */
   topbar?: ReactNode;
+  /** Small counts on the PC sidebar rows (jobs, saved community). */
+  counts?: Partial<Record<NavKey, number>>;
   /** True on contextual screens (print, edit): the phone's bottom
    * tab bar is off, the parent's destination stays highlighted. */
   contextual?: boolean;
@@ -33,6 +88,7 @@ export function Layout({
   active,
   onNavigate,
   topbar,
+  counts,
   contextual = false,
   children,
 }: LayoutProps) {
@@ -45,6 +101,7 @@ export function Layout({
     }
   });
   const [version, setVersion] = useState("");
+  const settings = NAV_ITEMS.find((item) => item.key === "settings")!;
 
   useEffect(() => {
     let alive = true;
@@ -103,32 +160,38 @@ export function Layout({
             aria-label={t("nav.aria")}
             className="flex-1 space-y-1 overflow-y-auto p-2"
           >
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = active === item.key;
-              const label = t(item.labelKey);
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => onNavigate(item.key)}
-                  aria-current={isActive ? "page" : undefined}
-                  title={collapsed ? label : undefined}
-                  className={cn(
-                    "flex h-control w-full items-center gap-3 rounded-md px-2.5 text-sm transition-colors",
-                    collapsed && "justify-center px-0",
-                    isActive
-                      ? "bg-accent font-medium text-accent-foreground"
-                      : "text-foreground/80 hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
-                  {!collapsed && <span className="truncate">{label}</span>}
-                </button>
-              );
-            })}
+            {SIDEBAR_GROUPS.map((group, i) => (
+              <div key={group.labelKey} className="space-y-1">
+                {collapsed ? (
+                  i > 0 && <div className="mx-1 border-t" />
+                ) : (
+                  <p className="px-2.5 pt-2 text-caption font-medium tracking-wide text-muted-foreground uppercase">
+                    {t(group.labelKey)}
+                  </p>
+                )}
+                {group.keys.map((key) => {
+                  const item = NAV_ITEMS.find((n) => n.key === key)!;
+                  return (
+                    <SidebarButton
+                      key={key}
+                      item={item}
+                      active={active === key}
+                      collapsed={collapsed}
+                      count={counts?.[key]}
+                      onClick={() => onNavigate(key)}
+                    />
+                  );
+                })}
+              </div>
+            ))}
           </nav>
-          <div className="border-t p-2">
+          <div className="space-y-1 border-t p-2">
+            <SidebarButton
+              item={settings}
+              active={active === "settings"}
+              collapsed={collapsed}
+              onClick={() => onNavigate("settings")}
+            />
             <button
               type="button"
               onClick={() => setCollapsed((c) => !c)}

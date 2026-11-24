@@ -442,6 +442,10 @@ function App() {
     <Layout
       active={active}
       contextual={contextual}
+      counts={{
+        jobs: recent.length,
+        community: community.filter((row) => row.saved).length,
+      }}
       onNavigate={(key) => setView({ name: key } as View)}
       topbar={
         <AccountMenu

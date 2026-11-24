@@ -365,9 +365,8 @@ async function navigate(page, view, l) {
     case "list":
       break;
     case "jobs":
-      await page
-        .getByRole("button", { name: l.jobs, exact: true })
-        .click();
+      // The sidebar button carries a job count after its name.
+      await page.getByRole("button", { name: l.jobs }).click();
       await page
         .getByRole("heading", { name: l.recentTitle, level: 1 })
         .waitFor();
@@ -381,17 +380,14 @@ async function navigate(page, view, l) {
         .waitFor();
       break;
     case "community":
-      await page
-        .getByRole("button", { name: l.tabCommunity, exact: true })
-        .click();
+      // The sidebar button carries the saved-template count after its name.
+      await page.getByRole("button", { name: l.tabCommunity }).click();
       await page
         .getByRole("heading", { name: l.tabCommunity, level: 1 })
         .waitFor();
       break;
     case "saved":
-      await page
-        .getByRole("button", { name: l.tabCommunity, exact: true })
-        .click();
+      await page.getByRole("button", { name: l.tabCommunity }).click();
       await page
         .getByRole("heading", { name: l.tabCommunity, level: 1 })
         .waitFor();
