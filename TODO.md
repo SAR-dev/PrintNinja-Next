@@ -14,6 +14,9 @@ spec for the items below.
 
 ## Done
 
+- [x] D5 — editor split into components, element rows with icons +
+      ⋯ M8 (reorder/delete), add-element icon toolbar, header inline
+      name + unsaved dot + ⋯ M7 (size, save) (commit 42a9af4)
 - [x] D2 — template card: Print primary, icon Edit, ⋯ menu (M2:
       publish/unpublish, duplicate, delete; right-click on PC) and
       new-template split/FAB (M3) (commit 88685b7)
@@ -43,9 +46,6 @@ spec for the items below.
 
 ## Remaining findings, in order
 
-- [ ] D5 — editor: split `editor-screen.tsx`, element rows with icons +
-      ⋯ M8 (reorder up/down, delete), add-element icon toolbar, header
-      inline name + unsaved dot + ⋯ M7 (template size, save)
 - [ ] D6 — print screen (PC): sticky summary, distinct Preview (`Eye`)
       and Print (`Printer`) buttons, M9 menu (edit template, save as
       default printer, clear data)
