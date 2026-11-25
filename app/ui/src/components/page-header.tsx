@@ -43,12 +43,26 @@ export function PageHeader({
     return () => scroller.removeEventListener("scroll", onScroll);
   }, []);
 
+  const titleClass = cn(
+    "min-w-0 truncate text-display font-semibold tracking-[-0.02em] max-md:text-2xl max-md:font-bold max-md:leading-[1.1] max-md:tracking-[-0.03em]",
+    scrolled && "md:text-title",
+    titleControl && "sr-only",
+  );
+  const descriptionNode = description !== undefined && !scrolled && (
+    <p className="hidden max-w-prose text-sm text-muted-foreground md:block">
+      {description}
+    </p>
+  );
+
   return (
     <header
       ref={rootRef}
       className={cn(
-        "sticky top-0 z-20 -mx-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-4 transition-[padding] duration-150 max-md:gap-y-3.5 max-md:border-b-0 max-md:pb-0 md:-mx-6 md:flex-row md:flex-nowrap md:items-end md:justify-between md:gap-3 md:px-6",
-        scrolled ? "py-2" : "pb-3 pt-0 md:pb-4",
+        // Sticky over the scrolling sheets: opaque so nothing shows through,
+        // hairline only once content is actually passing underneath.
+        "sticky top-0 z-20 -mx-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background px-4 transition-[padding,border-color] duration-150 max-md:gap-y-3.5 max-md:border-b-0 max-md:pb-0 md:-mx-6 md:flex-row md:flex-nowrap md:items-center md:justify-between md:gap-4 md:px-6",
+        scrolled ? "py-2" : "pb-4 pt-1 md:pb-3",
+        !scrolled && "border-transparent",
         className,
       )}
     >
@@ -61,19 +75,17 @@ export function PageHeader({
           className="-ml-2 shrink-0"
         />
       )}
-      <h1
-        className={cn(
-          "min-w-0 truncate text-xl font-semibold leading-tight tracking-tight max-md:text-2xl max-md:font-bold max-md:leading-[1.1] max-md:tracking-[-0.03em]",
-          titleControl && "sr-only",
-        )}
-      >
-        {title}
-      </h1>
-      {titleControl}
-      {description !== undefined && !scrolled && (
-        <p className="hidden max-w-prose text-sm text-muted-foreground md:block">
-          {description}
-        </p>
+      {titleControl ? (
+        <>
+          <h1 className={titleClass}>{title}</h1>
+          {titleControl}
+          {descriptionNode}
+        </>
+      ) : (
+        <div className="flex min-w-0 flex-col gap-0.5 md:flex-1">
+          <h1 className={titleClass}>{title}</h1>
+          {descriptionNode}
+        </div>
       )}
       {children !== undefined && children !== null && (
         <div

@@ -20,6 +20,7 @@ import {
   Ellipsis,
   Eye,
   EyeOff,
+  FileText,
   Frame,
   Globe,
   Image as ImageIcon,
@@ -32,6 +33,7 @@ import {
   Minus,
   QrCode,
   Square,
+  Tag,
   Pencil,
   Plus,
   Printer,
@@ -83,6 +85,9 @@ export const icons = {
   partially_printed: TriangleAlert,
   failed: XCircle,
   wrong_mode_suspected: CircleHelp,
+  // Template tracks: a scene is a label, a document is a page
+  track_scene: Tag,
+  track_document: FileText,
   // Actions
   close: X,
   search: Search,

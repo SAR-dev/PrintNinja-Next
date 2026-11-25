@@ -85,7 +85,7 @@ export function JobsScreen({
             return (
               <div
                 key={j.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3"
+                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3.5 shadow-card max-md:rounded-[1.25rem] max-md:border-transparent"
               >
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate text-body font-medium">

@@ -46,19 +46,23 @@ function SidebarButton({
       aria-current={active ? "page" : undefined}
       title={collapsed ? label : undefined}
       className={cn(
-        "relative flex h-control w-full items-center gap-3 rounded-md px-2.5 text-sm transition-colors",
+        "relative flex h-control w-full items-center gap-3 rounded-lg px-2.5 text-sm transition-colors",
         collapsed && "justify-center px-0",
         active
-          ? "bg-accent font-medium text-accent-foreground"
-          : "text-foreground/80 hover:bg-muted hover:text-foreground",
+          ? // The open sheet: white paper on the desk, with a brand tick.
+            "bg-card font-medium text-foreground shadow-card before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-primary"
+          : "text-foreground/80 hover:bg-foreground/[0.06] hover:text-foreground",
       )}
     >
-      <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+      <Icon
+        aria-hidden="true"
+        className={cn("h-4 w-4 shrink-0", active && "text-primary")}
+      />
       {!collapsed && <span className="truncate">{label}</span>}
       {count != null && count > 0 && (
         <span
           className={cn(
-            "flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1 text-caption tabular-nums text-muted-foreground",
+            "ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-foreground/[0.07] px-1.5 text-caption tabular-nums text-muted-foreground",
             collapsed && "absolute top-0 right-0 h-4 min-w-4 px-0.5",
           )}
         >
@@ -130,12 +134,12 @@ export function Layout({
         {t("nav.skip")}
       </a>
 
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b bg-card px-3 md:px-4">
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border/70 bg-chrome px-3 md:px-4">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-control">
             <icons.brand aria-hidden="true" className="h-4 w-4" />
           </span>
-          <span className="truncate text-base font-semibold tracking-tight">
+          <span className="truncate text-base font-semibold tracking-[-0.02em]">
             {t("app.title")}
           </span>
           {version !== "" && (
@@ -152,7 +156,7 @@ export function Layout({
       <div className="flex min-h-0 flex-1">
         <aside
           className={cn(
-            "hidden shrink-0 flex-col border-r bg-card transition-[width] duration-150 md:flex",
+            "hidden shrink-0 flex-col border-r border-border/70 bg-chrome transition-[width] duration-150 md:flex",
             collapsed ? "w-14" : "w-56",
           )}
         >
@@ -165,7 +169,7 @@ export function Layout({
                 {collapsed ? (
                   i > 0 && <div className="mx-1 border-t" />
                 ) : (
-                  <p className="px-2.5 pt-2 text-caption font-medium tracking-wide text-muted-foreground uppercase">
+                  <p className="px-2.5 pb-0.5 pt-3 text-caption font-semibold text-muted-foreground">
                     {t(group.labelKey)}
                   </p>
                 )}
@@ -185,7 +189,7 @@ export function Layout({
               </div>
             ))}
           </nav>
-          <div className="space-y-1 border-t p-2">
+          <div className="space-y-1 border-t border-border/70 p-2">
             <SidebarButton
               item={settings}
               active={active === "settings"}
@@ -197,7 +201,7 @@ export function Layout({
               onClick={() => setCollapsed((c) => !c)}
               aria-label={collapsed ? t("nav.expand") : t("nav.collapse")}
               className={cn(
-                "flex h-8 w-full items-center gap-3 rounded-md px-2.5 text-sm text-foreground/80 transition-colors hover:bg-muted hover:text-foreground",
+                "flex h-8 w-full items-center gap-3 rounded-lg px-2.5 text-sm text-foreground/80 transition-colors hover:bg-foreground/[0.06] hover:text-foreground",
                 collapsed && "justify-center px-0",
               )}
             >

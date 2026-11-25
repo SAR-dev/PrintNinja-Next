@@ -58,7 +58,7 @@ const TabsList = React.forwardRef<
         // max-w-full + overflow-x-auto: on a phone a long tab row scrolls sideways
         // instead of being clipped by the screen edge. On coarse pointers the strip
         // grows so its 44px triggers are not clipped (h-10 still wins on fine pointers).
-        "inline-flex h-10 max-w-full items-center justify-start overflow-x-auto rounded-md bg-muted p-1 text-muted-foreground [@media(pointer:coarse)]:min-h-[3.25rem] sm:justify-center",
+        "inline-flex h-10 max-w-full items-center justify-start overflow-x-auto rounded-lg bg-muted p-1 text-muted-foreground [@media(pointer:coarse)]:min-h-[3.25rem] sm:justify-center",
         phoneStacked &&
           // h-auto on max-md: a stacked column sizes to its triggers — the
           // fixed h-10 box used to clip the lower tabs on a phone.
@@ -80,7 +80,7 @@ const TabsTrigger = React.forwardRef<
     data-slot="tabs-trigger"
     className={cn(
       // Touch targets: 44px tall on coarse pointers, matching Button/Input/Select.
-      "inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all [@media(pointer:coarse)]:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm",
+      "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium ring-offset-background transition-all [@media(pointer:coarse)]:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-card",
       className,
     )}
     {...props}

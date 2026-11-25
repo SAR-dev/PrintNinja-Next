@@ -51,9 +51,9 @@ export function AccountMenu({
         <button
           type="button"
           aria-label={`${t("registry.account_menu")} — ${state}`}
-          className="flex h-control items-center gap-2 rounded-md px-1.5 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex h-control items-center gap-2 rounded-lg px-1.5 text-sm transition-colors hover:bg-foreground/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-caption font-semibold text-accent-foreground">
+          <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-card text-caption font-semibold text-accent-foreground shadow-card">
             {signedIn ? (
               handle.slice(0, 1).toUpperCase()
             ) : (

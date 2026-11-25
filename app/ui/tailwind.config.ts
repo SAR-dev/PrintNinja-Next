@@ -66,6 +66,9 @@ const config: Config = {
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
+        // The desk: top bar and sidebar sit on this, one step off the work
+        // area, so the cards on `background` read as sheets of paper.
+        chrome: "hsl(var(--chrome))",
         foreground: "hsl(var(--foreground))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
@@ -95,6 +98,16 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+      },
+      // Elevation lives in CSS variables (index.css) so dark mode can swap
+      // shadows for borders. `control` is the raised look of a primary
+      // button: a 1px top highlight plus a brand-tinted drop.
+      boxShadow: {
+        card: "var(--shadow-card)",
+        pop: "var(--shadow-pop)",
+        control:
+          "inset 0 1px 0 hsl(0 0% 100% / 0.16), 0 1px 2px hsl(var(--primary) / 0.35)",
+        field: "0 1px 1px hsl(var(--foreground) / 0.04)",
       },
       borderRadius: {
         lg: "var(--radius)",

@@ -8,6 +8,12 @@ const pkg = require("./package.json") as { version: string };
 
 export default defineConfig({
   plugins: [react()],
+  // Outside the tree `tauri dev` watches: while the dep optimizer
+  // rebuilds its cache it writes temp files into node_modules/.vite,
+  // and every one of those made the dev watcher kill and restart the
+  // app in a loop (with the single-instance plugin, the restart
+  // races left no window at all).
+  cacheDir: path.resolve(__dirname, "../../.vite-cache"),
   // Build-baked app version for web mode, where Tauri's getVersion() is
   // unavailable. Single source of truth: package.json.
   define: {

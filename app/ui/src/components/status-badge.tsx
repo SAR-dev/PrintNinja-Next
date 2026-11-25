@@ -97,7 +97,7 @@ function BadgeBase({
     <span
       data-status={data}
       className={cn(
-        "inline-flex items-center gap-1 whitespace-nowrap rounded-sm px-2 py-0.5 text-caption font-medium",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-0.5 text-caption font-medium",
         TONE_CLASS[tone],
         className,
       )}
@@ -161,7 +161,7 @@ export function JobResultBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center whitespace-nowrap rounded-sm bg-neutral-soft px-2 py-0.5 text-caption font-medium text-neutral",
+        "inline-flex items-center whitespace-nowrap rounded-full bg-neutral-soft px-2.5 py-0.5 text-caption font-medium text-neutral",
         className,
       )}
     >

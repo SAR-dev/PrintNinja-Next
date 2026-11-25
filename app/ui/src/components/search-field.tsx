@@ -45,7 +45,7 @@ export function SearchField({
         placeholder={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-control w-48 rounded-md border border-input bg-background pr-2 pl-8 text-sm outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring lg:w-64"
+        className="h-control w-48 rounded-lg border border-input bg-card pr-2 pl-8 text-sm shadow-field outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring lg:w-64"
       />
     </div>
   );

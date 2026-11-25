@@ -20,14 +20,14 @@ const SheetContent = React.forwardRef<
     <SheetPortal>
       <DialogPrimitive.Overlay
         data-slot="overlay"
-        className="fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 max-md:bg-[hsl(var(--foreground)/0.45)]"
+        className="fixed inset-0 z-50 bg-[hsl(var(--scrim)/0.55)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 max-md:bg-[hsl(var(--foreground)/0.45)]"
       />
       <DialogPrimitive.Content
         ref={ref}
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          "fixed z-50 gap-4 bg-background p-6 shadow-lg",
+          "fixed z-50 gap-4 bg-background p-6 shadow-pop",
           // top-[env(safe-area-inset-top)]: on edge-to-edge Android the webview
           // runs under the status bar / punch hole, so anchoring at top-0
           // clipped the sheet header and close button off screen.

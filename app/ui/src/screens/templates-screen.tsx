@@ -25,6 +25,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { NewTemplateButton } from "@/components/new-template-button";
 import { PageHeader } from "@/components/page-header";
 import { icons } from "@/lib/icons";
+import { cn } from "@/lib/utils";
 import type { AppTemplate } from "@/templates";
 
 interface CardProps {
@@ -50,6 +51,8 @@ function TemplateCard({
 }: CardProps) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const TrackIcon =
+    tpl.track === "scene" ? icons.track_scene : icons.track_document;
   const items: ActionItem[] = [
     published
       ? {
@@ -87,22 +90,40 @@ function TemplateCard({
         }
       }}
     >
-      <CardHeader className="flex-row items-center justify-between gap-3 max-md:flex-col max-md:items-stretch">
-        <div className="min-w-0">
-          <CardTitle className="flex flex-wrap items-center gap-2">
-            {tpl.name}
-            <Badge variant={tpl.track === "scene" ? "default" : "secondary"}>
-              {tpl.track === "scene"
-                ? t("app.track_scene")
-                : t("app.track_document")}
-            </Badge>
-            {published && (
-              <Badge variant="secondary">{t("app.published")}</Badge>
+      <CardHeader className="flex-row items-center justify-between gap-4 max-md:flex-col max-md:items-stretch">
+        <div className="flex min-w-0 items-center gap-3.5">
+          {/* The track as a glyph: a scene is a label, a document is a
+              page. The brand tint marks scenes, neutral marks documents;
+              the badge beside the name still spells it out in words. */}
+          <span
+            aria-hidden="true"
+            className={cn(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg",
+              tpl.track === "scene"
+                ? "bg-accent text-accent-foreground"
+                : "bg-secondary text-secondary-foreground",
             )}
-          </CardTitle>
-          <CardDescription>{tpl.description}</CardDescription>
+          >
+            <TrackIcon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <CardTitle className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              {tpl.name}
+              <Badge variant={tpl.track === "scene" ? "default" : "secondary"}>
+                {tpl.track === "scene"
+                  ? t("app.track_scene")
+                  : t("app.track_document")}
+              </Badge>
+              {published && (
+                <Badge variant="outline">{t("app.published")}</Badge>
+              )}
+            </CardTitle>
+            <CardDescription className="mt-1">
+              {tpl.description}
+            </CardDescription>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1.5">
           <IconButton
             icon="edit"
             label={t("app.edit")}
@@ -193,7 +214,7 @@ export function TemplatesScreen({
         </div>
       )}
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         {shown.map((tpl) => (
           <TemplateCard
             key={tpl.id}

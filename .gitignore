@@ -5,6 +5,7 @@ test-report/
 # Frontend
 node_modules/
 app/ui/dist/
+.vite-cache/
 
 # Env and local state
 .env

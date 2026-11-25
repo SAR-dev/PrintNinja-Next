@@ -8,6 +8,10 @@ Unreleased.
 
 ## Unreleased
 
+### Changed
+
+- UI refresh: a desk-and-paper surface system (new `chrome` token, card and pop-up shadows), a deeper ink-teal brand palette with a layered dark theme, soft pill badges, track icons on template rows, and a left-aligned page header. Defines the previously missing `--shadow-card` token.
+
 ## [2026.1124.0] - 2026-11-24
 
 ### Added

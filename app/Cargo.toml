@@ -9,7 +9,7 @@ name = "printninja_lib"
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [build-dependencies]
-tauri-build = "2"
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 # The local print API (plan phase 8): axum on the app's own tokio
@@ -34,7 +34,7 @@ mdns-sd = { workspace = true }
 uuid = { version = "1", features = ["v4"] }
 rand = "0.8"
 sha2 = "0.10"
-tauri = "2"
+tauri = { version = "2", features = [] }
 # printninja:// deep links (plan phase 8): the plugin delivers the
 # URL; single-instance forwards it to the running app when the OS
 # hands the link to a fresh process instead (the `deep-link` feature

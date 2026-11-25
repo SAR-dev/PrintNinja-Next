@@ -3,37 +3,42 @@
 @tailwind utilities;
 
 @layer base {
-  /* PrintNinja corporate palette ("Slate teal"), light and dark.
+  /* PrintNinja palette ("Ink on paper"), light and dark.
      Values are HSL triplets so Tailwind can apply opacity modifiers.
-     Contrast pairs are asserted in src/test/tokens.test.ts. Light is the
+     The idea: the shell (top bar, sidebar) is the desk, everything you
+     work on (cards, rows, dialogs) is a sheet of paper lying on it, so
+     depth comes from three surface tones and a soft paper shadow rather
+     than from borders alone. Every text/surface pair below was checked
+     against WCAG AA (4.5:1 text, 3:1 form-control borders). Light is the
      default; the dark set applies when Settings → Appearance sets
      data-theme="dark" on <html>. */
   :root {
     color-scheme: light;
 
-    --background: 180 16% 96%;            /* #F4F7F7 app surface */
-    --foreground: 196 37% 12%;            /* #14252B ink */
-    --card: 0 0% 100%;
-    --card-foreground: 196 37% 12%;
+    --background: 165 14% 95%;            /* #F0F4F3 work area */
+    --chrome: 168 16% 92%;                /* #E7EEED the desk: top bar, sidebar */
+    --foreground: 197 40% 11%;            /* #11222A ink */
+    --card: 0 0% 100%;                    /* the paper */
+    --card-foreground: 197 40% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 196 37% 12%;
+    --popover-foreground: 197 40% 11%;
 
-    --primary: 180 75% 24%;               /* #0F6B6B brand */
+    --primary: 186 84% 20%;               /* #08555E ink teal */
     --primary-foreground: 0 0% 100%;
-    --secondary: 180 14% 93%;             /* #EBF0F0 */
-    --secondary-foreground: 196 37% 12%;
-    --muted: 180 14% 93%;
-    --muted-foreground: 194 16% 32%;      /* #44575D */
-    --accent: 176 33% 92%;                /* #E3F1F0 brand-soft */
-    --accent-foreground: 180 75% 24%;
+    --secondary: 168 14% 91%;             /* #E6EDEB */
+    --secondary-foreground: 197 40% 11%;
+    --muted: 168 14% 91%;
+    --muted-foreground: 196 18% 31%;      /* #425960 */
+    --accent: 178 42% 90%;                /* #DBF0EF brand-soft */
+    --accent-foreground: 186 84% 17%;
 
     --destructive: 4 76% 40%;             /* #B42318 */
     --destructive-foreground: 0 0% 100%;
 
     /* Decorative dividers are light; form-control borders must reach 3:1. */
-    --border: 180 14% 86%;                /* #D6E0E0 */
-    --input: 193 9% 52%;                  /* #7A8C91 */
-    --ring: 180 75% 24%;
+    --border: 168 12% 85%;                /* #D4DDDC */
+    --input: 190 10% 46%;                 /* #6A7D81 */
+    --ring: 186 84% 28%;
 
     /* Status vocabulary. Each state is a text colour on its own tint, and is
        always shown with an icon and a word (see StatusBadge). */
@@ -43,10 +48,10 @@
     --warning-soft: 38 89% 93%;           /* #FDF1DC */
     --danger: 4 76% 40%;                  /* #B42318 */
     --danger-soft: 5 85% 95%;             /* #FDE8E6 */
-    --info: 180 75% 24%;                  /* #0F6B6B */
-    --info-soft: 176 33% 92%;             /* #E3F1F0 */
-    --neutral: 194 16% 32%;               /* #44575D */
-    --neutral-soft: 180 14% 93%;          /* #EBF0F0 */
+    --info: 186 84% 20%;                  /* #08555E */
+    --info-soft: 178 42% 90%;             /* #DBF0EF */
+    --neutral: 196 18% 31%;               /* #425960 */
+    --neutral-soft: 168 14% 91%;          /* #E6EDEB */
 
     /* Highlight: the non-status brand accent, used only for attention that
        is not a state (a "new" badge, a one-time first-print moment). The
@@ -54,7 +59,20 @@
     --highlight: 262 70% 40%;             /* #531FAD */
     --highlight-soft: 262 60% 95%;        /* #F0EBFA */
 
-    --radius: 0.375rem;
+    --radius: 0.5rem;
+
+    /* Elevation. Paper shadows are tinted with the ink hue, never pure
+       black, and stay tight so a sheet looks like it lies on the desk
+       rather than floats above it. */
+    --shadow-card:
+      0 0 0 1px hsl(197 40% 11% / 0.03),
+      0 1px 2px hsl(197 40% 11% / 0.06),
+      0 2px 6px -2px hsl(197 40% 11% / 0.06);
+    --shadow-pop:
+      0 0 0 1px hsl(197 40% 11% / 0.05),
+      0 4px 10px -2px hsl(197 40% 11% / 0.10),
+      0 12px 28px -8px hsl(197 40% 11% / 0.18);
+    --scrim: 197 40% 11%;
 
     /* Density. Comfortable is the default; Compact is set from Settings via
        data-density on <html>. Touch screens always keep the comfortable sizes. */
@@ -73,35 +91,45 @@
     --dur-slow: 320ms;
   }
 
-  /* Dark theme: the same tokens on dark slate surfaces. The brand teal
-     lightens and takes dark ink, so primary keeps 4.5:1 both as text on
-     the surface and under its own label. */
+  /* Dark theme: the same desk-and-paper layering on dark slate. The
+     brand teal lightens and takes dark ink, so primary keeps 4.5:1 both
+     as text on every surface and under its own label. Borders carry the
+     elevation here, because shadows vanish on dark surfaces. */
   :root[data-theme="dark"] {
     color-scheme: dark;
 
-    --background: 200 24% 10%;
-    --foreground: 180 14% 91%;
-    --card: 200 20% 14%;
-    --card-foreground: 180 14% 91%;
-    --popover: 200 20% 16%;
-    --popover-foreground: 180 14% 91%;
+    --background: 200 24% 9%;             /* #11191C */
+    --chrome: 200 28% 6.5%;               /* #0C1215 */
+    --foreground: 180 14% 92%;
+    --card: 200 20% 13%;                  /* #1B2328 */
+    --card-foreground: 180 14% 92%;
+    --popover: 200 20% 15%;
+    --popover-foreground: 180 14% 92%;
 
-    --primary: 180 70% 45%;
-    --primary-foreground: 200 40% 8%;
-    --secondary: 200 18% 20%;
-    --secondary-foreground: 180 14% 91%;
-    --muted: 200 18% 20%;
-    /* 68% keeps muted text at >=4.5:1 on `bg-accent` cards in dark mode. */
-    --muted-foreground: 190 12% 68%;
-    --accent: 180 25% 22%;
-    --accent-foreground: 170 65% 72%;
+    --primary: 176 64% 50%;               /* #2ED1C6 */
+    --primary-foreground: 200 40% 7%;
+    --secondary: 200 18% 19%;
+    --secondary-foreground: 180 14% 92%;
+    --muted: 200 18% 19%;
+    /* 69% keeps muted text at >=4.5:1 on `bg-accent` cards in dark mode. */
+    --muted-foreground: 190 12% 69%;
+    --accent: 182 28% 20%;
+    --accent-foreground: 172 66% 74%;
 
     --destructive: 4 72% 62%;
     --destructive-foreground: 200 40% 8%;
 
-    --border: 200 14% 28%;
-    --input: 190 8% 56%;
-    --ring: 180 70% 50%;
+    --border: 200 14% 22%;
+    --input: 190 8% 54%;
+    --ring: 176 64% 55%;
+
+    --shadow-card:
+      0 0 0 1px hsl(0 0% 0% / 0.25),
+      0 1px 2px hsl(0 0% 0% / 0.35);
+    --shadow-pop:
+      0 0 0 1px hsl(0 0% 0% / 0.4),
+      0 8px 24px -4px hsl(0 0% 0% / 0.55);
+    --scrim: 200 40% 3%;
 
     --success: 93 55% 60%;
     --success-soft: 93 25% 16%;
@@ -109,10 +137,10 @@
     --warning-soft: 40 40% 16%;
     --danger: 4 78% 66%;
     --danger-soft: 4 35% 18%;
-    --info: 180 70% 50%;
-    --info-soft: 180 25% 18%;
+    --info: 176 64% 50%;
+    --info-soft: 182 28% 20%;
     --neutral: 190 12% 66%;
-    --neutral-soft: 200 18% 20%;
+    --neutral-soft: 200 18% 19%;
 
     /* The violet lifts to stay >=4.5:1 on the dark surfaces. */
     --highlight: 262 80% 72%;             /* #A87EF1 */
@@ -161,6 +189,17 @@
   }
   html {
     -webkit-text-size-adjust: 100%;
+    /* Thin, token-coloured scrollbars on the desktop app. */
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--input) / 0.55) transparent;
+  }
+  ::selection {
+    background-color: hsl(var(--primary) / 0.22);
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
   body {
     @apply bg-background text-foreground antialiased;
@@ -185,6 +224,7 @@
       sans-serif;
     font-size: 0.875rem;
     line-height: 1.5;
+    font-feature-settings: "kern", "liga", "calt";
   }
   code,
   kbd,

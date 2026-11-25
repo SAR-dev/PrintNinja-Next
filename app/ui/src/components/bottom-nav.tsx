@@ -57,7 +57,7 @@ export function BottomNav({
   return (
     <nav
       aria-label={t("nav.aria")}
-      className="flex shrink-0 border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
+      className="flex shrink-0 border-t border-border/70 bg-card pb-[env(safe-area-inset-bottom)] shadow-[0_-6px_20px_-10px_hsl(var(--foreground)/0.18)] md:hidden"
     >
       {NAV_ITEMS.map((item) => {
         const Icon = navIcon(item);
